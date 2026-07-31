@@ -494,7 +494,18 @@ function rBoardLive(){
     if(r.dispatcher_name) byDrv[k].disp=r.dispatcher_name;
     byDrv[k].loads.push(r);
   });
-  var drivers=Object.keys(byDrv).map(function(k){ return byDrv[k]; });
+  var maxD='';
+  L.forEach(function(r){ if(r.pickup_week && r.pickup_week>maxD) maxD=r.pickup_week; });
+  var cut='';
+  if(maxD){ var mm=/(\d{4})-(\d{2})-(\d{2})/.exec(maxD);
+    if(mm){ var dd=new Date(+mm[1],+mm[2]-1,+mm[3]); dd.setDate(dd.getDate()-30);
+      var p2=function(n){ return String(n).padStart(2,'0'); };
+      cut=dd.getFullYear()+'-'+p2(dd.getMonth()+1)+'-'+p2(dd.getDate()); } }
+  var drivers=Object.keys(byDrv).map(function(k){ return byDrv[k]; }).filter(function(d){
+    d.last='';
+    d.loads.forEach(function(l){ if(l.pickup_week && l.pickup_week>d.last) d.last=l.pickup_week; });
+    return !cut || d.last>=cut;
+  });
   var B={loaded:[],next:[],idle:[]};
   drivers.forEach(function(d){
     var pk=d.loads.filter(function(l){ return l.status==='picked_up'; });
@@ -510,7 +521,7 @@ function rBoardLive(){
     var detail='';
     if(d.bucket==='loaded'){ var l=d.active[0]; detail=`<span class='load'><b>${esc(locShort(l.pickup_location))}</b> → ${esc(locShort(l.delivery_location))} · ${money(l.price)}</span>`; }
     else if(d.bucket==='next'){ var n=d.active[0]; detail=`<span class='load'>შემდეგი: <b>${esc(locShort(n.pickup_location))}</b> → ${esc(locShort(n.delivery_location))} · ${money(n.price)}</span>`; }
-    else { var del=d.loads.filter(function(l){ return l.status==='delivered'; }).length; detail=`<span class='load' style='color:var(--muted)'>${del} ჩაბარებული · აქტიური ტვირთი არ აქვს</span>`; }
+    else { var del=d.loads.filter(function(l){ return l.status==='delivered'; }).length; detail=`<span class='load' style='color:var(--muted)'>აქტიური ტვირთი არ აქვს · ბოლო ტვირთი ${gd(d.last)} · სულ ${del} ჩაბარებული</span>`; }
     var chip={loaded:'g',next:'y',idle:'r'}[d.bucket];
     var clab={loaded:'დატვირთული',next:'შემდეგზე',idle:'უტვირთოდ'}[d.bucket];
     return `<div class='driver'><div class='cap'>${d.loads.length}</div>`+
@@ -522,12 +533,12 @@ function rBoardLive(){
     return `<div class='card' style='margin-bottom:14px'><div class='sect' style='padding:14px 15px 2px;color:${color};font-size:12.5px'>${title} · ${list.length}</div>`+
       (list.map(card).join('')||`<div class='muted' style='padding:6px 15px 14px'>ცარიელია</div>`)+`</div>`;
   }
-  $('view').innerHTML = ph('ცოცხალი მძღოლების დაფა','ვინ არის დატვირთული · ვინ მიდის შემდეგ ტვირთზე · ვინ დგას უტვირთოდ — Super Dispatch-ის ცოცხალი სტატუსით')+
+  $('view').innerHTML = ph('ცოცხალი მძღოლების დაფა','ვინ არის დატვირთული · ვინ მიდის შემდეგ ტვირთზე · ვინ დგას უტვირთოდ — Super Dispatch-ის ცოცხალი სტატუსით (ბოლო 30 დღეში აქტიური მძღოლები)')+
     `<div class='kpis'>`+
       kpi('დატვირთული / გზაშია',B.loaded.length,'g','მანქანა აყვანილია')+
       kpi('შემდეგ ტვირთზე',B.next.length,'w','მინიჭებული, ასაღები')+
       kpi('უტვირთოდ დგას',B.idle.length,B.idle.length?'r':'','აქტიური ტვირთი არ აქვს')+
-      kpi('სულ მძღოლი',drivers.length,'','SD Driver ID-ით')+
+      kpi('სულ აქტიური მძღოლი',drivers.length,'','ბოლო 30 დღე')+
     `</div>`+
     grp('🚚 დატვირთული — მანქანა აყვანილია / გზაშია',B.loaded,'var(--good)')+
     grp('➡️ შემდეგ ტვირთზე მიდის — მინიჭებული, ჯერ აუღებელი',B.next,'var(--warn)')+
