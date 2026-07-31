@@ -193,7 +193,8 @@ let USER = null;            // {email,name,role:'mgmt'|'disp',dispatcher,quality
 let REAL = {};             // reference data from Supabase
 let RECV = {};             // received marks by order id
 let ODRECV = {};           // overdue received marks
-let DRIVERS_BY_NAME = {};  // drivers registry rows keyed by name
+let DRIVERS_BY_NAME = {};
+let LIVE = [];  // drivers registry rows keyed by name
 
 /* ---------- auth + data bootstrap ---------- */
 async function signIn(){
@@ -232,6 +233,7 @@ async function loadData(){
     const { data:pr } = await sb.from('payment_received').select('order_id,received');
     RECV={}; (pr||[]).forEach(r=>{ if(r.received){ RECV[r.order_id]=true; } });
     ODRECV=Object.assign({},RECV);
+    await loadLiveLoads();
   } else {
     const { data } = await sb.from('dispatcher_snapshot').select('payload').maybeSingle(); // RLS scopes to own row
     const p=(data && data.payload) ? data.payload : {};
@@ -283,7 +285,7 @@ function pm(n){return (n==null||!isFinite(n))?'—':'$'+Number(n).toFixed(2);}
 function pymd(s){var m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 
 const DTABS=[['board','ჩემი დაფა'],['profile','ჩემი პროფილი'],['worklog','ჩემი Work Log']];
-const MTABS=[['overview','მიმოხილვა'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['pnl','P&L']];
+const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['pnl','P&L']];
 
 function enterAs(kind){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -322,7 +324,7 @@ function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if
 
 function render(){
   if(ROLE==='disp'){ if(TAB==='board')return rBoard(); if(TAB==='profile')return rProfile(); return rWorklog(); }
-  ({overview:rOverview,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,pnl:rPnl}[MTAB])();
+  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,pnl:rPnl}[MTAB])();
 }
 
 /* ---------- DISPATCHER ---------- */
@@ -449,6 +451,131 @@ function tw(i){const b=$('wb'+i),c=$('wc'+i);const h=b.style.display!=='none';b.
 function tg(id){const b=$('b'+id),c=$('c'+id);const h=b.style.display!=='none';b.style.display=h?'none':'';c.textContent=h?'▸':'▾';}
 
 /* ---------- MANAGEMENT ---------- */
+/* ---------- LIVE (Super Dispatch) ---------- */
+function locShort(s){
+  s=String(s||'');
+  var m=s.match(/([A-Za-z][A-Za-z .'\-]*),\s*([A-Z]{2})\s*\d{5}/g);
+  if(m&&m.length){ var last=m[m.length-1]; var mm=/([A-Za-z][A-Za-z .'\-]*),\s*([A-Z]{2})/.exec(last); return mm? mm[1].trim()+', '+mm[2] : last; }
+  return s.length>26? s.slice(0,26)+'…' : s;
+}
+function mondayOf(s){
+  var m=/(\d{4})-(\d{2})-(\d{2})/.exec(String(s||'')); if(!m) return null;
+  var d=new Date(+m[1], +m[2]-1, +m[3]);
+  var dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow);
+  var p=function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+function weekLabel(mon){
+  var m=/(\d{4})-(\d{2})-(\d{2})/.exec(mon||''); if(!m) return mon;
+  var a=new Date(+m[1],+m[2]-1,+m[3]); var b=new Date(a); b.setDate(b.getDate()+6);
+  var f=function(d){ return d.getDate()+' '+GM[d.getMonth()]; };
+  return f(a)+' – '+f(b);
+}
+async function loadLiveLoads(){
+  var all=[], from=0;
+  while(true){
+    var res = await sb.from('loads').select('order_number,status,price,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled').range(from, from+999);
+    if(res.error){ console.error(res.error); break; }
+    var d=res.data||[]; all=all.concat(d);
+    if(d.length<1000) break;
+    from+=1000;
+  }
+  LIVE=all;
+}
+
+function rBoardLive(){
+  var L=LIVE||[];
+  var byDrv={};
+  L.forEach(function(r){
+    if(!r.driver_id_sd) return;
+    var k=r.driver_id_sd;
+    if(!byDrv[k]) byDrv[k]={id:k,name:r.driver_name||('SD '+k),disp:r.dispatcher_name||'—',loads:[]};
+    if(r.driver_name) byDrv[k].name=r.driver_name;
+    if(r.dispatcher_name) byDrv[k].disp=r.dispatcher_name;
+    byDrv[k].loads.push(r);
+  });
+  var drivers=Object.keys(byDrv).map(function(k){ return byDrv[k]; });
+  var B={loaded:[],next:[],idle:[]};
+  drivers.forEach(function(d){
+    var pk=d.loads.filter(function(l){ return l.status==='picked_up'; });
+    var nw=d.loads.filter(function(l){ return l.status==='new'; });
+    if(pk.length){ d.bucket='loaded'; d.active=pk; }
+    else if(nw.length){ d.bucket='next'; d.active=nw.slice().sort(function(a,b){ return String(a.pickup_scheduled||'').localeCompare(String(b.pickup_scheduled||'')); }); }
+    else { d.bucket='idle'; d.active=[]; }
+    B[d.bucket].push(d);
+  });
+  var srt=function(a,b){ return (a.disp+a.name).localeCompare(b.disp+b.name); };
+  B.loaded.sort(srt); B.next.sort(srt); B.idle.sort(srt);
+  function card(d){
+    var detail='';
+    if(d.bucket==='loaded'){ var l=d.active[0]; detail=`<span class='load'><b>${esc(locShort(l.pickup_location))}</b> → ${esc(locShort(l.delivery_location))} · ${money(l.price)}</span>`; }
+    else if(d.bucket==='next'){ var n=d.active[0]; detail=`<span class='load'>შემდეგი: <b>${esc(locShort(n.pickup_location))}</b> → ${esc(locShort(n.delivery_location))} · ${money(n.price)}</span>`; }
+    else { var del=d.loads.filter(function(l){ return l.status==='delivered'; }).length; detail=`<span class='load' style='color:var(--muted)'>${del} ჩაბარებული · აქტიური ტვირთი არ აქვს</span>`; }
+    var chip={loaded:'g',next:'y',idle:'r'}[d.bucket];
+    var clab={loaded:'დატვირთული',next:'შემდეგზე',idle:'უტვირთოდ'}[d.bucket];
+    return `<div class='driver'><div class='cap'>${d.loads.length}</div>`+
+      `<div><div class='nm'>${esc(d.name)}</div><div class='meta'>${esc(d.disp)}</div></div>`+
+      `<div class='lw'><div class='loadline'>${detail}</div></div>`+
+      `<div class='st'><span class='chip ${chip}'><span class='dot'></span>${clab}</span></div></div>`;
+  }
+  function grp(title,list,color){
+    return `<div class='card' style='margin-bottom:14px'><div class='sect' style='padding:14px 15px 2px;color:${color};font-size:12.5px'>${title} · ${list.length}</div>`+
+      (list.map(card).join('')||`<div class='muted' style='padding:6px 15px 14px'>ცარიელია</div>`)+`</div>`;
+  }
+  $('view').innerHTML = ph('ცოცხალი მძღოლების დაფა','ვინ არის დატვირთული · ვინ მიდის შემდეგ ტვირთზე · ვინ დგას უტვირთოდ — Super Dispatch-ის ცოცხალი სტატუსით')+
+    `<div class='kpis'>`+
+      kpi('დატვირთული / გზაშია',B.loaded.length,'g','მანქანა აყვანილია')+
+      kpi('შემდეგ ტვირთზე',B.next.length,'w','მინიჭებული, ასაღები')+
+      kpi('უტვირთოდ დგას',B.idle.length,B.idle.length?'r':'','აქტიური ტვირთი არ აქვს')+
+      kpi('სულ მძღოლი',drivers.length,'','SD Driver ID-ით')+
+    `</div>`+
+    grp('🚚 დატვირთული — მანქანა აყვანილია / გზაშია',B.loaded,'var(--good)')+
+    grp('➡️ შემდეგ ტვირთზე მიდის — მინიჭებული, ჯერ აუღებელი',B.next,'var(--warn)')+
+    grp('⛔ უტვირთოდ დგას — აქტიური ტვირთი არ აქვს',B.idle,'var(--crit)')+
+    `<div class='callout'><span class='b'>i</span><div>სტატუსი <b>ცოცხალია</b> Super Dispatch-იდან: <b>picked_up</b>=მანქანა აყვანილია, <b>new</b>=მინიჭებული/ასაღები, ყველა <b>delivered</b>=უტვირთოდ. <span class='muted'>განახლდება ავტომატურად, ყოველ 30 წუთში.</span></div></div>`;
+}
+
+function rLive(){
+  var L=LIVE||[];
+  var gross=L.reduce(function(s,r){ return s+(Number(r.price)||0); },0);
+  var st={delivered:0,picked_up:0,new:0}; L.forEach(function(r){ if(st[r.status]!=null) st[r.status]++; });
+  var nDrv=Object.keys(L.reduce(function(a,r){ if(r.driver_name) a[r.driver_name]=1; return a; },{})).length;
+  var nDsp=Object.keys(L.reduce(function(a,r){ if(r.dispatcher_name) a[r.dispatcher_name]=1; return a; },{})).length;
+  var days=L.map(function(r){ return r.pickup_week; }).filter(Boolean).sort();
+  var drange=days.length? gd(days[0])+' – '+gd(days[days.length-1]) : '—';
+  var byW={};
+  L.forEach(function(r){ var mo=mondayOf(r.pickup_week); if(!mo) return;
+    if(!byW[mo]) byW[mo]={n:0,g:0,drv:{}};
+    byW[mo].n++; byW[mo].g+=Number(r.price)||0; if(r.driver_name) byW[mo].drv[r.driver_name]=1; });
+  var wk=Object.keys(byW).sort().reverse();
+  var mxW=Math.max.apply(null,wk.map(function(k){ return byW[k].g; }).concat([1]));
+  var wkRows=wk.map(function(k,i){
+    var w=byW[k]; var avg=w.n? w.g/w.n : 0; var nd=Object.keys(w.drv).length;
+    var prev=wk[i+1]? byW[wk[i+1]].g : null;
+    var dlt=prev? Math.round((w.g-prev)/prev*100) : null;
+    var dc = (dlt==null)? '' : (dlt>=0? `<span style='color:var(--good)'>▲ ${dlt}%</span>` : `<span style='color:var(--crit)'>▼ ${Math.abs(dlt)}%</span>`);
+    return `<tr><td><b>${weekLabel(k)}</b> <span class='muted' style='font-size:11px'>${k.slice(0,4)}</span></td>`+
+      `<td class='num'>${w.n}</td><td class='num'><b>${money(w.g)}</b></td><td class='num'>${money(avg)}</td>`+
+      `<td class='num'>${nd}</td><td class='num'>${dc}</td>`+
+      `<td style='width:170px'><div class='track'><i style='width:${Math.round(w.g/mxW*100)}%;background:var(--brand)'></i></div></td></tr>`;
+  }).join('');
+  var byD={}; L.forEach(function(r){ var k=r.dispatcher_name||'(მიუბმელი)'; if(!byD[k]) byD[k]={n:0,g:0}; byD[k].n++; byD[k].g+=Number(r.price)||0; });
+  var dk=Object.keys(byD).sort(function(a,b){ return byD[b].g-byD[a].g; });
+  var mxD=Math.max.apply(null,dk.map(function(k){ return byD[k].g; }).concat([1]));
+  var dispBars=dk.map(function(k){ return `<div class='meter'><div class='ml'><span>${esc(k)}</span><b class='tnum'>${money(byD[k].g)} · ${byD[k].n}</b></div><div class='track'><i style='width:${Math.round(byD[k].g/mxD*100)}%;background:${k==='(მიუბმელი)'?'var(--muted)':'var(--good)'}'></i></div></div>`; }).join('');
+  $('view').innerHTML = ph('ცოცხალი ტვირთები — Super Dispatch',`მთელი ისტორია ბაზიდან · ${L.length} ტვირთი · ${drange}`)+
+    `<div class='kpis'>`+
+      kpi('სულ ტვირთი',L.length.toLocaleString('en-US'),'','SD-ის სრული ისტორია')+
+      kpi('ჯამური გროსი',money(gross),'g','ყველა ტვირთი')+
+      kpi('მძღოლი',nDrv,'',nDsp+' დისპეტჩერი')+
+      kpi('კვირა',wk.length,'','ორშაბათი–კვირა')+
+    `</div>`+
+    `<div class='card p' style='margin-bottom:14px'><h4>კვირები — ორშაბათი–კვირა <span class='databadge' style='background:var(--brand-soft);color:var(--brand)'>SD</span></h4>`+
+      `<div class='tablewrap' style='max-height:520px;overflow-y:auto'><table style='min-width:760px'><thead><tr><th>კვირა</th><th class='num'>ტვირთი</th><th class='num'>გროსი</th><th class='num'>საშ. ფასი</th><th class='num'>მძღოლი</th><th class='num'>ცვლილება</th><th></th></tr></thead><tbody>${wkRows}</tbody></table></div></div>`+
+    `<div class='card p'><h4>დისპეტჩერების ჭრილი <span class='muted' style='font-weight:500;font-size:11px'>— მთელი პერიოდი</span></h4>${dispBars}</div>`+
+    `<div class='callout' style='margin-top:14px'><span class='b'>i</span><div>კვირა ითვლება <b>ორშაბათიდან კვირამდე</b> (pickup თარიღით). <span class='muted'>„(მიუბმელი)" = SD-ში მძღოლი არ მიენიჭა.</span></div></div>`;
+}
+
 function rOverview(){
   const g=REAL.mgmtGlobal;
   const cd=REAL.capDist||{}; const capTxt=Object.keys(cd).sort().map(k=>`${cd[k]}×${k}-მანქ`).join(' · ');
