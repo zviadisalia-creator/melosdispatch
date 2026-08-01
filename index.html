@@ -309,7 +309,8 @@ function setRole(r){
 }
 function showD(k,b){TAB=k; $('tabsDisp').querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); render();}
 function showM(k,b){MTAB=k; $('tabsMgmt').querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); render();}
-function toggleTheme(){const r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark');}
+function toggleTheme(){const r=document.documentElement;const v=(r.getAttribute('data-theme')==='dark')?'light':'dark';r.setAttribute('data-theme',v);try{localStorage.setItem('md_theme',v);}catch(e){}}
+try{var _mdTh=localStorage.getItem('md_theme'); if(_mdTh) document.documentElement.setAttribute('data-theme',_mdTh);}catch(e){}
 
 function ph(t,s){return `<div class="ph"><h2>${t}</h2><div class="sub">${s}</div></div>`;}
 function kpi(l,v,cls,sub,tab){
@@ -475,7 +476,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled').range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled').range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -520,8 +521,8 @@ function rBoardLive(){
   B.loaded.sort(srt); B.next.sort(srt); B.idle.sort(srt);
   function card(d){
     var detail='';
-    if(d.bucket==='loaded'){ var l=d.active[0]; detail=`<span class='load'><b>${esc(locShort(l.pickup_location))}</b> → ${esc(locShort(l.delivery_location))} · ${money(l.price)}</span>`; }
-    else if(d.bucket==='next'){ var n=d.active[0]; detail=`<span class='load'>შემდეგი: <b>${esc(locShort(n.pickup_location))}</b> → ${esc(locShort(n.delivery_location))} · ${money(n.price)}</span>`; }
+    if(d.bucket==='loaded'){ var l=d.active[0]; detail=`<span class='load'><b>${esc(locShort(l.pickup_location))}</b> → ${esc(locShort(l.delivery_location))} · ${money(l.gross!=null?l.gross:l.price)}${l.vehicle_count>1?` · ${l.vehicle_count} მანქ.`:''}</span>`; }
+    else if(d.bucket==='next'){ var n=d.active[0]; detail=`<span class='load'>შემდეგი: <b>${esc(locShort(n.pickup_location))}</b> → ${esc(locShort(n.delivery_location))} · ${money(n.gross!=null?n.gross:n.price)}${n.vehicle_count>1?` · ${n.vehicle_count} მანქ.`:''}</span>`; }
     else { var del=d.loads.filter(function(l){ return l.status==='delivered'; }).length; detail=`<span class='load' style='color:var(--muted)'>აქტიური ტვირთი არ აქვს · ბოლო ტვირთი ${gd(d.last)} · სულ ${del} ჩაბარებული</span>`; }
     var chip={loaded:'g',next:'y',idle:'r'}[d.bucket];
     var clab={loaded:'დატვირთული',next:'შემდეგზე',idle:'უტვირთოდ'}[d.bucket];
@@ -549,7 +550,8 @@ function rBoardLive(){
 
 function rLive(){
   var L=LIVE||[];
-  var gross=L.reduce(function(s,r){ return s+(Number(r.price)||0); },0);
+  function GR(r){ return Number(r.gross != null ? r.gross : r.price) || 0; }
+  var gross=L.reduce(function(s,r){ return s+GR(r); },0);
   var st={delivered:0,picked_up:0,new:0}; L.forEach(function(r){ if(st[r.status]!=null) st[r.status]++; });
   var nDrv=Object.keys(L.reduce(function(a,r){ if(r.driver_name) a[r.driver_name]=1; return a; },{})).length;
   var nDsp=Object.keys(L.reduce(function(a,r){ if(r.dispatcher_name) a[r.dispatcher_name]=1; return a; },{})).length;
@@ -558,7 +560,7 @@ function rLive(){
   var byW={};
   L.forEach(function(r){ var mo=mondayOf(r.pickup_week); if(!mo) return;
     if(!byW[mo]) byW[mo]={n:0,g:0,drv:{}};
-    byW[mo].n++; byW[mo].g+=Number(r.price)||0; if(r.driver_name) byW[mo].drv[r.driver_name]=1; });
+    byW[mo].n++; byW[mo].g+=GR(r); if(r.driver_name) byW[mo].drv[r.driver_name]=1; });
   var wk=Object.keys(byW).sort().reverse();
   var mxW=Math.max.apply(null,wk.map(function(k){ return byW[k].g; }).concat([1]));
   var wkRows=wk.map(function(k,i){
@@ -571,7 +573,7 @@ function rLive(){
       `<td class='num'>${nd}</td><td class='num'>${dc}</td>`+
       `<td style='width:170px'><div class='track'><i style='width:${Math.round(w.g/mxW*100)}%;background:var(--brand)'></i></div></td></tr>`;
   }).join('');
-  var byD={}; L.forEach(function(r){ var k=r.dispatcher_name||'(მიუბმელი)'; if(!byD[k]) byD[k]={n:0,g:0}; byD[k].n++; byD[k].g+=Number(r.price)||0; });
+  var byD={}; L.forEach(function(r){ var k=r.dispatcher_name||'(მიუბმელი)'; if(!byD[k]) byD[k]={n:0,g:0}; byD[k].n++; byD[k].g+=GR(r); });
   var dk=Object.keys(byD).sort(function(a,b){ return byD[b].g-byD[a].g; });
   var mxD=Math.max.apply(null,dk.map(function(k){ return byD[k].g; }).concat([1]));
   var dispBars=dk.map(function(k){ return `<div class='meter'><div class='ml'><span>${esc(k)}</span><b class='tnum'>${money(byD[k].g)} · ${byD[k].n}</b></div><div class='track'><i style='width:${Math.round(byD[k].g/mxD*100)}%;background:${k==='(მიუბმელი)'?'var(--muted)':'var(--good)'}'></i></div></div>`; }).join('');
