@@ -621,7 +621,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,bol,customer').is('deleted_at', null).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer').is('deleted_at', null).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -900,42 +900,84 @@ function rInv(){
     '<div class="tablewrap"><table style="min-width:860px"><thead><tr><th>Order ID</th><th>დისპეტჩერი</th><th>მძღოლი</th><th>კლიენტი</th><th>ჩაბარება</th><th class="num">დაგვიანება</th><th>Terms</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div class="muted" style="font-size:12px;margin-top:10px">მონაცემი პირდაპირ Super Dispatch-იდან — ტვირთი ჩაბარებულია, მაგრამ ინვოისი არ არის გაგზავნილი. On-site გადახდები (cash/check on pickup/delivery) სიაში არ შედის. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან. ინვოისი Super Dispatch-ში უნდა გაიგზავნოს — შემდეგ სია თავად განახლდება.</div></div>';
 }
-function toggleRecv(o){o=decodeURIComponent(o); RECV[o]=!RECV[o]; rRecv(); persistRecv(o, RECV[o]);}
-function rRecv(){
-  const p=REAL.payments;
-  const shownTot=p.reduce((s,r)=>s+r.price,0);
-  const rcvSum=p.filter(r=>RECV[r.order]).reduce((s,r)=>s+r.price,0);
-  const rcvN=p.filter(r=>RECV[r.order]).length;
-  const rows=p.map(r=>{const isR=!!RECV[r.order]; const od=pymd(r.payDate)&&pymd(r.payDate)<TODAY;
-    const chip=isR?'<span class="chip g"><span class="dot"></span>მიღებული</span>':(od?'<span class="chip r"><span class="dot"></span>ვადაგადაცილ.</span>':(r.sent?'<span class="chip g" style="opacity:.7"><span class="dot"></span>გაგზავნილი</span>':'<span class="chip y"><span class="dot"></span>გასაგზავნი</span>'));
-    const box=`<span onclick="toggleRecv('${encodeURIComponent(r.order)}')" style="display:inline-block;width:20px;height:20px;border-radius:6px;border:1.5px solid ${isR?'var(--good)':'var(--line)'};background:${isR?'var(--good)':'transparent'};color:#fff;text-align:center;line-height:17px;font-weight:800;cursor:pointer">${isR?'✓':''}</span>`;
-    return `<tr${isR?' style="opacity:.55"':''}><td>${esc(r.order)}</td><td>${esc(r.payer)}</td><td>${gd(r.delDate)}</td><td>${esc(r.pay)}</td><td class="num">${money(r.price)}</td><td>${gd(r.payDate)}</td><td>${chip}</td><td style="text-align:center">${box}</td></tr>`;}).join('');
-  $('view').innerHTML=ph('მისაღები თანხები',`კომპანიაში მოსასვლელი თანხები · Geotranspo Inc`)+
-    `<div class="kpis">${kpi('კომპანიაში მოსასვლელი (ჯამი)',money(REAL.payTotal),'',REAL.payCount+' ტვირთი')}${kpi('ინვოისი გაგზავნილია',money(REAL.paySent),'g')}${kpi('ინვოისი ჯერ გასაგზავნია',money(REAL.payNotSent),'w')}${kpi('აქედან ვადაგადაცილებული',money(REAL.odTotal),'r',REAL.odCount+' ტვირთი','overdue')}</div>`+
-    `<div class="card p"><div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;font-size:13px"><span class="ink2">ცხრილში ნაჩვენები ${p.length} ტვირთის ჯამი: <b>${money(shownTot)}</b></span><span>მონიშნული მიღებული: <b style="color:var(--good)">${money(rcvSum)}</b> · დარჩა: <b>${money(shownTot-rcvSum)}</b></span></div>
-    <div class="tablewrap"><table style="min-width:760px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>ჩაბარება</th><th>Pay</th><th class="num">თანხა</th><th>Pay Date</th><th>სტატუსი</th><th style="text-align:center">მიღება</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="muted" style="font-size:12px;margin-top:10px">რიცხვები რეალურია Payments-იდან. „მიღება" — მონიშნე, როცა ბანკში შემოვა (= ექსელის TRUE); ცოცხლად აკლდება „დარჩა"-ს. ცხრილში პირველი ${p.length} ტვირთი (KPI-ები სრულ ${REAL.payCount}-ს ითვლის).</div></div>`;
+/* ---- მისაღები / ვადაგადაცილება — ცოცხალი, Super Dispatch-ის paid_at-ით ---- */
+var TERMDAYS={'1_3_days':3,'2_days':2,'3_days':3,'5_days':5,'7_days':7,'10_days':10,'15_days':15,'20_days':20,'30_days':30,'45_days':45,'ach':7,'other':30,
+  'cash_on_pickup':0,'cash_on_delivery':0,'check_on_pickup':0,'check_on_delivery':0,'on_delivery':0};
+function dueOf_(l){
+  var base = l.invoice_sent_at || l.delivery_completed;
+  var t = Date.parse(base||'');
+  if(isNaN(t)) return null;
+  var d = TERMDAYS[l.payment_terms];
+  if(d===undefined) d=30;
+  return t + d*864e5;
 }
-function toggleOD(o){o=decodeURIComponent(o);ODRECV[o]=!ODRECV[o];rOverdue(); persistRecv(o, ODRECV[o]);}
-function odColor(d){return d<=15?'var(--warn)':d<=30?'var(--serious)':d<=45?'var(--crit)':'#a51f1f';}
-function rOverdue(){
-  const all=REAL.overdue.map(r=>{const d=pymd(r.payDate); const days=d?Math.round((TODAY-d)/864e5):0; return {...r,days};}).filter(r=>r.days>0).sort((a,b)=>b.days-a.days);
-  const od=all.filter(r=>!ODRECV[r.order]);
-  const paidSum=all.filter(r=>ODRECV[r.order]).reduce((s,r)=>s+r.price,0);
-  const remain=od.reduce((s,r)=>s+r.price,0);
-  const bk=[['1–15 დღე',1,15],['16–30 დღე',16,30],['31–45 დღე',31,45],['45+ დღე',46,1e9]];
-  const bs=bk.map(([l,mn,mx])=>{const rs=od.filter(r=>r.days>=mn&&r.days<=mx);return {l,sum:rs.reduce((s,r)=>s+r.price,0),n:rs.length,mn};});
-  const mxs=Math.max(...bs.map(b=>b.sum),1);
-  const aging=bs.map(b=>`<div class="meter"><div class="ml"><span>${b.l}</span><b class="tnum">${money(b.sum)} · ${b.n}</b></div><div class="track"><i style="width:${Math.round(b.sum/mxs*100)}%;background:${odColor(b.mn)}"></i></div></div>`).join('');
-  const rows=od.map(r=>{const c=odColor(r.days);
-    const box=`<span onclick="toggleOD('${encodeURIComponent(r.order)}')" style="display:inline-block;width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);text-align:center;line-height:17px;cursor:pointer"></span>`;
-    return `<tr><td>${esc(r.order)}</td><td>${esc(r.payer)}</td><td class="num">${money(r.price)}</td><td>${gd(r.payDate)}</td><td class="num" style="color:${c};font-weight:750">${r.days} დღე</td><td>${esc(r.pay)}</td><td style="text-align:center">${box}</td></tr>`;
+function openAR_(){
+  return (LIVE||[]).filter(function(l){ return l.delivery_completed && !l.paid_at; })
+    .map(function(l){
+      var due=dueOf_(l), now=Date.now();
+      return Object.assign({},l,{_due:due,_late:(due?Math.floor((now-due)/864e5):0)});
+    });
+}
+var RECVF='';
+function setRecvF(v){ RECVF=v; rRecv(); }
+function rRecv(){
+  var A=openAR_();
+  var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
+  var late=A.filter(function(l){ return l._late>0; });
+  var ONS2={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
+  var noInv=A.filter(function(l){ return !l.invoice_sent_at && !ONS2[l.payment_terms]; });
+  var F=A.slice();
+  if(RECVF==='late') F=late.slice();
+  if(RECVF==='noinv') F=noInv.slice();
+  F.sort(function(a,b){ return b._late-a._late; });
+  var col=function(d){ return d<=0?'var(--ink2)':d<=15?'var(--warn)':d<=30?'var(--serious)':d<=60?'var(--crit)':'#a51f1f'; };
+  var SHOW=500;
+  var rows=F.slice(0,SHOW).map(function(l){
+    return '<tr><td>'+esc(l.order_number||'')+'</td><td>'+esc(l.customer||'—')+'</td><td>'+esc(l.dispatcher_name||'—')+'</td>'+
+      '<td>'+gd(String(l.delivery_completed).slice(0,10))+'</td>'+
+      '<td>'+(l.invoice_sent_at?gd(String(l.invoice_sent_at).slice(0,10)):'<span style="color:var(--crit)">არ არის</span>')+'</td>'+
+      '<td>'+(l._due?gd(new Date(l._due).toISOString().slice(0,10)):'—')+'</td>'+
+      '<td class="num" style="color:'+col(l._late)+';font-weight:'+(l._late>0?750:400)+'">'+(l._late>0?(l._late+' დღე'):'—')+'</td>'+
+      '<td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td>'+
+      '<td class="num">'+money(Number(l.price)||0)+'</td></tr>';
   }).join('');
-  $('view').innerHTML=ph('ვადაგადაცილებული გადახდები','')+
-    `<div class="kpis">${kpi('სულ ვადაგადაცილებული გადახდები',money(remain),'r',od.length+' ტვირთი')}${kpi('მონიშნული მიღებული',money(paidSum),'g')}</div>`+
-    `<div class="card p" style="margin-bottom:14px"><h4>რამდენი ხანია გადავადებული</h4>${aging}</div>`+
-    `<div class="card p"><div class="tablewrap"><table style="min-width:700px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th class="num">თანხა</th><th>Pay Date</th><th class="num">დაგვიანება</th><th>Pay</th><th style="text-align:center">მიღება</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="muted" style="font-size:12px;margin-top:10px">„მიღება" — მონიშნე, როცა თანხა შემოვა; გამოაკლდება ვადაგადაცილებულ სიას. დაგვიანება: რაც უფრო წითელია, მით მეტი დღეა.</div></div>`;
+  var chip=function(k,l,n){ return '<span class="chip'+(RECVF===k?' g':'')+'" style="cursor:pointer" onclick="setRecvF(\''+k+'\')">'+l+' ('+n+')</span>'; };
+  $('view').innerHTML=ph('მისაღები თანხები','ჩაბარებული ტვირთები, რომლებზეც Super Dispatch-ში გადახდა ჯერ არ დაფიქსირდა')+
+    '<div class="kpis">'+kpi('სულ მისაღები',money(sum(A)),'',A.length+' ტვირთი')+
+      kpi('ვადაგადაცილებული',money(sum(late)),'r',late.length+' ტვირთი','overdue')+
+      kpi('ინვოისი გასაგზავნია',money(sum(noInv)),'w',noInv.length+' ტვირთი','invoices')+
+      kpi('საშუალო დაგვიანება',(late.length?Math.round(late.reduce(function(s,l){return s+l._late;},0)/late.length):0)+' დღე',late.length?'r':'')+'</div>'+
+    '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+chip('','ყველა',A.length)+chip('late','ვადაგადაცილებული',late.length)+chip('noinv','ინვოისის გარეშე',noInv.length)+'</div>'+
+    '<div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th>ჩაბარება</th><th>ინვოისი</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი მოდის პირდაპირ Super Dispatch-იდან (paid_at) — ხელით მონიშვნა აღარ სჭირდება. ვადა = ინვოისის გაგზავნის დღე (ან ჩაბარება, თუ ინვოისი არ არის) + Terms. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან.</div></div>';
+}
+function rOverdue(){
+  var A=openAR_().filter(function(l){ return l._late>0; });
+  A.sort(function(a,b){ return b._late-a._late; });
+  var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
+  var bk=[['1–15 დღე',1,15],['16–30 დღე',16,30],['31–45 დღე',31,45],['46–90 დღე',46,90],['90+ დღე',91,1e9]];
+  var bs=bk.map(function(b){ var rs=A.filter(function(l){ return l._late>=b[1]&&l._late<=b[2]; }); return {l:b[0],n:rs.length,s:sum(rs),mn:b[1]}; });
+  var mxs=Math.max.apply(null,bs.map(function(b){return b.s;}).concat([1]));
+  var col=function(d){ return d<=15?'var(--warn)':d<=30?'var(--serious)':d<=45?'var(--crit)':'#a51f1f'; };
+  var aging=bs.map(function(b){ return '<div class="meter"><div class="ml"><span>'+b.l+'</span><b class="tnum">'+money(b.s)+' · '+b.n+'</b></div><div class="track"><i style="width:'+Math.round(b.s/mxs*100)+'%;background:'+col(b.mn)+'"></i></div></div>'; }).join('');
+  var byC={}; A.forEach(function(l){ var k=l.customer||'—'; if(!byC[k]) byC[k]={n:0,s:0,mx:0}; byC[k].n++; byC[k].s+=Number(l.price)||0; if(l._late>byC[k].mx) byC[k].mx=l._late; });
+  var cn=Object.keys(byC).sort(function(a,b){ return byC[b].s-byC[a].s; }).slice(0,20);
+  var crows=cn.map(function(k){ var x=byC[k]; return '<tr><td>'+esc(k)+'</td><td class="num">'+x.n+'</td><td class="num">'+money(x.s)+'</td><td class="num" style="color:'+col(x.mx)+';font-weight:700">'+x.mx+' დღე</td></tr>'; }).join('');
+  var rows=A.slice(0,500).map(function(l){
+    return '<tr><td>'+esc(l.order_number||'')+'</td><td>'+esc(l.customer||'—')+'</td><td>'+esc(l.dispatcher_name||'—')+'</td><td class="num">'+money(Number(l.price)||0)+'</td>'+
+      '<td>'+(l._due?gd(new Date(l._due).toISOString().slice(0,10)):'—')+'</td>'+
+      '<td class="num" style="color:'+col(l._late)+';font-weight:750">'+l._late+' დღე</td>'+
+      '<td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td>'+
+      '<td>'+(l.invoice_sent_at?'<span class="chip g"><span class="dot"></span>ინვოისი</span>':'<span class="chip r"><span class="dot"></span>ინვოისი არ არის</span>')+'</td></tr>';
+  }).join('');
+  $('view').innerHTML=ph('ვადაგადაცილებული გადახდები','გადახდის ვადა გავიდა, Super Dispatch-ში თანხა ჯერ არ დაფიქსირებულა')+
+    '<div class="kpis">'+kpi('სულ ვადაგადაცილებული',money(sum(A)),'r',A.length+' ტვირთი')+
+      kpi('90 დღეზე ძველი',money(sum(A.filter(function(l){return l._late>90;}))),'r',A.filter(function(l){return l._late>90;}).length+' ტვირთი')+
+      kpi('კლიენტი',cn.length)+'</div>'+
+    '<div class="card p" style="margin-bottom:14px"><h4>რამდენი ხანია ვადაგადაცილებული</h4>'+aging+'</div>'+
+    '<div class="card p" style="margin-bottom:14px"><h4>ტოპ გადამხდელები</h4><div class="tablewrap"><table style="min-width:520px"><thead><tr><th>გადამხდელი</th><th class="num">ტვირთი</th><th class="num">თანხა</th><th class="num">ყველაზე ძველი</th></tr></thead><tbody>'+crows+'</tbody></table></div></div>'+
+    '<div class="card p"><div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th class="num">თანხა</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th>სტატუსი</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი — Super Dispatch-ის paid_at. თუ თანხა შემოსულია, მაგრამ აქ ჩანს, ესე იგი Super Dispatch-ში გადახდა არ არის მონიშნული.</div></div>';
 }
 function rPayroll(){
   const p=REAL.driverPayroll;
