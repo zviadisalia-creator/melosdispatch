@@ -195,6 +195,10 @@ let RECV = {};             // received marks by order id
 let ODRECV = {};           // overdue received marks
 let DRIVERS_BY_NAME = {};
 let LIVE = [];  // drivers registry rows keyed by name
+let ACT = {};   // load_actions keyed by order_number (BOL sent / check uploaded / dead head)
+const TERM_ONSITE={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
+function actOf_(o){ return ACT[o]||{}; }
+async function loadActions(){ try{ const { data } = await sb.from('load_actions').select('*'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
 
 /* ---------- auth + data bootstrap ---------- */
 async function signIn(){
@@ -234,6 +238,7 @@ async function loadData(){
     RECV={}; (pr||[]).forEach(r=>{ if(r.received){ RECV[r.order_id]=true; } });
     ODRECV=Object.assign({},RECV);
     await loadLiveLoads();
+    await loadActions();
   } else {
     const { data } = await sb.from('dispatcher_snapshot').select('payload').maybeSingle(); // RLS scopes to own row
     const p=(data && data.payload) ? data.payload : {};
@@ -242,6 +247,7 @@ async function loadData(){
     await loadLiveLoads();   // RLS scopes loads to this dispatcher only
     const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
+    await loadActions();
   }
 }
 function startApp(){
@@ -374,8 +380,32 @@ function rBoard(){
       <div class="st"><span class="chip ${color}"><span class="dot"></span>${({g:'მწვანე',y:'ყვითელი',r:'წითელი'})[color]}</span></div></div>`;
   }).join('');
 
+  var delivered=L.filter(function(l){ return l.delivery_completed; });
+  var byNew=function(a,b){ return String(b.delivery_completed||'').localeCompare(String(a.delivery_completed||'')); };
+  var bolP=delivered.filter(function(l){ return !actOf_(l.order_number).bol_sent_at; }).sort(byNew);
+  var invP=delivered.filter(function(l){ return !TERM_ONSITE[l.payment_terms] && !l.invoice_sent_at; }).sort(byNew);
+  var chkP=L.filter(function(l){
+    var need=(l.payment_terms==='check_on_pickup' && l.pickup_completed)||(l.payment_terms==='check_on_delivery' && l.delivery_completed);
+    return need && !actOf_(l.order_number).check_uploaded_at; }).sort(byNew);
+
+  function gate_(title, n, sub, manual){
+    var ok = (n===0);
+    var btn = manual ? '<button class="fixbtn" onclick="fixGate(this)">გასწორება</button>' : '';
+    return '<div class="gate '+(ok?'ok':'no')+'"><div class="ic">'+(ok?'✓':'!')+'</div><div class="t"><b>'+title+'</b><span>'+(ok?'ყველაფერი დახურულია':sub)+'</span></div>'+btn+'</div>';
+  }
+  function rows_(items, kind){
+    if(!items.length) return '';
+    var head=items.slice(0,8).map(function(l){
+      var act='';
+      if(kind==='bol') act='<a class="fixbtn" href="'+esc(l.bol||'#')+'" target="_blank" rel="noopener" style="text-decoration:none;margin-right:6px">BOL</a><button class="fixbtn" onclick="markAct(\''+encodeURIComponent(l.order_number)+'\',\'bol\')">გავაგზავნე</button>';
+      if(kind==='chk') act='<button class="fixbtn" onclick="markAct(\''+encodeURIComponent(l.order_number)+'\',\'chk\')">ატვირთულია</button>';
+      return '<div class="gate" style="padding-left:34px"><div class="ic" style="visibility:hidden">·</div><div class="t"><b>'+esc(l.order_number)+'</b><span>'+esc(l.driver_name||'—')+' · '+esc(locShort(l.pickup_location))+' → '+esc(locShort(l.delivery_location))+' · '+money(l.gross!=null?l.gross:l.price)+'</span></div>'+act+'</div>';
+    }).join('');
+    return head + (items.length>8 ? '<div class="muted" style="padding:4px 15px 12px 49px;font-size:12px">…და კიდევ '+(items.length-8)+'</div>' : '');
+  }
+
   var g1ok = list.length>0 && gaps.length===0;
-  var rem = (g1ok?0:1)+4;
+  var rem = (g1ok?0:1) + (bolP.length?1:0) + (invP.length?1:0) + (chkP.length?1:0) + 1;
   var chips=[['g','მწვანე'],['y','ყვითელი'],['r','წითელი']].filter(function(t){return cnt[t[0]];})
     .map(function(t){ return `<span class="chip ${t[0]}"><span class="dot"></span>${cnt[t[0]]} ${t[1]}</span>`; }).join('');
 
@@ -385,13 +415,29 @@ function rBoard(){
     `<div class="sect">ცვლის დახურვა — გასვლის GATE-ები</div>`+
     `<div class="card" id="closeCard">
       <div class="gate ${g1ok?'ok':'no'}"><div class="ic">${g1ok?'✓':'!'}</div><div class="t"><b>${gdFull(tday)}-ის ტვირთები დაბუკულია</b><span>${list.length} მძღოლი · ${cnt.g} დაცული · ${cnt.y} ნაწილობრივი · ${cnt.r} დაუბუკავი${gaps.length?' — '+esc(gaps.join(', ')):''}</span></div></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>ზარები · Pickup / Delivery</b><span>ჯერ ხელით — Quo-ს ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>BOL გაგზავნა</b><span>ჯერ ხელით — SD-ის ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>ინვოისის გაგზავნა</b><span>ჯერ ხელით — SD-ის ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>ჩეკის ატვირთვა · Check on Pickup / Delivery</b><span>ჯერ ხელით — ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">ატვირთვა</button></div>
+      ${gate_('ზარები · Pickup / Delivery', null, 'Quo-ს ჩანაწერები ჯერ არ არის ბაზაში — მუშავდება', true)}
+      ${gate_('BOL გაგზავნა', bolP.length, bolP.length+' ჩაბარებული ტვირთი ჯერ არ არის მონიშნული', false)}
+      ${rows_(bolP,'bol')}
+      ${gate_('ინვოისის გაგზავნა', invP.length, invP.length+' ჩაბარებული ტვირთი ინვოისის გარეშე — Super Dispatch-ის ჩანაწერით', false)}
+      ${rows_(invP,'inv')}
+      ${gate_('ჩეკის ატვირთვა · Check on Pickup / Delivery', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', false)}
+      ${rows_(chkP,'chk')}
       <div class="closebar"><button class="bigbtn" id="logoutBtn" disabled>ცვლის დახურვა</button><span id="gateCount" class="chip ${rem?'r':'g'}"><span class="dot"></span>${rem?rem+' დარჩენილი':'ყველა gate გავლილია'}</span><span class="muted" style="font-size:12px">ყველა ✓-ის შემდეგ — „მწვანე"</span></div>
     </div>
     <div class="callout" style="margin-top:14px"><span class="b">i</span><div>დაფარვა ითვლება <b>მანქანებით, არა ტვირთებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. პირველი gate <b>სისტემა ითვლის</b> Super Dispatch-ის ცოცხალი ბუკინგებით — ხელით ვერ გამწვანდება. <span class="muted">დანარჩენი gate-ები ჯერ ხელითაა და თანდათან ავტომატდება.</span></div></div>`;
+}
+async function markAct(enc, kind){
+  const o=decodeURIComponent(enc); const now=new Date().toISOString();
+  const row={order_number:o, updated_at:now};
+  if(kind==='bol'){ row.bol_sent_at=now; row.bol_by=USER.email; }
+  else { row.check_uploaded_at=now; row.check_by=USER.email; }
+  try{
+    const { error } = await sb.from('load_actions').upsert(row,{onConflict:'order_number'});
+    if(error) throw error;
+    ACT[o]=Object.assign(ACT[o]||{},row);
+    toast(kind==='bol'?'BOL მონიშნულია ✓':'ჩეკი მონიშნულია ✓');
+    render();
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
 function fixGate(b){const g=b.closest('.gate');g.classList.remove('no');g.classList.add('ok');g.querySelector('.ic').textContent='✓';
   const rem=document.querySelectorAll('#closeCard .gate.no').length; const c=$('gateCount'),lb=$('logoutBtn');
@@ -498,7 +544,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled').range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,bol,customer').range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
