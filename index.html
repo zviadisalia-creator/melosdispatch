@@ -486,41 +486,96 @@ function wlRow(l){
     `<td>${/sent/i.test(l.bol)?'<span class="tick">✓</span>':'<span class="cross">—</span>'}</td></tr>`;
 }
 var _did=0;
+function wlRow2(l){
+  var a=actOf_(l.order_number);
+  var dh=(a.dead_head!=null?a.dead_head:'');
+  var mi=Number(l.miles)||0;
+  var tot=mi+(Number(dh)||0);
+  var g=Number(l.gross!=null?l.gross:l.price)||0;
+  var pm=tot>=5?'$'+(g/tot).toFixed(2):'—';
+  var extra=cars_(l)>1?' <span class="chip" style="font-size:10px;padding:1px 6px">+'+(cars_(l)-1)+' მანქ</span>':'';
+  return '<tr>'+
+    '<td>'+esc(l.vehicle||'—')+extra+'</td>'+
+    '<td>'+esc(l.customer||'—')+'</td>'+
+    '<td>'+esc(locShort(l.pickup_location))+'<div class="meta">'+gd(String(l.pickup_scheduled||'').slice(0,10))+'</div></td>'+
+    '<td>'+esc(locShort(l.delivery_location))+'<div class="meta">'+gd(String(l.delivery_scheduled||'').slice(0,10))+'</div></td>'+
+    '<td class="num">'+(mi?Math.round(mi).toLocaleString('en-US'):'—')+'</td>'+
+    '<td class="num"><input class="mini" type="number" min="0" step="1" style="width:66px;text-align:right" value="'+dh+'" placeholder="—" onchange="saveDeadHead(&quot;'+encodeURIComponent(l.order_number)+'&quot;,this.value)"></td>'+
+    '<td>'+esc(l.order_number)+'</td>'+
+    '<td class="num">'+money(g)+'</td>'+
+    '<td class="num">'+pm+'</td>'+
+    '<td>'+esc(l.payment_method||'—')+'</td>'+
+    '<td>'+(a.bol_sent_at?'<span style="color:var(--good)">✓</span>':(l.delivery_completed?'<span style="color:var(--crit)">—</span>':''))+'</td>'+
+  '</tr>';
+}
+async function saveDeadHead(enc, v){
+  const o=decodeURIComponent(enc);
+  const n=(v===''?null:Number(v));
+  if(n!=null && !isFinite(n)){ toast('რიცხვი ჩაწერე'); return; }
+  try{
+    const now=new Date().toISOString();
+    const { error } = await sb.from('load_actions').upsert({order_number:o, dead_head:n, dead_head_by:USER.email, updated_at:now},{onConflict:'order_number'});
+    if(error) throw error;
+    ACT[o]=Object.assign(ACT[o]||{},{dead_head:n});
+    toast('შენახულია ✓');
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+}
 function rWorklog(){
-  const weeks=REAL.myWeeks||[]; _did=0;
-  const capOf={}; (REAL.myDrivers||[]).forEach(d=>capOf[d.driver]=d.cap||1);
-  const grand=weeks.reduce((s,w)=>s+w.drivers.reduce((a,d)=>a+d.gross,0),0);
-  const sections=weeks.map((w,wi)=>{
-    const wkGross=w.drivers.reduce((a,d)=>a+d.gross,0);
-    const wkLoads=w.drivers.reduce((a,d)=>a+d.loads.length,0);
-    const open=wi===0;
-    const driverBlocks=w.drivers.map(d=>{
-      const did='dd'+(_did++);
-      const cap=capOf[d.driver]||1;
-      const body=d.loads.map(wlRow).join('');
-      const totMiles=d.loads.reduce((s,l)=>s+(l.miles>=5?l.miles:0),0);
-      const totPrice=d.loads.reduce((s,l)=>s+(l.price||0),0);
-      const avgPm=totMiles>=5?'$'+(totPrice/totMiles).toFixed(2):'—';
-      const foot=`<tr class="wtot"><td colspan="4">ჯამი · ${d.loads.length} ტვირთი</td><td class="num">${totMiles?Math.round(totMiles).toLocaleString('en-US'):'—'}</td><td></td><td class="num">${money(totPrice)}</td><td class="num">${avgPm}</td><td></td><td></td></tr>`;
-      const sub=`${d.loads.length} ტვირთი · ${cap}-მანქ`;
-      return `<div style="margin-top:14px">
-        <div onclick="tg('${did}')" style="cursor:pointer;display:flex;align-items:center;gap:9px;margin-bottom:7px">
-          <span id="c${did}" style="color:var(--muted);width:12px">▾</span>
-          <span class="cap" style="width:30px;height:30px;font-size:12px">${d.loads.length}</span>
-          <b>${esc(d.driver)}</b><span class="meta">${sub}</span>
-          <span style="margin-left:auto;font-weight:750">${money(d.gross)}</span></div>
-        <div id="b${did}"><div class="tablewrap"><table class="wl" style="min-width:900px"><thead><tr><th>მანქანა</th><th>ბროკერი <span class="databadge" style="background:var(--brand-soft);color:var(--brand)">SD</span></th><th>Pickup</th><th>Delivery</th><th class="num">Miles</th><th>Order ID</th><th class="num">Price</th><th class="num">$/mi</th><th>Pay</th><th>BOL</th></tr></thead><tbody>${body}${foot}</tbody></table></div></div></div>`;
+  var L=LIVE||[]; _did=0;
+  var byW={};
+  L.forEach(function(l){
+    var d=String(l.pickup_scheduled||l.pickup_week||'').slice(0,10);
+    var mo=mondayOf(d); if(!mo) return;
+    var nm=l.driver_name||(l.driver_id_sd?('SD '+l.driver_id_sd):'—');
+    if(!byW[mo]) byW[mo]={drv:{}};
+    if(!byW[mo].drv[nm]) byW[mo].drv[nm]={driver:nm, loads:[], gross:0};
+    byW[mo].drv[nm].loads.push(l);
+    byW[mo].drv[nm].gross += Number(l.gross!=null?l.gross:l.price)||0;
+  });
+  var wk=Object.keys(byW).sort().reverse().slice(0,12);
+  var grand=0; wk.forEach(function(k){ var D=byW[k].drv; Object.keys(D).forEach(function(n){ grand+=D[n].gross; }); });
+  var sections=wk.map(function(k, wi){
+    var D=byW[k].drv;
+    var names=Object.keys(D).sort();
+    var wkGross=0, wkLoads=0;
+    names.forEach(function(n){ wkGross+=D[n].gross; wkLoads+=D[n].loads.length; });
+    var open=(wi===0);
+    var driverBlocks=names.map(function(n){
+      var d=D[n];
+      d.loads.sort(function(a,b){ return String(a.pickup_scheduled||'').localeCompare(String(b.pickup_scheduled||'')); });
+      var did='dd'+(_did++);
+      var reg=DRIVERS_BY_NAME[d.driver]||{}; var cap=Number(reg.cap)||1;
+      var body=d.loads.map(wlRow2).join('');
+      var totMiles=d.loads.reduce(function(s,l){ return s+(Number(l.miles)||0); },0);
+      var totDh=d.loads.reduce(function(s,l){ var a=actOf_(l.order_number); return s+(Number(a.dead_head)||0); },0);
+      var totCars=d.loads.reduce(function(s,l){ return s+cars_(l); },0);
+      var tot=totMiles+totDh;
+      var avgPm=tot>=5?'$'+(d.gross/tot).toFixed(2):'—';
+      var foot='<tr class="wtot"><td colspan="4">ჯამი · '+d.loads.length+' ტვირთი · '+totCars+' მანქანა</td>'+
+        '<td class="num">'+(totMiles?Math.round(totMiles).toLocaleString('en-US'):'—')+'</td>'+
+        '<td class="num">'+(totDh?Math.round(totDh).toLocaleString('en-US'):'—')+'</td>'+
+        '<td></td><td class="num">'+money(d.gross)+'</td><td class="num">'+avgPm+'</td><td></td><td></td></tr>';
+      return '<div style="margin-top:14px">'+
+        '<div onclick="tg(&quot;'+did+'&quot;)" style="cursor:pointer;display:flex;align-items:center;gap:9px;margin-bottom:7px">'+
+          '<span id="c'+did+'" style="color:var(--muted);width:12px">▾</span>'+
+          '<span class="cap" style="width:30px;height:30px;font-size:12px">'+d.loads.length+'</span>'+
+          '<b>'+esc(d.driver)+'</b><span class="meta">'+d.loads.length+' ტვირთი · '+cap+'-მანქ</span>'+
+          '<span style="margin-left:auto;font-weight:750">'+money(d.gross)+'</span></div>'+
+        '<div id="b'+did+'"><div class="tablewrap"><table class="wl" style="min-width:1040px"><thead><tr>'+
+        '<th>მანქანა</th><th>ბროკერი</th><th>Pickup</th><th>Delivery</th><th class="num">Miles</th>'+
+        '<th class="num">Dead head</th><th>Order ID</th><th class="num">გროსი</th><th class="num">$/mi</th><th>Pay</th><th>BOL</th>'+
+        '</tr></thead><tbody>'+body+foot+'</tbody></table></div></div></div>';
     }).join('');
-    return `<div class="card p" style="margin-bottom:12px">
-      <div onclick="tw(${wi})" style="cursor:pointer;display:flex;align-items:center;gap:10px">
-        <span id="wc${wi}" style="color:var(--muted);width:12px">${open?'▾':'▸'}</span>
-        <b>კვირა · ${esc(w.week)}</b><span class="meta">${w.drivers.length} მძღოლი · ${wkLoads} ტვირთი</span>
-        <span style="margin-left:auto;font-weight:750;font-size:15px">${money(wkGross)}</span></div>
-      <div id="wb${wi}" style="${open?'':'display:none'}">${driverBlocks}</div></div>`;
+    return '<div class="card p" style="margin-bottom:12px">'+
+      '<div onclick="tw('+wi+')" style="cursor:pointer;display:flex;align-items:center;gap:10px">'+
+        '<span id="wc'+wi+'" style="color:var(--muted);width:12px">'+(open?'▾':'▸')+'</span>'+
+        '<b>კვირა · '+weekLabel(k)+'</b><span class="meta">'+names.length+' მძღოლი · '+wkLoads+' ტვირთი</span>'+
+        '<span style="margin-left:auto;font-weight:750;font-size:15px">'+money(wkGross)+'</span></div>'+
+      '<div id="wb'+wi+'" style="'+(open?'':'display:none')+'">'+driverBlocks+'</div></div>';
   }).join('');
-  $('view').innerHTML=ph('ჩემი Work Log',`${USER.name} · ${weeks.length} კვირა · ${money(grand)}`)+
-    sections+
-    `<div class="callout" style="margin-top:6px"><span class="b">i</span><div>ტვირთები ჩამოთვლილია <b>ზუსტად როგორც ექსელში</b> (კვირა → მძღოლი), ჯამის რიგით ბოლოში. „<b>+N მანქ</b>" = ერთ ტვირთზე რამდენიმე მანქანა. <span class="muted">ბროკერი ცოცხალ რეჟიმში <b>SD-ის „Shipper"-იდან</b> წამოვა (Order ID-ით); რომელი ტვირთები ერთ რეისში ჩაიტვირთა — ავტომატური Work Log-იდან.</span></div></div>`;
+  $('view').innerHTML=ph('ჩემი Work Log',esc(USER.name||'')+' · '+wk.length+' კვირა · '+money(grand))+
+    (sections||'<div class="card p"><div class="muted">ტვირთი ჯერ არ არის</div></div>')+
+    '<div class="callout" style="margin-top:6px"><span class="b">i</span><div>ივსება <b>ავტომატურად Super Dispatch-იდან</b> — კვირა → მძღოლი → ტვირთები. <b>Dead head</b> ერთადერთი ხელით შესავსები ველია: ჩაწერე მილები და მაშინვე ინახება. <span class="muted">$/mi = გროსი ÷ (loaded miles + dead head). გროსი უკვე საბროკეროს გამოკლებით არის.</span></div></div>';
 }
 function tw(i){const b=$('wb'+i),c=$('wc'+i);const h=b.style.display!=='none';b.style.display=h?'none':'';c.textContent=h?'▸':'▾';}
 function tg(id){const b=$('b'+id),c=$('c'+id);const h=b.style.display!=='none';b.style.display=h?'none':'';c.textContent=h?'▸':'▾';}
