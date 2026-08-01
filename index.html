@@ -380,13 +380,17 @@ function rBoard(){
       <div class="st"><span class="chip ${color}"><span class="dot"></span>${({g:'მწვანე',y:'ყვითელი',r:'წითელი'})[color]}</span></div></div>`;
   }).join('');
 
-  var delivered=L.filter(function(l){ return l.delivery_completed; });
+  var winCut=new Date(Date.now()-14*864e5).toISOString();
+  var delivered=L.filter(function(l){ return l.delivery_completed && l.delivery_completed>=winCut; });
+  var older=L.filter(function(l){ return l.delivery_completed && l.delivery_completed<winCut; });
+  var oldInv=older.filter(function(l){ return !TERM_ONSITE[l.payment_terms] && !l.invoice_sent_at; }).length;
   var byNew=function(a,b){ return String(b.delivery_completed||'').localeCompare(String(a.delivery_completed||'')); };
   var bolP=delivered.filter(function(l){ return !actOf_(l.order_number).bol_sent_at; }).sort(byNew);
   var invP=delivered.filter(function(l){ return !TERM_ONSITE[l.payment_terms] && !l.invoice_sent_at; }).sort(byNew);
   var chkP=L.filter(function(l){
-    var need=(l.payment_terms==='check_on_pickup' && l.pickup_completed)||(l.payment_terms==='check_on_delivery' && l.delivery_completed);
-    return need && !actOf_(l.order_number).check_uploaded_at; }).sort(byNew);
+    var pu=(l.payment_terms==='check_on_pickup' && l.pickup_completed && l.pickup_completed>=winCut);
+    var dl=(l.payment_terms==='check_on_delivery' && l.delivery_completed && l.delivery_completed>=winCut);
+    return (pu||dl) && !actOf_(l.order_number).check_uploaded_at; }).sort(byNew);
 
   function gate_(title, n, sub, manual){
     var ok = (n===0);
@@ -422,9 +426,10 @@ function rBoard(){
       ${rows_(invP,'inv')}
       ${gate_('ჩეკის ატვირთვა · Check on Pickup / Delivery', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', false)}
       ${rows_(chkP,'chk')}
+      ${oldInv?`<div class="muted" style="padding:8px 15px 12px 49px;font-size:12px">14 დღეზე ძველი: <b>${oldInv}</b> ჩაბარებული ტვირთი ინვოისის გარეშე — gate-ს არ ბლოკავს, მაგრამ ფული გამოსაწერია</div>`:''}
       <div class="closebar"><button class="bigbtn" id="logoutBtn" disabled>ცვლის დახურვა</button><span id="gateCount" class="chip ${rem?'r':'g'}"><span class="dot"></span>${rem?rem+' დარჩენილი':'ყველა gate გავლილია'}</span><span class="muted" style="font-size:12px">ყველა ✓-ის შემდეგ — „მწვანე"</span></div>
     </div>
-    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>დაფარვა ითვლება <b>მანქანებით, არა ტვირთებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. პირველი gate <b>სისტემა ითვლის</b> Super Dispatch-ის ცოცხალი ბუკინგებით — ხელით ვერ გამწვანდება. <span class="muted">დანარჩენი gate-ები ჯერ ხელითაა და თანდათან ავტომატდება.</span></div></div>`;
+    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>gate-ები ითვლის <b>ბოლო 14 დღეს</b>. დაფარვა ითვლება <b>მანქანებით, არა ტვირთებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. პირველი gate <b>სისტემა ითვლის</b> Super Dispatch-ის ცოცხალი ბუკინგებით — ხელით ვერ გამწვანდება. <span class="muted">დანარჩენი gate-ები ჯერ ხელითაა და თანდათან ავტომატდება.</span></div></div>`;
 }
 async function markAct(enc, kind){
   const o=decodeURIComponent(enc); const now=new Date().toISOString();
