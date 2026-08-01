@@ -604,7 +604,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,bol,customer').range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,bol,customer').is('deleted_at', null).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
