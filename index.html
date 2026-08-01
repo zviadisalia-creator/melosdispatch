@@ -299,7 +299,7 @@ function pm(n){return (n==null||!isFinite(n))?'—':'$'+Number(n).toFixed(2);}
 function pymd(s){var m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 
 const DTABS=[['board','ჩემი დაფა'],['liveboard','ჩემი მძღოლები'],['liveloads','ჩემი ტვირთები'],['profile','ჩემი პროფილი'],['worklog','ჩემი Work Log']];
-const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['pnl','P&L']];
+const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['pnl','P&L']];
 
 function enterAs(kind){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -339,7 +339,7 @@ function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if
 
 function render(){
   if(ROLE==='disp'){ if(TAB==='board')return rBoard(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
-  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,pnl:rPnl}[MTAB])();
+  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,pnl:rPnl}[MTAB])();
 }
 
 /* ---------- DISPATCHER ---------- */
@@ -804,6 +804,42 @@ function rAnalysis(){
   $('view').innerHTML=ph('ანალიზი — დისპეტჩერების ჭრილი',`კვირა ${REAL.payrollWeek} · GrossezSalariez-იდან`)+
     `<div class="kpis">${kpi('დისპეტჩერი',a.length)}${kpi('მძღოლი',REAL.nDrivers)}${kpi('ჯამ. gross',money(REAL.totGross))}${kpi('კომპ. შემოსავალი',money(REAL.totRevenue),'g')}</div>`+
     `<div class="card p"><div class="tablewrap"><table style="min-width:560px"><thead><tr><th>დისპეტჩერი</th><th class="num">მძღ.</th><th class="num">gross</th><th class="num">დისპ. ხელფ.</th><th class="num">კომპ. შემოს.</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+/* ---- ინვოისები — გასაგზავნი (ცოცხალი, SD-იდან) ---- */
+var INVD='';
+var INVN=[];
+function selInv(i){ INVD=(i<0)?'':(INVN[i]||''); rInv(); }
+function rInv(){
+  var ONS={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
+  var L=(LIVE||[]).filter(function(l){ return l.delivery_completed && !ONS[l.payment_terms] && !l.invoice_sent_at; });
+  var now=Date.now();
+  L=L.map(function(l){ var t=Date.parse(l.delivery_completed); var d=isNaN(t)?0:Math.floor((now-t)/864e5); return Object.assign({},l,{_d:d}); });
+  L.sort(function(a,b){ return b._d-a._d; });
+  var disps={}; L.forEach(function(l){ var k=l.dispatcher_name||'—'; if(!disps[k]) disps[k]={n:0,s:0,mx:0}; disps[k].n++; disps[k].s+=Number(l.price)||0; if(l._d>disps[k].mx) disps[k].mx=l._d; });
+  var dnames=Object.keys(disps).sort(function(a,b){ return disps[b].s-disps[a].s; });
+  INVN=dnames;
+  var F=INVD?L.filter(function(l){ return (l.dispatcher_name||'—')===INVD; }):L;
+  var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
+  var tot=sum(L), old30=L.filter(function(l){ return l._d>30; });
+  var fresh=L.filter(function(l){ return l._d<=7; });
+  var bk=[['0–7 დღე',0,7],['8–15 დღე',8,15],['16–30 დღე',16,30],['31–60 დღე',31,60],['60+ დღე',61,1e9]];
+  var bs=bk.map(function(b){ var rs=L.filter(function(l){ return l._d>=b[1]&&l._d<=b[2]; }); return {l:b[0],n:rs.length,s:sum(rs),mn:b[1]}; });
+  var mxs=Math.max.apply(null,bs.map(function(b){ return b.s; }).concat([1]));
+  var col=function(d){ return d<=7?'var(--good)':d<=15?'var(--warn)':d<=30?'var(--serious)':d<=60?'var(--crit)':'#a51f1f'; };
+  var aging=bs.map(function(b){ return '<div class="meter"><div class="ml"><span>'+b.l+'</span><b class="tnum">'+money(b.s)+' · '+b.n+'</b></div><div class="track"><i style="width:'+Math.round(b.s/mxs*100)+'%;background:'+col(b.mn)+'"></i></div></div>'; }).join('');
+  var drows=dnames.map(function(k,i){ var x=disps[k]; return '<tr'+(INVD===k?' style="background:var(--brand-soft)"':'')+'><td><span style="cursor:pointer;text-decoration:underline" onclick="selInv('+i+')">'+esc(k)+'</span></td><td class="num">'+x.n+'</td><td class="num">'+money(x.s)+'</td><td class="num" style="color:'+col(x.mx)+';font-weight:700">'+x.mx+' დღე</td></tr>'; }).join('');
+  var SHOW=400;
+  var rows=F.slice(0,SHOW).map(function(l){
+    return '<tr><td>'+esc(l.order_number||'')+'</td><td>'+esc(l.dispatcher_name||'—')+'</td><td>'+esc(l.driver_name||'—')+'</td><td>'+esc(l.customer||'—')+'</td><td>'+gd(String(l.delivery_completed).slice(0,10))+'</td><td class="num" style="color:'+col(l._d)+';font-weight:750">'+l._d+' დღე</td><td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td><td class="num">'+money(Number(l.price)||0)+'</td></tr>';
+  }).join('');
+  var chips='<span class="chip'+(INVD?'':' g')+'" style="cursor:pointer" onclick="selInv(-1)">ყველა ('+L.length+')</span>';
+  $('view').innerHTML=ph('ინვოისები — გასაგზავნი','ჩაბარებული ტვირთები, რომლებზეც Super Dispatch-ში ინვოისი გაგზავნილი არ არის')+
+    '<div class="kpis">'+kpi('ინვოისი გასაგზავნია',money(tot),'r',L.length+' ჩაბარებული ტვირთი')+kpi('30 დღეზე ძველი',money(sum(old30)),'r',old30.length+' ტვირთი')+kpi('ბოლო 7 დღე',money(sum(fresh)),'w',fresh.length+' ტვირთი')+kpi('დისპეტჩერი',dnames.length)+'</div>'+
+    '<div class="card p" style="margin-bottom:14px"><h4>რამდენი ხანია ჩაბარებიდან</h4>'+aging+'</div>'+
+    '<div class="card p" style="margin-bottom:14px"><h4>დისპეტჩერების ჭრილი</h4><div class="tablewrap"><table style="min-width:520px"><thead><tr><th>დისპეტჩერი</th><th class="num">ტვირთი</th><th class="num">თანხა</th><th class="num">ყველაზე ძველი</th></tr></thead><tbody>'+drows+'</tbody></table></div></div>'+
+    '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'+chips+(INVD?'<span class="chip y">'+esc(INVD)+' — '+F.length+'</span>':'')+'</div>'+
+    '<div class="tablewrap"><table style="min-width:860px"><thead><tr><th>Order ID</th><th>დისპეტჩერი</th><th>მძღოლი</th><th>კლიენტი</th><th>ჩაბარება</th><th class="num">დაგვიანება</th><th>Terms</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="muted" style="font-size:12px;margin-top:10px">მონაცემი პირდაპირ Super Dispatch-იდან — ტვირთი ჩაბარებულია, მაგრამ ინვოისი არ არის გაგზავნილი. On-site გადახდები (cash/check on pickup/delivery) სიაში არ შედის. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან. ინვოისი Super Dispatch-ში უნდა გაიგზავნოს — შემდეგ სია თავად განახლდება.</div></div>';
 }
 function toggleRecv(o){o=decodeURIComponent(o); RECV[o]=!RECV[o]; rRecv(); persistRecv(o, RECV[o]);}
 function rRecv(){
