@@ -789,10 +789,69 @@ function rCoverage(){
     grp('❌ საერთოდ არ აქვს',none,'var(--crit)')+grp('⚠ ტვირთი აკლია',miss,'var(--warn)')+grp('✓ დღე სრულად დაგეგმილი',full,'var(--good)')+
     `<div class="callout"><span class="b">i</span><div><b>ეს ჩვენი coverage-ის გულია</b> (შენი „Dispatchers Trucking"-ის მსგავსად). „აქვს/სჭირდება" ცოცხალ რეჟიმში SD-ის ხვალინდელი ბუკინგებიდან და თითო მძღოლის <b>ინდივიდუალური სამიზნიდან</b> გამოითვლება. <span class="muted">ახლა რიცხვები საილუსტრაციოა.</span></div></div>`;
 }
+/* ---- რეიტინგი — ცოცხალი დისპეტჩერული ქულა ---- */
+var CSTAT=null, CSTAT_LOADING=false, CSTAT_DAYS=30;
+function setLbDays(d){ CSTAT_DAYS=d; CSTAT=null; rLeader(); }
 function rLeader(){
-  const a=REAL.leaderboard, mx=Math.max(...a.map(x=>x.q));
-  $('view').innerHTML=ph('რეიტინგი',`დისპეტჩერების ხარისხის ქულა · Quo მონიტორინგი`)+
-    `<div class="card">`+a.map((x,i)=>`<div class="lb-row"><div class="rank">${i+1}</div><div><b>${esc(x.d)}</b><div class="meta">${x.calls} ზარი · ${esc(x.s)}</div></div><div class="bar"><i style="width:${Math.round(x.q/mx*100)}%"></i></div><div class="score">${x.q}</div></div>`).join('')+`</div>`;
+  var ONS={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
+  var days=CSTAT_DAYS;
+  var to=new Date(), from=new Date(Date.now()-days*864e5);
+  if(CSTAT_LOADING) return;
+  if(!CSTAT){
+    CSTAT_LOADING=true;
+    $('view').innerHTML=ph('რეიტინგი','დისპეტჩერების ქულა — ცოცხალი მონაცემიდან')+
+      '<div class="card p"><div class="muted">ითვლება ზარებისა და SMS-ების სტატისტიკა Quo-დან… (10-15 წამი)</div></div>';
+    sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
+      CSTAT={}; (r.data||[]).forEach(function(x){ CSTAT[x.dispatcher]=x; });
+      CSTAT_LOADING=false;
+      if(MTAB==='leaderboard') rLeader();
+    },function(){ CSTAT={}; CSTAT_LOADING=false; if(MTAB==='leaderboard') rLeader(); });
+    return;
+  }
+  var cut=ymd_(from);
+  var W=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=cut; });
+  var by={};
+  W.forEach(function(l){
+    var k=l.dispatcher_name||'—';
+    if(!by[k]) by[k]={d:k,n:0,cars:0,gross:0,assigned:0,delNeed:0,delOk:0};
+    var x=by[k];
+    x.n++; x.cars+=cars_(l); x.gross+=Number(l.gross)||0;
+    if(l.driver_id_sd) x.assigned++;
+    if(l.delivery_completed && !ONS[l.payment_terms]){ x.delNeed++; if(l.invoice_sent_at) x.delOk++; }
+  });
+  var A=Object.keys(by).map(function(k){
+    var x=by[k], c=CSTAT[k]||{n_loads:0,both_ok:0};
+    x.callN=c.n_loads||0; x.callOk=c.both_ok||0;
+    x.callPct=x.callN?Math.round(x.callOk/x.callN*100):0;
+    x.invPct=x.delNeed?Math.round(x.delOk/x.delNeed*100):100;
+    x.asgPct=x.n?Math.round(x.assigned/x.n*100):0;
+    x.q=Math.round(x.callPct*0.5 + x.invPct*0.3 + x.asgPct*0.2);
+    x.per=x.n?Math.round(x.gross/x.n):0;
+    return x;
+  }).filter(function(x){ return x.d!=='—' && x.n>=3; });
+  A.sort(function(a,b){ return b.q-a.q; });
+  var mx=Math.max.apply(null,A.map(function(x){return x.q;}).concat([1]));
+  var cc=function(p){ return p>=70?'var(--good)':p>=45?'var(--warn)':'var(--crit)'; };
+  var rows=A.map(function(x,i){
+    return '<tr><td class="num">'+(i+1)+'</td><td><b>'+esc(x.d)+'</b></td>'+
+      '<td style="min-width:130px"><div class="track" style="margin:0"><i style="width:'+Math.round(x.q/mx*100)+'%;background:'+cc(x.q)+'"></i></div></td>'+
+      '<td class="num" style="font-weight:750;color:'+cc(x.q)+'">'+x.q+'</td>'+
+      '<td class="num">'+x.n+'</td><td class="num">'+x.cars+'</td><td class="num">'+money(x.gross)+'</td><td class="num">'+money(x.per)+'</td>'+
+      '<td class="num" style="color:'+cc(x.callPct)+'">'+x.callPct+'%<span class="muted" style="font-weight:400"> ('+x.callOk+'/'+x.callN+')</span></td>'+
+      '<td class="num" style="color:'+cc(x.invPct)+'">'+x.invPct+'%<span class="muted" style="font-weight:400"> ('+(x.delNeed-x.delOk)+' დარჩა)</span></td>'+
+      '<td class="num" style="color:'+cc(x.asgPct)+'">'+x.asgPct+'%</td></tr>';
+  }).join('');
+  var tot=function(f){ return A.reduce(function(s,x){ return s+f(x); },0); };
+  var callN=tot(function(x){return x.callN;}), callOk=tot(function(x){return x.callOk;});
+  var dn=tot(function(x){return x.delNeed;}), dok=tot(function(x){return x.delOk;});
+  var chip=function(d,l){ return '<span class="chip'+(CSTAT_DAYS===d?' g':'')+'" style="cursor:pointer" onclick="setLbDays('+d+')">'+l+'</span>'; };
+  $('view').innerHTML=ph('რეიტინგი','დისპეტჩერების ქულა — ბოლო '+days+' დღე · Super Dispatch + Quo, ცოცხლად')+
+    '<div style="display:flex;gap:8px;margin-bottom:12px">'+chip(7,'7 დღე')+chip(30,'30 დღე')+chip(90,'90 დღე')+'</div>'+
+    '<div class="kpis">'+kpi('დისპეტჩერი',A.length)+kpi('ტვირთი',tot(function(x){return x.n;}))+
+      kpi('ზარი ორივე მხარეს',(callN?Math.round(callOk/callN*100):0)+'%',(callN&&callOk/callN>=0.7)?'g':'r',callOk+' / '+callN)+
+      kpi('ინვოისი გაგზავნილი',(dn?Math.round(dok/dn*100):0)+'%',(dn&&dok/dn>=0.7)?'g':'r',(dn-dok)+' დარჩენილი')+'</div>'+
+    '<div class="card p"><div class="tablewrap"><table style="min-width:980px"><thead><tr><th class="num">#</th><th>დისპეტჩერი</th><th>ქულა</th><th class="num">ქულა</th><th class="num">ტვირთი</th><th class="num">მანქანა</th><th class="num">გროსი</th><th class="num">$/ტვირთი</th><th class="num">ზარები</th><th class="num">ინვოისი</th><th class="num">მიბმული</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="muted" style="font-size:12px;margin-top:10px">ქულა = ზარები×50% + ინვოისი×30% + მძღოლზე მიბმა×20%. „ზარები" — ფიქაფზეც და დელივერიზეც დაფიქსირდა პასუხგაცემული ზარი ან შემომავალი SMS (Quo). „ინვოისი" — ჩაბარებულ ტვირთებზე გაგზავნილი ინვოისის წილი (on-site გადახდები არ ითვლება). „მიბმული" — ტვირთი Super Dispatch-ში მძღოლზეა მიბმული. ზარების ისტორია Quo-ში 29 ივნისიდან ითვლება, SMS — 21 ივლისიდან.</div></div>';
 }
 function rExc(){
   $('view').innerHTML=ph('გამონაკლისები',`მხოლოდ რისკი/ყურადღება — Quo დღიური`)+
