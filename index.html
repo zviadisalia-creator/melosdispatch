@@ -198,6 +198,9 @@ let LIVE = [];  // drivers registry rows keyed by name
 let ACT = {};   // load_actions keyed by order_number (BOL sent / check uploaded / dead head)
 const TERM_ONSITE={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
 function actOf_(o){ return ACT[o]||{}; }
+let CONTACTS = [];  // contact_check rows for the next work day
+function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
+async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()) }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
 async function loadActions(){ try{ const { data } = await sb.from('load_actions').select('*'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
 
 /* ---------- auth + data bootstrap ---------- */
@@ -239,6 +242,7 @@ async function loadData(){
     ODRECV=Object.assign({},RECV);
     await loadLiveLoads();
     await loadActions();
+    await loadContacts();
   } else {
     const { data } = await sb.from('dispatcher_snapshot').select('payload').maybeSingle(); // RLS scopes to own row
     const p=(data && data.payload) ? data.payload : {};
@@ -248,6 +252,7 @@ async function loadData(){
     const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
     await loadActions();
+    await loadContacts();
   }
 }
 function startApp(){
@@ -408,8 +413,19 @@ function rBoard(){
     return head + (items.length>8 ? '<div class="muted" style="padding:4px 15px 12px 49px;font-size:12px">…და კიდევ '+(items.length-8)+'</div>' : '');
   }
 
+  var callP=(CONTACTS||[]).filter(function(r){ return !((r.pu_call||r.pu_sms) && (r.del_call||r.del_sms)); });
+  function callRows_(items){
+    if(!items.length) return '';
+    return items.slice(0,8).map(function(r){
+      var miss=[];
+      if(!(r.pu_call||r.pu_sms)) miss.push('ფიქაფი ' + fmtPhone_(r.pickup_phone));
+      if(!(r.del_call||r.del_sms)) miss.push('დელივერი ' + fmtPhone_(r.delivery_phone));
+      return '<div class="gate" style="padding-left:34px"><div class="ic" style="visibility:hidden">·</div><div class="t"><b>'+esc(r.order_number)+'</b><span>'+esc(r.driver_name||'—')+' · <span style="color:var(--crit)">'+esc(miss.join(' · '))+'</span> — არ არის დარეკილი</span></div></div>';
+    }).join('') + (items.length>8 ? '<div class="muted" style="padding:4px 15px 12px 49px;font-size:12px">…და კიდევ '+(items.length-8)+'</div>' : '');
+  }
+
   var g1ok = list.length>0 && gaps.length===0;
-  var rem = (g1ok?0:1) + (bolP.length?1:0) + (invP.length?1:0) + (chkP.length?1:0) + 1;
+  var rem = (g1ok?0:1) + (callP.length?1:0) + (bolP.length?1:0) + (invP.length?1:0) + (chkP.length?1:0);
   var chips=[['g','მწვანე'],['y','ყვითელი'],['r','წითელი']].filter(function(t){return cnt[t[0]];})
     .map(function(t){ return `<span class="chip ${t[0]}"><span class="dot"></span>${cnt[t[0]]} ${t[1]}</span>`; }).join('');
 
@@ -419,7 +435,8 @@ function rBoard(){
     `<div class="sect">ცვლის დახურვა — გასვლის GATE-ები</div>`+
     `<div class="card" id="closeCard">
       <div class="gate ${g1ok?'ok':'no'}"><div class="ic">${g1ok?'✓':'!'}</div><div class="t"><b>${gdFull(tday)}-ის ტვირთები დაბუკულია</b><span>${list.length} მძღოლი · ${cnt.g} დაცული · ${cnt.y} ნაწილობრივი · ${cnt.r} დაუბუკავი${gaps.length?' — '+esc(gaps.join(', ')):''}</span></div></div>
-      ${gate_('ზარები · Pickup / Delivery', null, 'Quo-ს ჩანაწერები ჯერ არ არის ბაზაში — მუშავდება', true)}
+      ${gate_('ზარები · Pickup / Delivery', callP.length, callP.length+' ტვირთზე დარეკვა/დადასტურება არ ჩანს Quo-ში', false)}
+      ${callRows_(callP)}
       ${gate_('BOL გაგზავნა', bolP.length, bolP.length+' ჩაბარებული ტვირთი ჯერ არ არის მონიშნული', false)}
       ${rows_(bolP,'bol')}
       ${gate_('ინვოისის გაგზავნა', invP.length, invP.length+' ჩაბარებული ტვირთი ინვოისის გარეშე — Super Dispatch-ის ჩანაწერით', false)}
@@ -429,7 +446,7 @@ function rBoard(){
       ${oldInv?`<div class="muted" style="padding:8px 15px 12px 49px;font-size:12px">14 დღეზე ძველი: <b>${oldInv}</b> ჩაბარებული ტვირთი ინვოისის გარეშე — gate-ს არ ბლოკავს, მაგრამ ფული გამოსაწერია</div>`:''}
       <div class="closebar"><button class="bigbtn" id="logoutBtn" disabled>ცვლის დახურვა</button><span id="gateCount" class="chip ${rem?'r':'g'}"><span class="dot"></span>${rem?rem+' დარჩენილი':'ყველა gate გავლილია'}</span><span class="muted" style="font-size:12px">ყველა ✓-ის შემდეგ — „მწვანე"</span></div>
     </div>
-    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>gate-ები ითვლის <b>ბოლო 14 დღეს</b>. დაფარვა ითვლება <b>მანქანებით, არა ტვირთებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. პირველი gate <b>სისტემა ითვლის</b> Super Dispatch-ის ცოცხალი ბუკინგებით — ხელით ვერ გამწვანდება. <span class="muted">დანარჩენი gate-ები ჯერ ხელითაა და თანდათან ავტომატდება.</span></div></div>`;
+    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>ზარი ჩაითვლება მხოლოდ <b>ნასაუბრები ზარით</b> ან <b>პასუხად მოსული SMS-ით</b> — უპასუხო ზარი არ ითვლება. დანარჩენი gate-ები ითვლის <b>ბოლო 14 დღეს</b>. დაფარვა ითვლება <b>მანქანებით, არა ტვირთებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. პირველი gate <b>სისტემა ითვლის</b> Super Dispatch-ის ცოცხალი ბუკინგებით — ხელით ვერ გამწვანდება. <span class="muted">დანარჩენი gate-ები ჯერ ხელითაა და თანდათან ავტომატდება.</span></div></div>`;
 }
 async function markAct(enc, kind){
   const o=decodeURIComponent(enc); const now=new Date().toISOString();
