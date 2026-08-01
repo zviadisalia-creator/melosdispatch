@@ -240,6 +240,8 @@ async function loadData(){
     REAL={}; REAL.myWeeks=p.weeks||[]; REAL.myDrivers=p.drivers||[]; REAL.myWorkLog=p.workLog||[];
     if(p.quality!=null) USER.quality=p.quality;
     await loadLiveLoads();   // RLS scopes loads to this dispatcher only
+    const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
+    DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
   }
 }
 function startApp(){
@@ -330,46 +332,66 @@ function render(){
 }
 
 /* ---------- DISPATCHER ---------- */
+/* ---- ჩემი დაფა — ცოცხალი მონაცემიდან, მანქანების დათვლით ---- */
+function nextWorkDay_(){ var d=new Date(); d.setDate(d.getDate()+1); if(d.getDay()===0) d.setDate(d.getDate()+1); return d; }
+function ymd_(d){ var p=function(n){return (n<10?'0':'')+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
+function puDay_(r){ return String(r.pickup_scheduled||r.pickup_week||'').slice(0,10); }
+function cars_(l){ return Number(l.vehicle_count)||1; }
+
 function rBoard(){
-  const wk=(REAL.myWeeks&&REAL.myWeeks[0])||{drivers:[]};
-  const capOf={}; (REAL.myDrivers||[]).forEach(d=>capOf[d.driver]=d.cap||1);
-  const cnt={g:0,y:0,r:0};
-  const cards=wk.drivers.map(d=>{
-    const cap=capOf[d.driver]||1;
-    let day=''; d.loads.forEach(l=>{if(l.puDate>day)day=l.puDate;});
-    const dayLoads=d.loads.filter(l=>l.puDate===day);
-    let color,reason;
-    if(cap>=2){ if(dayLoads.length>=cap){color='g';reason='დაცული — '+dayLoads.length+'/'+cap+' ტვირთი';}
-      else if(dayLoads.length){color='y';reason=dayLoads.length+'/'+cap+' ტვირთი — ნაწილობრივი დაფარვა';}
-      else {color='r';reason='ტვირთი არ არის დაცული';} }
-    else { const best=Math.max(0,...dayLoads.map(l=>l.price||0));
-      if(best>=900){color='g';reason='დაცული — '+money(best);}
-      else if(dayLoads.length){color='y';reason='ტვირთი < $900 — ნახევარი დღე';}
-      else {color='r';reason='ტვირთი არ არის დაცული';} }
-    cnt[color]++;
-    const ll=dayLoads.slice(0,3).map(l=>`<span class="load"><b>${esc(l.puLoc)}</b> → ${esc(l.dlLoc)} · ${money(l.price)}</span>`).join('');
-    const rcls=color==='y'?'reason y':(color==='r'?'reason':'reason');
-    const rstyle=color==='g'?' style="color:var(--good)"':'';
+  var L=LIVE||[];
+  var tday=ymd_(nextWorkDay_());
+  var cutD=ymd_(new Date(Date.now()-30*864e5));
+  var byName={};
+  L.forEach(function(r){
+    var nm=r.driver_name||(r.driver_id_sd?('SD '+r.driver_id_sd):'');
+    if(!nm) return;
+    if(!byName[nm]) byName[nm]={name:nm,loads:[],last:''};
+    byName[nm].loads.push(r);
+    var d=puDay_(r); if(d>byName[nm].last) byName[nm].last=d;
+  });
+  var list=Object.keys(byName).map(function(k){return byName[k];})
+    .filter(function(d){ var reg=DRIVERS_BY_NAME[d.name]; return !reg||reg.active!==false; })
+    .filter(function(d){ return d.last>=cutD; })
+    .sort(function(a,b){ return a.name.localeCompare(b.name); });
+
+  var cnt={g:0,y:0,r:0}, gaps=[];
+  var cards=list.map(function(d){
+    var reg=DRIVERS_BY_NAME[d.name]||{};
+    var cap=Number(reg.cap)||1;
+    var day=d.loads.filter(function(l){ return puDay_(l)===tday; });
+    var cars=day.reduce(function(s,l){ return s+cars_(l); },0);
+    var color=cars>=cap?'g':(cars>0?'y':'r');
+    cnt[color]++; if(color==='r') gaps.push(d.name);
+    var reason = cars>=cap ? ('დაცული — '+cars+'/'+cap+' მანქანა')
+      : (cars>0 ? (cars+'/'+cap+' მანქანა — ნაწილობრივი დაფარვა') : 'ტვირთი არ არის დაბუკული');
+    var ll=day.slice(0,3).map(function(l){
+      return `<span class="load"><b>${esc(locShort(l.pickup_location))}</b> → ${esc(locShort(l.delivery_location))} · ${money(l.gross!=null?l.gross:l.price)}${cars_(l)>1?` · ${cars_(l)} მანქ.`:''}</span>`;
+    }).join('');
     return `<div class="driver"><div class="cap">${cap}</div>
-      <div><div class="nm">${esc(d.driver)}</div><div class="meta">${cap}-მანქ. · ბოლო დღე ${esc(day).slice(5)}</div></div>
-      <div class="lw"><div class="loadline">${ll||'<span class="load">ტვირთი არ არის</span>'}</div><div class="${rcls}"${rstyle}>${reason}</div></div>
-      <div class="st"><span class="chip ${color}"><span class="dot"></span>${{g:'მწვანე',y:'ყვითელი',r:'წითელი'}[color]}</span></div></div>`;
+      <div><div class="nm">${esc(d.name)}</div><div class="meta">${cap}-მანქ. · ბოლო ტვირთი ${gd(d.last)}</div></div>
+      <div class="lw"><div class="loadline">${ll||'<span class="load">ტვირთი არ არის</span>'}</div><div class="reason"${color==='g'?' style="color:var(--good)"':''}>${reason}</div></div>
+      <div class="st"><span class="chip ${color}"><span class="dot"></span>${({g:'მწვანე',y:'ყვითელი',r:'წითელი'})[color]}</span></div></div>`;
   }).join('');
-  const chips=[['g','მწვანე'],['y','ყვითელი'],['r','წითელი']].filter(([k])=>cnt[k]).map(([k,l])=>`<span class="chip ${k}"><span class="dot"></span>${cnt[k]} ${l}</span>`).join('');
-  $('view').innerHTML=ph('ჩემი დაფა',`${USER.name} · ${wk.drivers.length} მძღოლი · ბოლო დღის დაფარვა (${esc(wk.week)} კვირა)`)+
-    `<div style="display:flex;gap:8px;margin-bottom:14px">${chips}</div>`+
-    `<div class="card" style="margin-bottom:16px">${cards}</div>`+
-    `<div class="sect">ცვლის დახურვა — გასვლის gate-ები</div>`+
+
+  var g1ok = list.length>0 && gaps.length===0;
+  var rem = (g1ok?0:1)+4;
+  var chips=[['g','მწვანე'],['y','ყვითელი'],['r','წითელი']].filter(function(t){return cnt[t[0]];})
+    .map(function(t){ return `<span class="chip ${t[0]}"><span class="dot"></span>${cnt[t[0]]} ${t[1]}</span>`; }).join('');
+
+  $('view').innerHTML=ph('ჩემი დაფა',`${esc(USER.name||'')} · ${list.length} აქტიური მძღოლი · დაფარვა ${gdFull(tday)}-სთვის`)+
+    `<div style="display:flex;gap:8px;margin-bottom:14px">${chips||'<span class="muted">მძღოლი არ არის</span>'}</div>`+
+    `<div class="card" style="margin-bottom:16px">${cards||'<div class="muted" style="padding:14px">ბოლო 30 დღეში აქტიური მძღოლი არ არის</div>'}</div>`+
+    `<div class="sect">ცვლის დახურვა — გასვლის GATE-ები</div>`+
     `<div class="card" id="closeCard">
-      <div class="gate ok"><div class="ic">✓</div><div class="t"><b>დაფარვა შემოწმებულია</b><span>${wk.drivers.length} მძღოლი შეფასდა R/Y/G რუბრიკით</span></div></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>ზარები · Pickup / Delivery</b><span>Quo-დან მოწმდება — SMS ითვლება მხოლოდ პასუხით</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>BOL გაგზავნა</b><span>ჩაბარებული ტვირთები — BOL სტატუსი Super Dispatch-იდან</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>ინვოისის გაგზავნა</b><span>ინვოისის სტატუსი Super Dispatch-იდან</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>ჩეკის ატვირთვა · Check on Delivery</b><span>ატვირთე ჩეკის ფოტო ან მონიშნე — ქეში / მძღოლმა თავად გაანაღდა</span></div><button class="fixbtn" onclick="fixGate(this)">ატვირთვა</button></div>
-      <div class="gate no"><div class="ic">!</div><div class="t"><b>ხვალინდელი ტვირთები დაბუკულია</b><span>tap-assign — აკრეფის გარეშე</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
-      <div class="closebar"><button class="bigbtn" id="logoutBtn" disabled>ცვლის დახურვა</button><span id="gateCount" class="chip r"><span class="dot"></span>5 დარჩენილი</span><span class="muted" style="font-size:12px">ყველა ✓-ის შემდეგ — „მწვანე"</span></div>
+      <div class="gate ${g1ok?'ok':'no'}"><div class="ic">${g1ok?'✓':'!'}</div><div class="t"><b>${gdFull(tday)}-ის ტვირთები დაბუკულია</b><span>${list.length} მძღოლი · ${cnt.g} დაცული · ${cnt.y} ნაწილობრივი · ${cnt.r} დაუბუკავი${gaps.length?' — '+esc(gaps.join(', ')):''}</span></div></div>
+      <div class="gate no"><div class="ic">!</div><div class="t"><b>ზარები · Pickup / Delivery</b><span>ჯერ ხელით — Quo-ს ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
+      <div class="gate no"><div class="ic">!</div><div class="t"><b>BOL გაგზავნა</b><span>ჯერ ხელით — SD-ის ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
+      <div class="gate no"><div class="ic">!</div><div class="t"><b>ინვოისის გაგზავნა</b><span>ჯერ ხელით — SD-ის ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">გასწორება</button></div>
+      <div class="gate no"><div class="ic">!</div><div class="t"><b>ჩეკის ატვირთვა · Check on Pickup / Delivery</b><span>ჯერ ხელით — ავტომატური შემოწმება მუშავდება</span></div><button class="fixbtn" onclick="fixGate(this)">ატვირთვა</button></div>
+      <div class="closebar"><button class="bigbtn" id="logoutBtn" disabled>ცვლის დახურვა</button><span id="gateCount" class="chip ${rem?'r':'g'}"><span class="dot"></span>${rem?rem+' დარჩენილი':'ყველა gate გავლილია'}</span><span class="muted" style="font-size:12px">ყველა ✓-ის შემდეგ — „მწვანე"</span></div>
     </div>
-    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>დისპეტჩერის შეყვანა = <b>განაცხადი</b>, არა ჭეშმარიტების წყარო. gate-ებს ავტომატურად ამოწმებს <b>Super Dispatch</b> (ტვირთი/BOL/ინვოისი) და <b>Quo</b> (ზარები). <span class="muted">ფერი გამოთვლილია რეალური რუბრიკით (მძღოლის ბოლო დაბუკული დღის ტვირთები); ცოცხალ რეჟიმში — ხვალინდელი SD ბუკინგებით.</span></div></div>`;
+    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>დაფარვა ითვლება <b>მანქანებით, არა ტვირთებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. პირველი gate <b>სისტემა ითვლის</b> Super Dispatch-ის ცოცხალი ბუკინგებით — ხელით ვერ გამწვანდება. <span class="muted">დანარჩენი gate-ები ჯერ ხელითაა და თანდათან ავტომატდება.</span></div></div>`;
 }
 function fixGate(b){const g=b.closest('.gate');g.classList.remove('no');g.classList.add('ok');g.querySelector('.ic').textContent='✓';
   const rem=document.querySelectorAll('#closeCard .gate.no').length; const c=$('gateCount'),lb=$('logoutBtn');
@@ -504,6 +526,7 @@ function rBoardLive(){
       var p2=function(n){ return String(n).padStart(2,'0'); };
       cut=dd.getFullYear()+'-'+p2(dd.getMonth()+1)+'-'+p2(dd.getDate()); } }
   var drivers=Object.keys(byDrv).map(function(k){ return byDrv[k]; }).filter(function(d){
+    var reg=DRIVERS_BY_NAME[d.name]; if(reg && reg.active===false) return false;
     d.last='';
     d.loads.forEach(function(l){ if(l.pickup_week && l.pickup_week>d.last) d.last=l.pickup_week; });
     return !cut || d.last>=cut;
