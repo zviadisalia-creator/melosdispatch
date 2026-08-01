@@ -870,7 +870,9 @@ var INVN=[];
 function selInv(i){ INVD=(i<0)?'':(INVN[i]||''); rInv(); }
 function rInv(){
   var ONS={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
-  var L=(LIVE||[]).filter(function(l){ return l.delivery_completed && !ONS[l.payment_terms] && !l.invoice_sent_at; });
+  var CAND=(LIVE||[]).filter(function(l){ return l.delivery_completed && !ONS[l.payment_terms] && !l.invoice_sent_at; });
+  var PAIDNOINV=CAND.filter(function(l){ return l.paid_at; });
+  var L=CAND.filter(function(l){ return !l.paid_at; });
   var now=Date.now();
   L=L.map(function(l){ var t=Date.parse(l.delivery_completed); var d=isNaN(t)?0:Math.floor((now-t)/864e5); return Object.assign({},l,{_d:d}); });
   L.sort(function(a,b){ return b._d-a._d; });
@@ -893,12 +895,12 @@ function rInv(){
   }).join('');
   var chips='<span class="chip'+(INVD?'':' g')+'" style="cursor:pointer" onclick="selInv(-1)">ყველა ('+L.length+')</span>';
   $('view').innerHTML=ph('ინვოისები — გასაგზავნი','ჩაბარებული ტვირთები, რომლებზეც Super Dispatch-ში ინვოისი გაგზავნილი არ არის')+
-    '<div class="kpis">'+kpi('ინვოისი გასაგზავნია',money(tot),'r',L.length+' ჩაბარებული ტვირთი')+kpi('30 დღეზე ძველი',money(sum(old30)),'r',old30.length+' ტვირთი')+kpi('ბოლო 7 დღე',money(sum(fresh)),'w',fresh.length+' ტვირთი')+kpi('დისპეტჩერი',dnames.length)+'</div>'+
+    '<div class="kpis">'+kpi('ინვოისი გასაგზავნია',money(tot),'r',L.length+' ჩაბარებული ტვირთი')+kpi('30 დღეზე ძველი',money(sum(old30)),'r',old30.length+' ტვირთი')+kpi('ბოლო 7 დღე',money(sum(fresh)),'w',fresh.length+' ტვირთი')+kpi('გადახდილია ინვოისის გარეშე',PAIDNOINV.length,'w','ჩანაწერის დისციპლინა SD-ში')+'</div>'+
     '<div class="card p" style="margin-bottom:14px"><h4>რამდენი ხანია ჩაბარებიდან</h4>'+aging+'</div>'+
     '<div class="card p" style="margin-bottom:14px"><h4>დისპეტჩერების ჭრილი</h4><div class="tablewrap"><table style="min-width:520px"><thead><tr><th>დისპეტჩერი</th><th class="num">ტვირთი</th><th class="num">თანხა</th><th class="num">ყველაზე ძველი</th></tr></thead><tbody>'+drows+'</tbody></table></div></div>'+
     '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'+chips+(INVD?'<span class="chip y">'+esc(INVD)+' — '+F.length+'</span>':'')+'</div>'+
     '<div class="tablewrap"><table style="min-width:860px"><thead><tr><th>Order ID</th><th>დისპეტჩერი</th><th>მძღოლი</th><th>კლიენტი</th><th>ჩაბარება</th><th class="num">დაგვიანება</th><th>Terms</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="muted" style="font-size:12px;margin-top:10px">მონაცემი პირდაპირ Super Dispatch-იდან — ტვირთი ჩაბარებულია, მაგრამ ინვოისი არ არის გაგზავნილი. On-site გადახდები (cash/check on pickup/delivery) სიაში არ შედის. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან. ინვოისი Super Dispatch-ში უნდა გაიგზავნოს — შემდეგ სია თავად განახლდება.</div></div>';
+    '<div class="muted" style="font-size:12px;margin-top:10px">მონაცემი პირდაპირ Super Dispatch-იდან — ტვირთი ჩაბარებულია, ინვოისი არ არის გაგზავნილი <b>და თანხაც ჯერ არ შემოსულა</b>. ასეთივე კიდევ '+PAIDNOINV.length+' ტვირთია, სადაც თანხა უკვე შემოსულია, მაგრამ ინვოისი SD-ში მაინც არ ჩანს — ეს ფულის და არა ჩანაწერის პრობლემაა. On-site გადახდები (cash/check on pickup/delivery) სიაში არ შედის. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან. ინვოისი Super Dispatch-ში უნდა გაიგზავნოს — შემდეგ სია თავად განახლდება.</div></div>';
 }
 /* ---- მისაღები / ვადაგადაცილება — ცოცხალი, Super Dispatch-ის paid_at-ით ---- */
 var TERMDAYS={'1_3_days':3,'2_days':2,'3_days':3,'5_days':5,'7_days':7,'10_days':10,'15_days':15,'20_days':20,'30_days':30,'45_days':45,'ach':7,'other':30,
@@ -918,17 +920,20 @@ function openAR_(){
       return Object.assign({},l,{_due:due,_late:(due?Math.floor((now-due)/864e5):0)});
     });
 }
-var RECVF='';
+var RECVF='broker';
 function setRecvF(v){ RECVF=v; rRecv(); }
+var ONSITE_={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
 function rRecv(){
   var A=openAR_();
   var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
-  var late=A.filter(function(l){ return l._late>0; });
-  var ONS2={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
-  var noInv=A.filter(function(l){ return !l.invoice_sent_at && !ONS2[l.payment_terms]; });
-  var F=A.slice();
+  var broker=A.filter(function(l){ return !ONSITE_[l.payment_terms]; });
+  var onsite=A.filter(function(l){ return ONSITE_[l.payment_terms]; });
+  var late=broker.filter(function(l){ return l._late>0; });
+  var noInv=broker.filter(function(l){ return !l.invoice_sent_at; });
+  var F=broker.slice();
   if(RECVF==='late') F=late.slice();
   if(RECVF==='noinv') F=noInv.slice();
+  if(RECVF==='onsite') F=onsite.slice();
   F.sort(function(a,b){ return b._late-a._late; });
   var col=function(d){ return d<=0?'var(--ink2)':d<=15?'var(--warn)':d<=30?'var(--serious)':d<=60?'var(--crit)':'#a51f1f'; };
   var SHOW=500;
@@ -943,16 +948,16 @@ function rRecv(){
   }).join('');
   var chip=function(k,l,n){ return '<span class="chip'+(RECVF===k?' g':'')+'" style="cursor:pointer" onclick="setRecvF(\''+k+'\')">'+l+' ('+n+')</span>'; };
   $('view').innerHTML=ph('მისაღები თანხები','ჩაბარებული ტვირთები, რომლებზეც Super Dispatch-ში გადახდა ჯერ არ დაფიქსირდა')+
-    '<div class="kpis">'+kpi('სულ მისაღები',money(sum(A)),'',A.length+' ტვირთი')+
+    '<div class="kpis">'+kpi('ბროკერზე მისაღები',money(sum(broker)),'',broker.length+' ტვირთი')+
       kpi('ვადაგადაცილებული',money(sum(late)),'r',late.length+' ტვირთი','overdue')+
       kpi('ინვოისი გასაგზავნია',money(sum(noInv)),'w',noInv.length+' ტვირთი','invoices')+
-      kpi('საშუალო დაგვიანება',(late.length?Math.round(late.reduce(function(s,l){return s+l._late;},0)/late.length):0)+' დღე',late.length?'r':'')+'</div>'+
-    '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+chip('','ყველა',A.length)+chip('late','ვადაგადაცილებული',late.length)+chip('noinv','ინვოისის გარეშე',noInv.length)+'</div>'+
+      kpi('ადგილზე ასაღები (cash/check)',money(sum(onsite)),'w',onsite.length+' ტვირთი')+'</div>'+
+    '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+chip('broker','ბროკერზე',broker.length)+chip('late','ვადაგადაცილებული',late.length)+chip('noinv','ინვოისის გარეშე',noInv.length)+chip('onsite','ადგილზე (cash/check)',onsite.length)+'</div>'+
     '<div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th>ჩაბარება</th><th>ინვოისი</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი მოდის პირდაპირ Super Dispatch-იდან (paid_at) — ხელით მონიშვნა აღარ სჭირდება. ვადა = ინვოისის გაგზავნის დღე (ან ჩაბარება, თუ ინვოისი არ არის) + Terms. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან.</div></div>';
+    '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი მოდის პირდაპირ Super Dispatch-იდან (paid_at) — ხელით მონიშვნა აღარ სჭირდება. „ადგილზე ასაღები" — cash/check on pickup/delivery: თანხა მძღოლმა ალბათ უკვე აიღო, მაგრამ Super Dispatch-ში გადახდა მონიშნული არ არის; ეს ჩანაწერის დისციპლინაა და არა დავალიანება. ვადა = ინვოისის გაგზავნის დღე (ან ჩაბარება, თუ ინვოისი არ არის) + Terms. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან.</div></div>';
 }
 function rOverdue(){
-  var A=openAR_().filter(function(l){ return l._late>0; });
+  var A=openAR_().filter(function(l){ return l._late>0 && !ONSITE_[l.payment_terms]; });
   A.sort(function(a,b){ return b._late-a._late; });
   var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
   var bk=[['1–15 დღე',1,15],['16–30 დღე',16,30],['31–45 დღე',31,45],['46–90 დღე',46,90],['90+ დღე',91,1e9]];
