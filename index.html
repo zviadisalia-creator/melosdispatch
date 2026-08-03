@@ -369,7 +369,14 @@ function render(){
 
 /* ---------- DISPATCHER ---------- */
 /* ---- ჩემი დაფა — ცოცხალი მონაცემიდან, მანქანების დათვლით ---- */
-function nextWorkDay_(){ var d=new Date(); d.setDate(d.getDate()+1); if(d.getDay()===0) d.setDate(d.getDate()+1); return d; }
+/* სამუშაო დღე შუაღამეს არ იცვლება — გუნდი ღამის პირველამდე მუშაობს.
+   საზღვარი დილის 4 საათია (იცვლება app_settings.shift_anchor_hour-ით). */
+function workNow_(){
+  var h=(typeof sett_==='function')?sett_('shift_anchor_hour',4):4;
+  return new Date(Date.now()-h*36e5);
+}
+function workToday_(){ return ymd_(workNow_()); }
+function nextWorkDay_(){ var d=workNow_(); d.setDate(d.getDate()+1); if(d.getDay()===0) d.setDate(d.getDate()+1); return d; }
 function ymd_(d){ var p=function(n){return (n<10?'0':'')+n;}; return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate()); }
 function puDay_(r){ return String(r.pickup_scheduled||r.pickup_week||'').slice(0,10); }
 function cars_(l){ return Number(l.vehicle_count)||1; }
@@ -459,7 +466,7 @@ function waivOk_(kind,subj,day,disp){ var w=waivOf_(kind,subj,day,disp); return 
 function rBoard(){
   var L=LIVE||[];
   var tday=ymd_(nextWorkDay_());
-  var cutD=addDays_(ymd_(new Date()),-30);
+  var cutD=addDays_(workToday_(),-30);
   var byName={};
   L.forEach(function(r){
     var nm=r.driver_name||(r.driver_id_sd?('SD '+r.driver_id_sd):'');
@@ -1199,7 +1206,7 @@ var COVF='all';
 function setCovF(v){ COVF=v; rCoverage(); }
 function coverRows_(){
   var L=LIVE||[], tday=ymd_(nextWorkDay_());
-  var cutD=addDays_(ymd_(new Date()),-30);
+  var cutD=addDays_(workToday_(),-30);
   var byName={};
   L.forEach(function(r){
     var nm=r.driver_name||(r.driver_id_sd?('SD '+r.driver_id_sd):'');
