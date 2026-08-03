@@ -1530,14 +1530,32 @@ function rPayroll(){
       "უარყოფითი ხელფასი ნიშნავს, რომ მძღოლმა ადგილზე უფრო მეტი აიღო, ვიდრე ეკუთვნოდა — სხვაობა მისგან ასაღებია. საბანკო რეკვიზიტები ჯერ ბაზაში არ ინახება.</div></div>";
 }
 /* ---- ხარჯები — ყოველთვიური ფიქსირებული ხარჯები (company_expenses) ---- */
-var EXP=[], USDGEL=2.6266;
-var EXPCATS=['ხელფასი','იჯარა','კომუნალური','ინტერნეტი','სხვა'];
+var EXP=[], USDGEL=2.6266, SETT={};
+var EXPCATS=['ხელფასი','იჯარა','კომუნალური','ინტერნეტი','ლოადბორდი','დაზღვევა','პროგრამები','სხვა'];
+var EXPREG={GE:'საქართველო',US:'ამერიკა'};
+function sett_(k,d){ var v=SETT[k]; return (v==null||!isFinite(v))?d:Number(v); }
+function taxes_(){
+  var inc=sett_('income_tax_pct',0.20), pe=sett_('pension_employee_pct',0.02), pr=sett_('pension_employer_pct',0.02);
+  var f=1-inc-pe; if(!(f>0)) f=1;
+  return {inc:inc, pe:pe, pr:pr, netFactor:f};
+}
+async function saveSett(key, value, div){
+  var v=Number(value); if(!isFinite(v)){ toast('რიცხვი ჩაწერე'); return; }
+  if(div) v=v/div;
+  try{
+    var res=await sb.from('app_settings').upsert({key:key,num_value:v,updated_at:new Date().toISOString(),updated_by:USER.email},{onConflict:'key'});
+    if(res.error) throw res.error;
+    SETT[key]=v; if(key==='usd_gel') USDGEL=v;
+    toast('შენახულია ✓'); render();
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+}
 async function loadExpenses(){
   try{
     var r=await sb.from('company_expenses').select('*').eq('active',true).order('sort');
     EXP=r.data||[];
-    var s=await sb.from('app_settings').select('*').eq('key','usd_gel').maybeSingle();
-    if(s.data && s.data.num_value!=null) USDGEL=Number(s.data.num_value);
+    var s=await sb.from('app_settings').select('*');
+    SETT={}; (s.data||[]).forEach(function(x){ if(x.num_value!=null) SETT[x.key]=Number(x.num_value); });
+    if(SETT.usd_gel) USDGEL=SETT.usd_gel;
   }catch(e){ console.error(e); EXP=[]; }
 }
 function expUSD_(e){
@@ -1571,10 +1589,11 @@ async function addExp(){
   var nm=($('expName')||{}).value||'', cat=($('expCat')||{}).value||'სხვა';
   var cash=Number(($('expCash')||{}).value||0), tr=Number(($('expTr')||{}).value||0);
   var cur=($('expCur')||{}).value||'GEL';
+  var reg=(($('expReg')||{}).value==='ამერიკა')?'US':'GE';
   if(!nm.trim()){ toast('დასახელება ჩაწერე'); return; }
   if(!isFinite(cash)||!isFinite(tr)){ toast('რიცხვი ჩაწერე'); return; }
   try{
-    var res=await sb.from('company_expenses').insert({name:nm.trim(),category:cat,amount_cash:cash,amount_transfer:tr,currency:cur,updated_by:USER.email}).select();
+    var res=await sb.from('company_expenses').insert({name:nm.trim(),category:cat,amount_cash:cash,amount_transfer:tr,currency:cur,region:reg,updated_by:USER.email}).select();
     if(res.error) throw res.error;
     if(res.data && res.data[0]) EXP.push(res.data[0]);
     toast('დამატებულია ✓'); if(MTAB==='expenses') rExpenses();
@@ -1582,17 +1601,16 @@ async function addExp(){
 }
 async function saveRate(value){
   var v=Number(value); if(!isFinite(v)||v<=0){ toast('კურსი არასწორია'); return; }
-  try{
-    var res=await sb.from('app_settings').upsert({key:'usd_gel',num_value:v,updated_at:new Date().toISOString(),updated_by:USER.email},{onConflict:'key'});
-    if(res.error) throw res.error;
-    USDGEL=v; toast('კურსი შენახულია ✓'); if(MTAB==='expenses') rExpenses();
-  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+  await saveSett('usd_gel', v, 0);
 }
 function rExpenses(){
-  var today=ymd_(new Date());
-  var cash=EXP.reduce(function(s,e){ return s+(e.currency==='USD'?(Number(e.amount_cash)||0):(Number(e.amount_cash)||0)/USDGEL); },0);
-  var tr=EXP.reduce(function(s,e){ return s+(e.currency==='USD'?(Number(e.amount_transfer)||0):(Number(e.amount_transfer)||0)/USDGEL); },0);
+  var regOf=function(e){ return (e.region==='US')?'US':'GE'; };
+  var usdOf=function(e,f){ var v=Number(e[f])||0; return e.currency==='USD'?v:v/USDGEL; };
+  var cash=EXP.reduce(function(s,e){ return s+usdOf(e,'amount_cash'); },0);
+  var tr=EXP.reduce(function(s,e){ return s+usdOf(e,'amount_transfer'); },0);
   var totUSD=cash+tr, totGEL=EXP.reduce(function(s,e){ return s+expGEL_(e); },0);
+  var ge=EXP.filter(function(e){ return regOf(e)==='GE'; }).reduce(function(s,e){ return s+expUSD_(e); },0);
+  var us=EXP.filter(function(e){ return regOf(e)==='US'; }).reduce(function(s,e){ return s+expUSD_(e); },0);
   var byCat={}; EXP.forEach(function(e){ var k=e.category||'სხვა'; byCat[k]=(byCat[k]||0)+expUSD_(e); });
   var ck=Object.keys(byCat).sort(function(a,b){ return byCat[b]-byCat[a]; });
   var mxC=Math.max.apply(null,ck.map(function(k){ return byCat[k]; }).concat([1]));
@@ -1600,35 +1618,44 @@ function rExpenses(){
     return "<div class='meter'><div class='ml'><span>"+esc(k)+"</span><b class='tnum'>"+money(byCat[k])+" · "+Math.round(byCat[k]/(totUSD||1)*100)+"%</b></div>"+
       "<div class='track'><i style='width:"+Math.round(byCat[k]/mxC*100)+"%;background:var(--brand)'></i></div></div>";
   }).join('');
-  var rows=EXP.slice().sort(function(a,b){ return (a.sort||100)-(b.sort||100); }).map(function(e){
-    var n="<input class='mini' style='width:78px' value='"+(Number(e.amount_cash)||0)+"' onchange=\"saveExp('"+e.id+"','amount_cash',this.value)\">";
-    var t="<input class='mini' style='width:78px' value='"+(Number(e.amount_transfer)||0)+"' onchange=\"saveExp('"+e.id+"','amount_transfer',this.value)\">";
-    var c="<select class='mini' onchange=\"saveExp('"+e.id+"','currency',this.value)\">"+['GEL','USD'].map(function(x){ return "<option"+(e.currency===x?' selected':'')+">"+x+"</option>"; }).join('')+"</select>";
-    var g="<select class='mini' onchange=\"saveExp('"+e.id+"','category',this.value)\">"+EXPCATS.map(function(x){ return "<option"+((e.category||'სხვა')===x?' selected':'')+">"+x+"</option>"; }).join('')+"</select>";
-    return "<tr><td><b>"+esc(e.name)+"</b>"+(e.note?"<div class='muted' style='font-size:11px;font-weight:400'>"+esc(e.note)+"</div>":"")+"</td>"+
-      "<td>"+g+"</td><td>"+n+"</td><td>"+t+"</td><td>"+c+"</td>"+
-      "<td class='num'><b>"+Math.round(expGEL_(e)).toLocaleString('en-US')+" ₾</b></td>"+
-      "<td class='num'>"+money(expUSD_(e))+"</td>"+
-      "<td><button class='fixbtn' onclick=\"delExp('"+e.id+"')\">წაშლა</button></td></tr>";
-  }).join('');
-  /* თვის სურათი — ბოლო 4 დასრულებული კვირა, თვედ გადაყვანილი (×30/28) */
+  var group=function(reg){
+    var L=EXP.filter(function(e){ return regOf(e)===reg; }).sort(function(a,b){ return (a.sort||100)-(b.sort||100); });
+    if(!L.length) return "<tr><td colspan='9' class='muted'>"+EXPREG[reg]+" — ხარჯი ჯერ არ არის</td></tr>";
+    var sub=L.reduce(function(s,e){ return s+expUSD_(e); },0);
+    var head="<tr style='background:var(--bg2)'><td colspan='7'><b>"+EXPREG[reg]+"</b></td><td class='num'><b>"+money(sub)+"</b></td><td></td></tr>";
+    return head+L.map(function(e){
+      var n="<input class='mini' style='width:74px' value='"+(Number(e.amount_cash)||0)+"' onchange=\"saveExp('"+e.id+"','amount_cash',this.value)\">";
+      var t="<input class='mini' style='width:74px' value='"+(Number(e.amount_transfer)||0)+"' onchange=\"saveExp('"+e.id+"','amount_transfer',this.value)\">";
+      var c="<select class='mini' onchange=\"saveExp('"+e.id+"','currency',this.value)\">"+['GEL','USD'].map(function(x){ return "<option"+(e.currency===x?' selected':'')+">"+x+"</option>"; }).join('')+"</select>";
+      var g="<select class='mini' onchange=\"saveExp('"+e.id+"','category',this.value)\">"+EXPCATS.map(function(x){ return "<option"+((e.category||'სხვა')===x?' selected':'')+">"+x+"</option>"; }).join('')+"</select>";
+      var r="<select class='mini' onchange=\"saveExp('"+e.id+"','region',this.value)\">"+['GE','US'].map(function(x){ return "<option value='"+x+"'"+(regOf(e)===x?' selected':'')+">"+EXPREG[x]+"</option>"; }).join('')+"</select>";
+      return "<tr><td><b>"+esc(e.name)+"</b>"+(e.note?"<div class='muted' style='font-size:11px;font-weight:400'>"+esc(e.note)+"</div>":"")+"</td>"+
+        "<td>"+g+"</td><td>"+r+"</td><td>"+n+"</td><td>"+t+"</td><td>"+c+"</td>"+
+        "<td class='num'>"+Math.round(expGEL_(e)).toLocaleString('en-US')+" ₾</td>"+
+        "<td class='num'><b>"+money(expUSD_(e))+"</b></td>"+
+        "<td><button class='fixbtn' onclick=\"delExp('"+e.id+"')\">წაშლა</button></td></tr>";
+    }).join('');
+  };
+  /* თვის სურათი */
+  var today=ymd_(new Date());
   var pStart=addDays_(mondayOf(today),-28), pEnd=addDays_(pStart,27);
   var P=dpRows_(pStart,pEnd);
+  var TX=taxes_();
   var comm=P.reduce(function(s,x){ return s+x.comm; },0);
-  var disp=P.reduce(function(s,x){ return s+(x.send||0); },0);
+  var cost=P.reduce(function(s,x){ return s+(x.cost||0); },0);
   var k=30/28;
-  var mComm=comm*k, mDisp=disp*k, mFix=totUSD, mNet=mComm-mDisp-mFix;
+  var mComm=comm*k, mDisp=cost*k, mFix=totUSD, mNet=mComm-mDisp-mFix;
   var line=function(l,v,cls,sub){
     return "<div style='display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line)'>"+
       "<div><div style='font-weight:600'>"+l+"</div>"+(sub?"<div class='muted' style='font-size:11.5px'>"+sub+"</div>":"")+"</div>"+
       "<b class='tnum' style='font-size:16px;color:"+(cls||'var(--ink)')+"'>"+v+"</b></div>";
   };
-  $('view').innerHTML=ph('ხარჯები','ყოველთვიური ფიქსირებული ხარჯები — ხელფასები, იჯარა, კომუნალურები, ინტერნეტი')+
+  $('view').innerHTML=ph('ხარჯები','ყოველთვიური ფიქსირებული ხარჯები — საქართველოსიც და ამერიკულიც')+
     "<div class='kpis'>"+
       kpi('სულ თვეში',money(totUSD),'r',Math.round(totGEL).toLocaleString('en-US')+' ₾')+
-      kpi('ქეშით',money(cash),'w','ხელიდან ხელში')+
-      kpi('ჩარიცხვით',money(tr),'','ბანკით')+
-      kpi('ხარჯის მუხლი',EXP.length,'',ck.length+' კატეგორია')+
+      kpi('საქართველო',money(ge),'',Math.round(ge/(totUSD||1)*100)+'% ხარჯებიდან')+
+      kpi('ამერიკა',money(us),'',us?(Math.round(us/(totUSD||1)*100)+'% ხარჯებიდან'):'ჯერ შევსებული არ არის')+
+      kpi('ქეშით',money(cash),'w','ხელიდან ხელში · ჩარიცხვით '+money(tr))+
     "</div>"+
     "<div class='grid2' style='margin-bottom:14px'>"+
       "<div class='card p'><h4>კატეგორიები</h4>"+(cbars||"<div class='muted'>ცარიელია</div>")+
@@ -1638,27 +1665,28 @@ function rExpenses(){
         "</div></div>"+
       "<div class='card p'><h4>თვის სურათი <span class='muted' style='font-weight:500;font-size:11px'>— დაახლოებით</span></h4>"+
         line('დისპეჩინგის საკომისიო',money(mComm),'var(--good)','მძღოლებისგან დაკავებული — ბოლო 4 კვირა, თვედ გადაყვანილი')+
-        line('− დისპეტჩერების ხელფასი','−'+money(mDisp),'var(--crit)','ამერიკიდან გადმოსარიცხი, გადასახადებით')+
+        line('− დისპეტჩერების სრული ხარჯი','−'+money(mDisp),'var(--crit)','ბრუტო ხელფასი + დამსაქმებლის საპენსიო')+
         line('− ფიქსირებული ხარჯები','−'+money(mFix),'var(--crit)','ეს გვერდი')+
         "<div style='display:flex;justify-content:space-between;align-items:baseline;padding:12px 0 0'>"+
           "<div style='font-weight:750;font-size:15px'>= წმინდა თვეში</div>"+
           "<b class='tnum' style='font-size:22px;color:"+(mNet>=0?'var(--good)':'var(--crit)')+"'>"+money(mNet)+"</b></div>"+
-        "<div class='muted' style='font-size:11.5px;margin-top:10px'>მძღოლების გროსი აქ არ ჩანს — ის pass-through-ია და კომპანიის შემოსავალი არ არის. აქ არ ითვლება: მძღოლების დაზღვევა, საბანკო/გადარიცხვის საკომისიოები და საქართველოს გადასახადები ხელფასებზე, სადაც თანხა netia.</div></div>"+
+        "<div class='muted' style='font-size:11.5px;margin-top:10px'>მძღოლების გროსი აქ არ ჩანს — ის pass-through-ია და კომპანიის შემოსავალი არ არის. აქ ჯერ არ ითვლება: მძღოლების დაზღვევა, საბანკო/გადარიცხვის საკომისიოები და საქართველოს გადასახადები ოფისის ხელფასებზე (მარიამი, ნიკა, დამლაგებელი — იქ თანხა netia).</div></div>"+
     "</div>"+
     "<div class='card p'><h4>ხარჯების სია</h4>"+
-      "<div class='tablewrap'><table style='min-width:900px'><thead><tr><th>დასახელება</th><th>კატეგორია</th><th>ქეში</th><th>ჩარიცხვა</th><th>ვალუტა</th><th class='num'>თვეში ₾</th><th class='num'>თვეში $</th><th></th></tr></thead><tbody>"+
-      (rows||"<tr><td colspan='8' class='muted'>ხარჯი არ არის</td></tr>")+
-      "<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td></td><td></td><td></td><td class='num'>"+Math.round(totGEL).toLocaleString('en-US')+" ₾</td><td class='num'>"+money(totUSD)+"</td><td></td></tr>"+
+      "<div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დასახელება</th><th>კატეგორია</th><th>სად</th><th>ქეში</th><th>ჩარიცხვა</th><th>ვალუტა</th><th class='num'>თვეში ₾</th><th class='num'>თვეში $</th><th></th></tr></thead><tbody>"+
+      group('GE')+group('US')+
+      "<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td></td><td></td><td></td><td></td><td class='num'>"+Math.round(totGEL).toLocaleString('en-US')+" ₾</td><td class='num'>"+money(totUSD)+"</td><td></td></tr>"+
       "</tbody></table></div>"+
       "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)'>"+
-        "<input class='mini' id='expName' style='width:190px' placeholder='ახალი ხარჯის დასახელება'>"+
+        "<input class='mini' id='expName' style='width:180px' placeholder='ახალი ხარჯის დასახელება'>"+
         "<select class='mini' id='expCat'>"+EXPCATS.map(function(x){ return "<option>"+x+"</option>"; }).join('')+"</select>"+
-        "<input class='mini' id='expCash' style='width:84px' placeholder='ქეში'>"+
-        "<input class='mini' id='expTr' style='width:84px' placeholder='ჩარიცხვა'>"+
+        "<select class='mini' id='expReg'><option>საქართველო</option><option>ამერიკა</option></select>"+
+        "<input class='mini' id='expCash' style='width:80px' placeholder='ქეში'>"+
+        "<input class='mini' id='expTr' style='width:80px' placeholder='ჩარიცხვა'>"+
         "<select class='mini' id='expCur'><option>GEL</option><option>USD</option></select>"+
         "<button class='fixbtn' onclick='addExp()'>დამატება</button>"+
       "</div>"+
-      "<div class='muted' style='font-size:12px;margin-top:10px'>ყველა უჯრა პირდაპირ იცვლება და ბაზაში ინახება. „ქეში“ = ხელიდან ხელში გადახდილი ნაწილი, „ჩარიცხვა“ = ბანკით. ლარის თანხები დოლარში გადაიყვანება ზემოთ მითითებული კურსით.</div></div>";
+      "<div class='muted' style='font-size:12px;margin-top:10px'>ყველა უჯრა პირდაპირ იცვლება და ბაზაში ინახება. „ქეში“ = ხელიდან ხელში, „ჩარიცხვა“ = ბანკით. ამერიკული ხარჯებისთვის (loadboard-ები, დაზღვევა) აირჩიე „ამერიკა“ და ვალუტა USD.</div></div>";
 }
 /* ---- დისპეტჩერების ხელფასები — 4-კვირიანი საანგარიშო პერიოდი ---- */
 var DPSTART='';   // პერიოდის პირველი ორშაბათი
@@ -1686,6 +1714,7 @@ async function saveDRate(enc, field, value){
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
 function dpRows_(from, to){
+  var TX=taxes_();
   var A=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=from && d<=to; });
   var by={};
   A.forEach(function(l){
@@ -1699,47 +1728,73 @@ function dpRows_(from, to){
   return Object.keys(by).map(function(k){
     var x=by[k], rt=DRATES[k]||{};
     x.nDrv=Object.keys(x.drv).length;
-    x.pct=(rt.pct!=null)?Number(rt.pct):null;
-    x.npct=(rt.net_pct!=null)?Number(rt.net_pct):null;
-    x.send=(x.pct!=null)? x.gross*x.pct : null;
+    x.pct=(rt.pct!=null)?Number(rt.pct):null;              // მიმდინარე ბრუტო განაკვეთი
+    x.npct=(rt.net_pct!=null)?Number(rt.net_pct):null;      // სასურველი NET განაკვეთი
+    x.reqPct=(x.npct!=null)? x.npct/TX.netFactor : null;    // ბრუტო, რომელიც NET-ს ფარავს
     x.net=(x.npct!=null)? x.gross*x.npct : null;
-    x.tax=(x.send!=null&&x.net!=null)? (x.send-x.net) : null;
-    x.margin=(x.send!=null)? (x.comm-x.send) : null;
+    x.send=(x.pct!=null)? x.gross*x.pct : null;             // რასაც დღეს გზავნის
+    x.reqSend=(x.reqPct!=null)? x.gross*x.reqPct : x.send;  // რაც უნდა გაიგზავნოს
+    x.gap=(x.reqSend!=null&&x.send!=null)? (x.reqSend-x.send) : null;
+    x.tax=(x.reqSend!=null&&x.net!=null)? (x.reqSend-x.net) : null;   // საშემოს. + თანამშრ. საპენსიო
+    x.pens=(x.reqSend!=null)? x.reqSend*TX.pr : null;                  // დამსაქმებლის საპენსიო
+    x.cost=(x.reqSend!=null)? (x.reqSend+(x.pens||0)) : null;          // კომპანიის სრული ხარჯი
+    x.margin=(x.cost!=null)? (x.comm-x.cost) : null;
     return x;
   }).sort(function(a,b){ return b.gross-a.gross; });
 }
+async function fixAllRates(){
+  var TX=taxes_();
+  var names=Object.keys(DRATES).filter(function(k){ return DRATES[k].net_pct!=null; });
+  if(!names.length){ toast('NET განაკვეთი არსად არის'); return; }
+  try{
+    for(var i=0;i<names.length;i++){
+      var k=names[i], want=Math.round(Number(DRATES[k].net_pct)/TX.netFactor*1e6)/1e6;
+      if(Math.abs((DRATES[k].pct||0)-want)<1e-9) continue;
+      var res=await sb.from('dispatcher_rates').upsert({dispatcher_name:k, pct:want, updated_at:new Date().toISOString(), updated_by:USER.email},{onConflict:'dispatcher_name'});
+      if(res.error) throw res.error;
+      DRATES[k].pct=want;
+    }
+    toast('განაკვეთები გასწორდა ✓'); rDispPay();
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+}
 function rDispPay(){
-  var start=dpStart_(), end=addDays_(start,27);       // 4 კვირა = 28 დღე
-  var payday=addDays_(start,29);                       // მე-5 კვირის სამშაბათი
+  var TX=taxes_();
+  var start=dpStart_(), end=addDays_(start,27);
+  var payday=addDays_(start,29);
   var today=ymd_(new Date());
   var done=(end<today);
   var R=dpRows_(start,end);
   var T=R.reduce(function(s,x){ s.n+=x.n; s.cars+=x.cars; s.gross+=x.gross; s.comm+=x.comm;
-    if(x.send!=null) s.send+=x.send; if(x.net!=null) s.net+=x.net; if(x.tax!=null) s.tax+=x.tax;
-    return s; },{n:0,cars:0,gross:0,comm:0,send:0,net:0,tax:0});
-  var noRate=R.filter(function(x){ return x.pct==null; }).length;
-  var noNet=R.filter(function(x){ return x.pct!=null && x.npct==null; }).length;
+    s.net+=(x.net||0); s.send+=(x.send||0); s.reqSend+=(x.reqSend||0); s.tax+=(x.tax||0);
+    s.pens+=(x.pens||0); s.cost+=(x.cost||0); return s; },
+    {n:0,cars:0,gross:0,comm:0,net:0,send:0,reqSend:0,tax:0,pens:0,cost:0});
+  var noRate=R.filter(function(x){ return x.npct==null; }).length;
+  var offRate=R.filter(function(x){ return x.npct!=null && x.pct!=null && Math.abs(x.pct-x.reqPct)>0.00005; }).length;
   var rows=R.map(function(x){
     var enc=encodeURIComponent(x.d);
-    var pin="<input class='mini' style='width:58px' placeholder='%' value='"+(x.pct!=null?(Math.round(x.pct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','pct',this.value)\">";
-    var nin="<input class='mini' style='width:58px' placeholder='%' value='"+(x.npct!=null?(Math.round(x.npct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','net_pct',this.value)\">";
-    return "<tr><td><b>"+esc(x.d)+"</b></td><td class='num'>"+x.nDrv+"</td><td class='num'>"+x.n+"</td><td class='num'>"+x.cars+"</td>"+
+    var pin="<input class='mini' style='width:56px' placeholder='%' value='"+(x.pct!=null?(Math.round(x.pct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','pct',this.value)\">";
+    var nin="<input class='mini' style='width:56px' placeholder='%' value='"+(x.npct!=null?(Math.round(x.npct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','net_pct',this.value)\">";
+    var off=(x.reqPct!=null && x.pct!=null && Math.abs(x.pct-x.reqPct)>0.00005);
+    return "<tr><td><b>"+esc(x.d)+"</b></td><td class='num'>"+x.nDrv+"</td><td class='num'>"+x.n+"</td>"+
       "<td class='num'><b>"+money(x.gross)+"</b></td>"+
       "<td class='num'>"+money(x.comm)+"</td>"+
-      "<td>"+pin+"</td>"+
-      "<td class='num' style='font-weight:750'>"+(x.send!=null?money(x.send):"<span class='muted' style='font-weight:400'>—</span>")+"</td>"+
       "<td>"+nin+"</td>"+
-      "<td class='num' style='font-weight:750;color:var(--good)'>"+(x.net!=null?money(x.net):"<span class='muted' style='font-weight:400'>—</span>")+"</td>"+
+      "<td class='num' style='font-weight:750;color:var(--good)'>"+(x.net!=null?money(x.net):'—')+"</td>"+
+      "<td>"+pin+"</td>"+
+      "<td class='num'>"+(x.reqPct!=null?("<b"+(off?" style='color:var(--crit)'":"")+">"+(Math.round(x.reqPct*1000000)/10000)+"%</b>"):'—')+"</td>"+
+      "<td class='num' style='font-weight:750'>"+(x.reqSend!=null?money(x.reqSend):'—')+
+        (off?("<div class='muted' style='font-size:11px;font-weight:400;color:var(--crit)'>ახლა "+money(x.send)+"</div>"):"")+"</td>"+
       "<td class='num muted'>"+(x.tax!=null?money(x.tax):'—')+"</td>"+
+      "<td class='num muted'>"+(x.pens!=null?money(x.pens):'—')+"</td>"+
+      "<td class='num' style='font-weight:750'>"+(x.cost!=null?money(x.cost):'—')+"</td>"+
       "<td class='num' style='color:"+(x.margin==null?'var(--muted)':(x.margin>=0?'var(--good)':'var(--crit)'))+";font-weight:700'>"+(x.margin!=null?money(x.margin):'—')+"</td></tr>";
   }).join('');
-  /* კვირების ჩაშლა */
   var wk=[0,1,2,3].map(function(i){
     var a=addDays_(start,i*7), b=addDays_(a,6);
     var W=dpRows_(a,b);
-    return {a:a,b:b, n:W.reduce(function(s,x){return s+x.n;},0),
+    return {a:a, n:W.reduce(function(s,x){return s+x.n;},0),
       g:W.reduce(function(s,x){return s+x.gross;},0),
-      send:W.reduce(function(s,x){return s+(x.send||0);},0),
+      send:W.reduce(function(s,x){return s+(x.reqSend||0);},0),
       net:W.reduce(function(s,x){return s+(x.net||0);},0),
       future:(a>today)};
   });
@@ -1750,11 +1805,11 @@ function rDispPay(){
       "<td class='num'>"+money(w.send)+"</td><td class='num' style='color:var(--good)'>"+money(w.net)+"</td>"+
       "<td style='width:150px'><div class='track'><i style='width:"+Math.round(w.g/mxW*100)+"%;background:var(--brand)'></i></div></td></tr>";
   }).join('');
-  /* წინა პერიოდები */
   var prevs=[1,2,3].map(function(i){ return addDays_(start,-28*i); });
   var pchips=prevs.map(function(m){
     return "<span class='chip' style='cursor:pointer' onclick=\"setDpStart('"+m+"')\">"+gd(m)+" – "+gd(addDays_(m,27))+"</span>";
   }).join('');
+  var pc=function(v){ return (Math.round(v*10000)/100)+'%'; };
   $('view').innerHTML=ph('დისპეტჩერების ხელფასები','საანგარიშო პერიოდი: 4 სამუშაო კვირა · გადახდა მე-5 კვირის სამშაბათს')+
     "<div class='card p' style='margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap'>"+
       "<div><div class='muted' style='font-size:11.5px'>პერიოდი</div>"+
@@ -1769,22 +1824,29 @@ function rDispPay(){
         "<span class='chip g' style='cursor:pointer' onclick=\"setDpStart('')\">ბოლო 4 კვირა</span>"+
       "</div></div>"+
     "<div class='kpis'>"+
-      kpi('მძღოლების გროსი',money(T.gross),'',R.length+' დისპეტჩერი · '+T.n+' ტვირთი')+
-      kpi('ამერიკიდან გადმოსარიცხი',money(T.send),'w','გადასახადების ჩათვლით · '+gd(payday))+
-      kpi('ბანკზე ჩასარიცხი (NET)',money(T.net),'g','რაც დისპეტჩერებს ხელზე ერგებათ')+
-      kpi('კომპანიის მარჟა',money(T.comm-T.send),(T.comm-T.send)>=0?'g':'r','საკომისიო '+money(T.comm)+' − ხელფასი')+
+      kpi('ბანკზე ჩასარიცხი (NET)',money(T.net),'g',R.length+' დისპეტჩერი · '+T.n+' ტვირთი')+
+      kpi('ბრუტო — გადმოსარიცხი',money(T.reqSend),'w','საშემოსავლო + საპენსიო '+money(T.tax))+
+      kpi('დამსაქმებლის საპენსიო',money(T.pens),'w',pc(TX.pr)+' ბრუტოზე, ზემოდან')+
+      kpi('კომპანიის სრული ხარჯი',money(T.cost),'r','საკომისიო '+money(T.comm)+' → მარჟა '+money(T.comm-T.cost))+
     "</div>"+
-    "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>ორი განაკვეთი, ორი რიცხვი.</b> „განაკვეთი %“ = რამდენი უნდა გადმოირიცხოს ამერიკიდან საქართველოში (გადასახადების ჩათვლით). „NET %“ = რამდენი ჩაერიცხება უშუალოდ დისპეტჩერის ბანკის ანგარიშზე. სხვაობა — გადასახადი. ორივე უჯრა პირდაპირ ცხრილში იცვლება და ბაზაში ინახება.</div></div>"+
-    "<div class='card p' style='margin-bottom:14px'><div class='tablewrap'><table style='min-width:1140px'><thead><tr><th>დისპეტჩერი</th><th class='num'>მძღოლი</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>მძღ. გროსი</th><th class='num'>კომპ. საკომისიო</th><th>განაკვეთი %</th><th class='num'>გადმოსარიცხი</th><th>NET %</th><th class='num'>NET ჩასარიცხი</th><th class='num'>გადასახადი</th><th class='num'>მარჟა</th></tr></thead><tbody>"+
-      (rows||"<tr><td colspan='12' class='muted'>ამ პერიოდში ტვირთი არ არის</td></tr>")+
-      (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+T.cars+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>"+money(T.comm)+"</td><td></td><td class='num'>"+money(T.send)+"</td><td></td><td class='num'>"+money(T.net)+"</td><td class='num'>"+money(T.tax)+"</td><td class='num'>"+money(T.comm-T.send)+"</td></tr>"):"")+
+    (offRate? "<div class='callout' style='margin-bottom:14px;border-color:var(--crit)'><span class='b' style='background:var(--crit)'>!</span><div><b>"+offRate+" დისპეტჩერს მიმდინარე ბრუტო განაკვეთი NET-ს ზუსტად არ ფარავს.</b> ამ პერიოდზე სხვაობა <b>"+money(T.reqSend-T.send)+"</b>-ია. საჭირო ბრუტო = NET ÷ "+(Math.round(TX.netFactor*10000)/100)+"%. <button class='fixbtn' style='margin-left:8px' onclick='fixAllRates()'>განაკვეთების გასწორება</button></div></div>" : "")+
+    "<div class='card p' style='margin-bottom:14px'><h4>გადასახადის მოდელი <span class='muted' style='font-weight:500;font-size:11px'>— დაქირავებული თანამშრომელი, საქართველო</span></h4>"+
+      "<div style='display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-top:10px'>"+
+        "<div><div class='muted' style='font-size:11.5px'>საშემოსავლო</div><input class='mini' style='width:64px' value='"+(Math.round(TX.inc*10000)/100)+"' onchange=\"saveSett('income_tax_pct',this.value,100)\"> %</div>"+
+        "<div><div class='muted' style='font-size:11.5px'>საპენსიო — თანამშრომელი</div><input class='mini' style='width:64px' value='"+(Math.round(TX.pe*10000)/100)+"' onchange=\"saveSett('pension_employee_pct',this.value,100)\"> %</div>"+
+        "<div><div class='muted' style='font-size:11.5px'>საპენსიო — დამსაქმებელი</div><input class='mini' style='width:64px' value='"+(Math.round(TX.pr*10000)/100)+"' onchange=\"saveSett('pension_employer_pct',this.value,100)\"> %</div>"+
+        "<div><div class='muted' style='font-size:11.5px'>ხელზე რჩება ბრუტოს</div><div style='font-size:18px;font-weight:750'>"+(Math.round(TX.netFactor*10000)/100)+"%</div></div>"+
+      "</div>"+
+      "<div class='muted' style='font-size:12px;margin-top:10px'>საშემოსავლო და თანამშრომლის საპენსიო <b>ბრუტოდან იკავება</b> — ბრუტო = NET ÷ "+(Math.round(TX.netFactor*10000)/100)+"%. დამსაქმებლის საპენსიო <b>ზემოდან ემატება</b> და ბრუტოდან არ იკავება. სახელმწიფოს წილი (2/1/0%) კომპანიას არ უჯდება. განაკვეთები აქ იცვლება — თუ კანონი შეიცვლება, სამი ციფრის შეცვლა კმარა.</div></div>"+
+    "<div class='card p' style='margin-bottom:14px'><div class='tablewrap'><table style='min-width:1240px'><thead><tr><th>დისპეტჩერი</th><th class='num'>მძღ.</th><th class='num'>ტვირთი</th><th class='num'>მძღ. გროსი</th><th class='num'>კომპ. საკომისიო</th><th>NET %</th><th class='num'>NET ჩასარიცხი</th><th>ბრუტო %</th><th class='num'>საჭირო %</th><th class='num'>ბრუტო (გადმოსარიცხი)</th><th class='num'>გადასახადი</th><th class='num'>დამსაქმ. საპენსიო</th><th class='num'>სრული ხარჯი</th><th class='num'>მარჟა</th></tr></thead><tbody>"+
+      (rows||"<tr><td colspan='14' class='muted'>ამ პერიოდში ტვირთი არ არის</td></tr>")+
+      (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>"+money(T.comm)+"</td><td></td><td class='num'>"+money(T.net)+"</td><td></td><td></td><td class='num'>"+money(T.reqSend)+"</td><td class='num'>"+money(T.tax)+"</td><td class='num'>"+money(T.pens)+"</td><td class='num'>"+money(T.cost)+"</td><td class='num'>"+money(T.comm-T.cost)+"</td></tr>"):"")+
       "</tbody></table></div>"+
       "<div class='muted' style='font-size:12px;margin-top:10px'>"+
-      (noRate?("<b style='color:var(--warn)'>"+noRate+" დისპეტჩერს განაკვეთი არ აქვს</b> — ჩაწერე უჯრაში. "):"")+
-      (noNet?("<b style='color:var(--warn)'>"+noNet+"-ს NET განაკვეთი აკლია.</b> "):"")+
-      "კომპანიის საკომისიო ითვლება მძღოლების რეესტრის განაკვეთებით (1-მანქ 10%, 2+მანქ 12%). ტვირთები, რომლებსაც დისპეტჩერი მიბმული არ აქვს, ცხრილში არ ჩანს. კვირა ითვლება ტვირთის აღების თარიღით.</div></div>"+
+      (noRate?("<b style='color:var(--warn)'>"+noRate+" დისპეტჩერს NET განაკვეთი არ აქვს</b> — ჩაწერე უჯრაში. "):"")+
+      "„NET %“ არის ის, რაც დისპეტჩერს ხელზე რჩება — ეს არის შენი გადაწყვეტილება. დანარჩენს სისტემა ითვლის. „ბრუტო %“ = რას აგზავნი დღეს; „საჭირო %“ = რამდენი უნდა გაიგზავნოს, რომ NET-იც დაიფაროს და გადასახადიც. კომპანიის საკომისიო ითვლება მძღოლების რეესტრის განაკვეთებით.</div></div>"+
     "<div class='grid2'>"+
-      "<div class='card p'><h4>პერიოდის კვირები</h4><div class='tablewrap'><table style='min-width:520px'><thead><tr><th>კვირა</th><th class='num'>ტვირთი</th><th class='num'>გროსი</th><th class='num'>გადმოსარიცხი</th><th class='num'>NET</th><th></th></tr></thead><tbody>"+wkRows+"</tbody></table></div></div>"+
+      "<div class='card p'><h4>პერიოდის კვირები</h4><div class='tablewrap'><table style='min-width:520px'><thead><tr><th>კვირა</th><th class='num'>ტვირთი</th><th class='num'>გროსი</th><th class='num'>ბრუტო</th><th class='num'>NET</th><th></th></tr></thead><tbody>"+wkRows+"</tbody></table></div></div>"+
       "<div class='card p'><h4>წინა პერიოდები</h4><div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>"+pchips+"</div>"+
         "<div class='muted' style='font-size:12px;margin-top:12px'>თუ ციკლის ათვლა ერთი კვირით აცდენილია, დააჭირე <b>„‹ 1 კვირით უკან“</b> ან <b>„1 კვირით წინ ›“</b> — პერიოდი და გადახდის თარიღი ავტომატურად გადაიწევს.</div></div>"+
     "</div>";
