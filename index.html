@@ -1528,9 +1528,15 @@ function rPayroll(){
       "<div class='muted' style='font-size:12px;margin-top:10px'>"+(noReg?("<b style='color:var(--warn)'>"+noReg+" მძღოლი რეესტრში არ არის</b> — მათზე ნაგულისხმევი წესი გამოიყენება. დაამატე ისინი <b onclick=\"goM('drivers')\" style='cursor:pointer;text-decoration:underline'>მძღოლების რეესტრში</b>. "):"")+
       "უარყოფითი ხელფასი ნიშნავს, რომ მძღოლმა ადგილზე უფრო მეტი აიღო, ვიდრე ეკუთვნოდა — სხვაობა მისგან ასაღებია. საბანკო რეკვიზიტები ჯერ ბაზაში არ ინახება.</div></div>";
 }
-/* ---- დისპეტჩერების ხელფასები — ცოცხლად (SD loads + dispatcher_rates) ---- */
-var DPW='';
-function setDpW(w){ DPW=w; rDispPay(); }
+/* ---- დისპეტჩერების ხელფასები — 4-კვირიანი საანგარიშო პერიოდი ---- */
+var DPSTART='';   // პერიოდის პირველი ორშაბათი
+function setDpStart(w){ DPSTART=w; rDispPay(); }
+function dpShift(n){ DPSTART=addDays_(dpStart_(), n*7); rDispPay(); }
+function dpStart_(){
+  if(DPSTART) return DPSTART;
+  var thisMon=mondayOf(ymd_(new Date()));
+  return addDays_(thisMon,-28);          // ბოლო 4 დასრულებული კვირა
+}
 async function saveDRate(enc, field, value){
   var name=decodeURIComponent(enc);
   var v=(value===''?null:Number(value));
@@ -1547,13 +1553,8 @@ async function saveDRate(enc, field, value){
     if(MTAB==='disppay') rDispPay();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
-function dpWeeks_(){
-  var m={}; (LIVE||[]).forEach(function(l){ var k=mondayOf(puDay_(l)); if(k) m[k]=1; });
-  return Object.keys(m).sort().reverse().slice(0,12);
-}
-function dpRows_(wk){
-  var end=addDays_(wk,6);
-  var A=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=wk && d<=end; });
+function dpRows_(from, to){
+  var A=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=from && d<=to; });
   var by={};
   A.forEach(function(l){
     var k=l.dispatcher_name; if(!k) return;
@@ -1568,18 +1569,19 @@ function dpRows_(wk){
     x.nDrv=Object.keys(x.drv).length;
     x.pct=(rt.pct!=null)?Number(rt.pct):null;
     x.npct=(rt.net_pct!=null)?Number(rt.net_pct):null;
-    x.send=(x.pct!=null)? x.gross*x.pct : null;          // ამერიკიდან გადმოსარიცხი
-    x.net=(x.npct!=null)? x.gross*x.npct : null;          // ბანკზე ჩასარიცხი
+    x.send=(x.pct!=null)? x.gross*x.pct : null;
+    x.net=(x.npct!=null)? x.gross*x.npct : null;
     x.tax=(x.send!=null&&x.net!=null)? (x.send-x.net) : null;
     x.margin=(x.send!=null)? (x.comm-x.send) : null;
     return x;
   }).sort(function(a,b){ return b.gross-a.gross; });
 }
 function rDispPay(){
-  var weeks=dpWeeks_();
-  var thisMon=mondayOf(ymd_(new Date()));
-  var wk=DPW || (weeks.filter(function(m){ return m<thisMon; })[0] || weeks[0] || thisMon);
-  var R=dpRows_(wk);
+  var start=dpStart_(), end=addDays_(start,27);       // 4 კვირა = 28 დღე
+  var payday=addDays_(start,29);                       // მე-5 კვირის სამშაბათი
+  var today=ymd_(new Date());
+  var done=(end<today);
+  var R=dpRows_(start,end);
   var T=R.reduce(function(s,x){ s.n+=x.n; s.cars+=x.cars; s.gross+=x.gross; s.comm+=x.comm;
     if(x.send!=null) s.send+=x.send; if(x.net!=null) s.net+=x.net; if(x.tax!=null) s.tax+=x.tax;
     return s; },{n:0,cars:0,gross:0,comm:0,send:0,net:0,tax:0});
@@ -1587,8 +1589,8 @@ function rDispPay(){
   var noNet=R.filter(function(x){ return x.pct!=null && x.npct==null; }).length;
   var rows=R.map(function(x){
     var enc=encodeURIComponent(x.d);
-    var pin="<input class='mini' style='width:60px' placeholder='%' value='"+(x.pct!=null?(Math.round(x.pct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','pct',this.value)\">";
-    var nin="<input class='mini' style='width:60px' placeholder='%' value='"+(x.npct!=null?(Math.round(x.npct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','net_pct',this.value)\">";
+    var pin="<input class='mini' style='width:58px' placeholder='%' value='"+(x.pct!=null?(Math.round(x.pct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','pct',this.value)\">";
+    var nin="<input class='mini' style='width:58px' placeholder='%' value='"+(x.npct!=null?(Math.round(x.npct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','net_pct',this.value)\">";
     return "<tr><td><b>"+esc(x.d)+"</b></td><td class='num'>"+x.nDrv+"</td><td class='num'>"+x.n+"</td><td class='num'>"+x.cars+"</td>"+
       "<td class='num'><b>"+money(x.gross)+"</b></td>"+
       "<td class='num'>"+money(x.comm)+"</td>"+
@@ -1596,39 +1598,64 @@ function rDispPay(){
       "<td class='num' style='font-weight:750'>"+(x.send!=null?money(x.send):"<span class='muted' style='font-weight:400'>—</span>")+"</td>"+
       "<td>"+nin+"</td>"+
       "<td class='num' style='font-weight:750;color:var(--good)'>"+(x.net!=null?money(x.net):"<span class='muted' style='font-weight:400'>—</span>")+"</td>"+
-      "<td class='num' class='muted'>"+(x.tax!=null?money(x.tax):'—')+"</td>"+
+      "<td class='num muted'>"+(x.tax!=null?money(x.tax):'—')+"</td>"+
       "<td class='num' style='color:"+(x.margin==null?'var(--muted)':(x.margin>=0?'var(--good)':'var(--crit)'))+";font-weight:700'>"+(x.margin!=null?money(x.margin):'—')+"</td></tr>";
   }).join('');
-  var wsel=weeks.slice(0,10).map(function(m){
-    return "<span class='chip"+(m===wk?' g':'')+"' style='cursor:pointer' onclick=\"setDpW('"+m+"')\">"+weekLabel(m)+"</span>";
+  /* კვირების ჩაშლა */
+  var wk=[0,1,2,3].map(function(i){
+    var a=addDays_(start,i*7), b=addDays_(a,6);
+    var W=dpRows_(a,b);
+    return {a:a,b:b, n:W.reduce(function(s,x){return s+x.n;},0),
+      g:W.reduce(function(s,x){return s+x.gross;},0),
+      send:W.reduce(function(s,x){return s+(x.send||0);},0),
+      net:W.reduce(function(s,x){return s+(x.net||0);},0),
+      future:(a>today)};
+  });
+  var mxW=Math.max.apply(null,wk.map(function(w){ return w.g; }).concat([1]));
+  var wkRows=wk.map(function(w,i){
+    return "<tr"+(w.future?" style='opacity:.5'":"")+"><td><b>კვირა "+(i+1)+"</b> <span class='muted'>"+weekLabel(w.a)+"</span></td>"+
+      "<td class='num'>"+w.n+"</td><td class='num'><b>"+money(w.g)+"</b></td>"+
+      "<td class='num'>"+money(w.send)+"</td><td class='num' style='color:var(--good)'>"+money(w.net)+"</td>"+
+      "<td style='width:150px'><div class='track'><i style='width:"+Math.round(w.g/mxW*100)+"%;background:var(--brand)'></i></div></td></tr>";
   }).join('');
-  /* ბოლო 4 დასრულებული კვირის ჯამი — თვის დაახლოებითი სურათი */
-  var last4=weeks.filter(function(m){ return m<thisMon; }).slice(0,4);
-  var M=last4.reduce(function(s,m){ dpRows_(m).forEach(function(x){ if(x.send!=null) s.send+=x.send; if(x.net!=null) s.net+=x.net; }); return s; },{send:0,net:0});
-  $('view').innerHTML=ph('დისპეტჩერების ხელფასები','კვირა '+weekLabel(wk)+' · ხელფასი = მძღოლების გროსი × განაკვეთი')+
+  /* წინა პერიოდები */
+  var prevs=[1,2,3].map(function(i){ return addDays_(start,-28*i); });
+  var pchips=prevs.map(function(m){
+    return "<span class='chip' style='cursor:pointer' onclick=\"setDpStart('"+m+"')\">"+gd(m)+" – "+gd(addDays_(m,27))+"</span>";
+  }).join('');
+  $('view').innerHTML=ph('დისპეტჩერების ხელფასები','საანგარიშო პერიოდი: 4 სამუშაო კვირა · გადახდა მე-5 კვირის სამშაბათს')+
+    "<div class='card p' style='margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap'>"+
+      "<div><div class='muted' style='font-size:11.5px'>პერიოდი</div>"+
+        "<div style='font-size:17px;font-weight:750'>"+gdFull(start)+" – "+gdFull(end)+"</div>"+
+        "<div class='muted' style='font-size:12px;margin-top:2px'>გადახდის დღე: <b style='color:var(--brand)'>"+gdFull(payday)+", სამშაბათი</b>"+(done?" · პერიოდი დასრულებულია ✓":" · <span style='color:var(--warn)'>პერიოდი ჯერ მიმდინარეობს</span>")+"</div>"+
+        "<div class='muted' style='font-size:11.5px;margin-top:4px'>მე-5 კვირის ორშაბათ-სამშაბათის გროსი ამ ხელფასში <b>არ შედის</b> — ის მომდევნო პერიოდში ჩაჯდება.</div></div>"+
+      "<div style='display:flex;gap:6px;flex-wrap:wrap'>"+
+        "<span class='chip' style='cursor:pointer' onclick='dpShift(-4)'>‹‹ წინა პერიოდი</span>"+
+        "<span class='chip' style='cursor:pointer' onclick='dpShift(-1)'>‹ 1 კვირით უკან</span>"+
+        "<span class='chip' style='cursor:pointer' onclick='dpShift(1)'>1 კვირით წინ ›</span>"+
+        "<span class='chip' style='cursor:pointer' onclick='dpShift(4)'>შემდეგი პერიოდი ››</span>"+
+        "<span class='chip g' style='cursor:pointer' onclick=\"setDpStart('')\">ბოლო 4 კვირა</span>"+
+      "</div></div>"+
     "<div class='kpis'>"+
       kpi('მძღოლების გროსი',money(T.gross),'',R.length+' დისპეტჩერი · '+T.n+' ტვირთი')+
-      kpi('ამერიკიდან გადმოსარიცხი',money(T.send),'w','გადასახადების ჩათვლით')+
-      kpi('ბანკზე ჩასარიცხი (NET)',money(T.net),'g','რაც დისპეტჩერს ხელზე ერგება')+
+      kpi('ამერიკიდან გადმოსარიცხი',money(T.send),'w','გადასახადების ჩათვლით · '+gd(payday))+
+      kpi('ბანკზე ჩასარიცხი (NET)',money(T.net),'g','რაც დისპეტჩერებს ხელზე ერგებათ')+
       kpi('კომპანიის მარჟა',money(T.comm-T.send),(T.comm-T.send)>=0?'g':'r','საკომისიო '+money(T.comm)+' − ხელფასი')+
     "</div>"+
-    "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>"+wsel+"</div>"+
     "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>ორი განაკვეთი, ორი რიცხვი.</b> „განაკვეთი %“ = რამდენი უნდა გადმოირიცხოს ამერიკიდან საქართველოში (გადასახადების ჩათვლით). „NET %“ = რამდენი ჩაერიცხება უშუალოდ დისპეტჩერის ბანკის ანგარიშზე. სხვაობა — გადასახადი. ორივე უჯრა პირდაპირ ცხრილში იცვლება და ბაზაში ინახება.</div></div>"+
     "<div class='card p' style='margin-bottom:14px'><div class='tablewrap'><table style='min-width:1140px'><thead><tr><th>დისპეტჩერი</th><th class='num'>მძღოლი</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>მძღ. გროსი</th><th class='num'>კომპ. საკომისიო</th><th>განაკვეთი %</th><th class='num'>გადმოსარიცხი</th><th>NET %</th><th class='num'>NET ჩასარიცხი</th><th class='num'>გადასახადი</th><th class='num'>მარჟა</th></tr></thead><tbody>"+
-      (rows||"<tr><td colspan='12' class='muted'>ამ კვირაში ტვირთი არ არის</td></tr>")+
+      (rows||"<tr><td colspan='12' class='muted'>ამ პერიოდში ტვირთი არ არის</td></tr>")+
       (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+T.cars+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>"+money(T.comm)+"</td><td></td><td class='num'>"+money(T.send)+"</td><td></td><td class='num'>"+money(T.net)+"</td><td class='num'>"+money(T.tax)+"</td><td class='num'>"+money(T.comm-T.send)+"</td></tr>"):"")+
       "</tbody></table></div>"+
       "<div class='muted' style='font-size:12px;margin-top:10px'>"+
       (noRate?("<b style='color:var(--warn)'>"+noRate+" დისპეტჩერს განაკვეთი არ აქვს</b> — ჩაწერე უჯრაში. "):"")+
       (noNet?("<b style='color:var(--warn)'>"+noNet+"-ს NET განაკვეთი აკლია.</b> "):"")+
       "კომპანიის საკომისიო ითვლება მძღოლების რეესტრის განაკვეთებით (1-მანქ 10%, 2+მანქ 12%). ტვირთები, რომლებსაც დისპეტჩერი მიბმული არ აქვს, ცხრილში არ ჩანს. კვირა ითვლება ტვირთის აღების თარიღით.</div></div>"+
-    "<div class='card p'><h4>ბოლო 4 დასრულებული კვირა — ჯამი</h4>"+
-      "<div style='display:flex;gap:26px;margin-top:10px;flex-wrap:wrap'>"+
-        "<div><div class='muted' style='font-size:11.5px'>ამერიკიდან გადმოსარიცხი</div><div style='font-size:24px;font-weight:750'>"+money(M.send)+"</div></div>"+
-        "<div><div class='muted' style='font-size:11.5px'>ბანკზე ჩასარიცხი (NET)</div><div style='font-size:24px;font-weight:750;color:var(--good)'>"+money(M.net)+"</div></div>"+
-        "<div><div class='muted' style='font-size:11.5px'>გადასახადი</div><div style='font-size:24px;font-weight:750'>"+money(M.send-M.net)+"</div></div>"+
-      "</div>"+
-      "<div class='muted' style='font-size:12px;margin-top:10px'>კვირები: "+last4.map(function(m){ return weekLabel(m); }).join(' · ')+"</div></div>";
+    "<div class='grid2'>"+
+      "<div class='card p'><h4>პერიოდის კვირები</h4><div class='tablewrap'><table style='min-width:520px'><thead><tr><th>კვირა</th><th class='num'>ტვირთი</th><th class='num'>გროსი</th><th class='num'>გადმოსარიცხი</th><th class='num'>NET</th><th></th></tr></thead><tbody>"+wkRows+"</tbody></table></div></div>"+
+      "<div class='card p'><h4>წინა პერიოდები</h4><div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>"+pchips+"</div>"+
+        "<div class='muted' style='font-size:12px;margin-top:12px'>თუ ციკლის ათვლა ერთი კვირით აცდენილია, დააჭირე <b>„‹ 1 კვირით უკან“</b> ან <b>„1 კვირით წინ ›“</b> — პერიოდი და გადახდის თარიღი ავტომატურად გადაიწევს.</div></div>"+
+    "</div>";
 }
 bootstrap();
 </script>
