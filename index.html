@@ -1535,7 +1535,7 @@ async function saveDRate(enc, field, value){
   var name=decodeURIComponent(enc);
   var v=(value===''?null:Number(value));
   if(v!=null && !isFinite(v)){ toast('რიცხვი ჩაწერე'); return; }
-  if(field==='pct' && v!=null) v=v/100;                 // % → წილადი
+  if((field==='pct'||field==='net_pct') && v!=null) v=v/100;   // % → წილადი
   var row={dispatcher_name:name, updated_at:new Date().toISOString(), updated_by:USER.email};
   row[field]=v;
   try{
@@ -1547,11 +1547,11 @@ async function saveDRate(enc, field, value){
     if(MTAB==='disppay') rDispPay();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
-function rDispPay(){
-  var weeks=(function(){ var m={}; (LIVE||[]).forEach(function(l){ var k=mondayOf(puDay_(l)); if(k) m[k]=1; });
-    return Object.keys(m).sort().reverse().slice(0,12); })();
-  var thisMon=mondayOf(ymd_(new Date()));
-  var wk=DPW || (weeks.filter(function(m){ return m<thisMon; })[0] || weeks[0] || thisMon);
+function dpWeeks_(){
+  var m={}; (LIVE||[]).forEach(function(l){ var k=mondayOf(puDay_(l)); if(k) m[k]=1; });
+  return Object.keys(m).sort().reverse().slice(0,12);
+}
+function dpRows_(wk){
   var end=addDays_(wk,6);
   var A=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=wk && d<=end; });
   var by={};
@@ -1563,46 +1563,72 @@ function rDispPay(){
     x.comm+=grossOf_(l)*r.pct;
     if(l.driver_name) x.drv[l.driver_name]=1;
   });
-  var R=Object.keys(by).map(function(k){
+  return Object.keys(by).map(function(k){
     var x=by[k], rt=DRATES[k]||{};
     x.nDrv=Object.keys(x.drv).length;
     x.pct=(rt.pct!=null)?Number(rt.pct):null;
-    x.base=(rt.base!=null)?Number(rt.base):null;
-    x.pay=(x.pct!=null||x.base!=null) ? (x.gross*(x.pct||0)+(x.base||0)) : null;
-    x.margin=(x.pay!=null)? (x.comm-x.pay) : null;
+    x.npct=(rt.net_pct!=null)?Number(rt.net_pct):null;
+    x.send=(x.pct!=null)? x.gross*x.pct : null;          // ამერიკიდან გადმოსარიცხი
+    x.net=(x.npct!=null)? x.gross*x.npct : null;          // ბანკზე ჩასარიცხი
+    x.tax=(x.send!=null&&x.net!=null)? (x.send-x.net) : null;
+    x.margin=(x.send!=null)? (x.comm-x.send) : null;
     return x;
   }).sort(function(a,b){ return b.gross-a.gross; });
+}
+function rDispPay(){
+  var weeks=dpWeeks_();
+  var thisMon=mondayOf(ymd_(new Date()));
+  var wk=DPW || (weeks.filter(function(m){ return m<thisMon; })[0] || weeks[0] || thisMon);
+  var R=dpRows_(wk);
   var T=R.reduce(function(s,x){ s.n+=x.n; s.cars+=x.cars; s.gross+=x.gross; s.comm+=x.comm;
-    if(x.pay!=null){ s.pay+=x.pay; s.known++; } return s; },{n:0,cars:0,gross:0,comm:0,pay:0,known:0});
-  var noRate=R.filter(function(x){ return x.pay==null; }).length;
+    if(x.send!=null) s.send+=x.send; if(x.net!=null) s.net+=x.net; if(x.tax!=null) s.tax+=x.tax;
+    return s; },{n:0,cars:0,gross:0,comm:0,send:0,net:0,tax:0});
+  var noRate=R.filter(function(x){ return x.pct==null; }).length;
+  var noNet=R.filter(function(x){ return x.pct!=null && x.npct==null; }).length;
   var rows=R.map(function(x){
     var enc=encodeURIComponent(x.d);
-    var pin="<input class='mini' style='width:64px' placeholder='%' value='"+(x.pct!=null?(Math.round(x.pct*10000)/100):'')+"' onchange=\"saveDRate('"+enc+"','pct',this.value)\">";
-    var bin="<input class='mini' style='width:74px' placeholder='$ ბაზა' value='"+(x.base!=null?x.base:'')+"' onchange=\"saveDRate('"+enc+"','base',this.value)\">";
+    var pin="<input class='mini' style='width:60px' placeholder='%' value='"+(x.pct!=null?(Math.round(x.pct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','pct',this.value)\">";
+    var nin="<input class='mini' style='width:60px' placeholder='%' value='"+(x.npct!=null?(Math.round(x.npct*1000000)/10000):'')+"' onchange=\"saveDRate('"+enc+"','net_pct',this.value)\">";
     return "<tr><td><b>"+esc(x.d)+"</b></td><td class='num'>"+x.nDrv+"</td><td class='num'>"+x.n+"</td><td class='num'>"+x.cars+"</td>"+
       "<td class='num'><b>"+money(x.gross)+"</b></td>"+
       "<td class='num'>"+money(x.comm)+"</td>"+
-      "<td>"+pin+"</td><td>"+bin+"</td>"+
-      "<td class='num' style='font-weight:750'>"+(x.pay!=null?money(x.pay):"<span class='muted' style='font-weight:400'>განაკვეთი არ არის</span>")+"</td>"+
+      "<td>"+pin+"</td>"+
+      "<td class='num' style='font-weight:750'>"+(x.send!=null?money(x.send):"<span class='muted' style='font-weight:400'>—</span>")+"</td>"+
+      "<td>"+nin+"</td>"+
+      "<td class='num' style='font-weight:750;color:var(--good)'>"+(x.net!=null?money(x.net):"<span class='muted' style='font-weight:400'>—</span>")+"</td>"+
+      "<td class='num' class='muted'>"+(x.tax!=null?money(x.tax):'—')+"</td>"+
       "<td class='num' style='color:"+(x.margin==null?'var(--muted)':(x.margin>=0?'var(--good)':'var(--crit)'))+";font-weight:700'>"+(x.margin!=null?money(x.margin):'—')+"</td></tr>";
   }).join('');
   var wsel=weeks.slice(0,10).map(function(m){
     return "<span class='chip"+(m===wk?' g':'')+"' style='cursor:pointer' onclick=\"setDpW('"+m+"')\">"+weekLabel(m)+"</span>";
   }).join('');
-  $('view').innerHTML=ph('დისპეტჩერების ხელფასები','კვირა '+weekLabel(wk)+' · ხელფასი = მძღოლების გროსი × განაკვეთი (+ ბაზა)')+
+  /* ბოლო 4 დასრულებული კვირის ჯამი — თვის დაახლოებითი სურათი */
+  var last4=weeks.filter(function(m){ return m<thisMon; }).slice(0,4);
+  var M=last4.reduce(function(s,m){ dpRows_(m).forEach(function(x){ if(x.send!=null) s.send+=x.send; if(x.net!=null) s.net+=x.net; }); return s; },{send:0,net:0});
+  $('view').innerHTML=ph('დისპეტჩერების ხელფასები','კვირა '+weekLabel(wk)+' · ხელფასი = მძღოლების გროსი × განაკვეთი')+
     "<div class='kpis'>"+
-      kpi('დისპეტჩერი',R.length,'',T.n+' ტვირთი · '+T.cars+' მანქანა')+
-      kpi('მძღოლების გროსი',money(T.gross),'','ამ კვირაში')+
-      kpi('კომპანიის საკომისიო',money(T.comm),'g','მძღოლებისგან დაკავებული')+
-      kpi('დისპეტჩერების ხელფასი',money(T.pay),'',(noRate?(noRate+' დისპეტჩერს განაკვეთი არ აქვს'):'ყველა განაკვეთი შევსებულია'))+
+      kpi('მძღოლების გროსი',money(T.gross),'',R.length+' დისპეტჩერი · '+T.n+' ტვირთი')+
+      kpi('ამერიკიდან გადმოსარიცხი',money(T.send),'w','გადასახადების ჩათვლით')+
+      kpi('ბანკზე ჩასარიცხი (NET)',money(T.net),'g','რაც დისპეტჩერს ხელზე ერგება')+
+      kpi('კომპანიის მარჟა',money(T.comm-T.send),(T.comm-T.send)>=0?'g':'r','საკომისიო '+money(T.comm)+' − ხელფასი')+
     "</div>"+
     "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>"+wsel+"</div>"+
-    "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>განაკვეთს პირდაპირ ცხრილში წერ</b> — ინახება ბაზაში და ყველა კვირაზე გამოიყენება. „%“ = მძღოლების გროსის პროცენტი, „ბაზა“ = ფიქსირებული თანხა (თუ არის). <b>მარჟა</b> = კომპანიის საკომისიო მინუს დისპეტჩერის ხელფასი.</div></div>"+
-    "<div class='card p'><div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დისპეტჩერი</th><th class='num'>მძღოლი</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>მძღ. გროსი</th><th class='num'>კომპ. საკომისიო</th><th>განაკვეთი %</th><th>ბაზა $</th><th class='num'>ხელფასი</th><th class='num'>მარჟა</th></tr></thead><tbody>"+
-      (rows||"<tr><td colspan='10' class='muted'>ამ კვირაში ტვირთი არ არის</td></tr>")+
-      (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+T.cars+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>"+money(T.comm)+"</td><td></td><td></td><td class='num'>"+money(T.pay)+"</td><td class='num'>"+money(T.comm-T.pay)+"</td></tr>"):"")+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>ორი განაკვეთი, ორი რიცხვი.</b> „განაკვეთი %“ = რამდენი უნდა გადმოირიცხოს ამერიკიდან საქართველოში (გადასახადების ჩათვლით). „NET %“ = რამდენი ჩაერიცხება უშუალოდ დისპეტჩერის ბანკის ანგარიშზე. სხვაობა — გადასახადი. ორივე უჯრა პირდაპირ ცხრილში იცვლება და ბაზაში ინახება.</div></div>"+
+    "<div class='card p' style='margin-bottom:14px'><div class='tablewrap'><table style='min-width:1140px'><thead><tr><th>დისპეტჩერი</th><th class='num'>მძღოლი</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>მძღ. გროსი</th><th class='num'>კომპ. საკომისიო</th><th>განაკვეთი %</th><th class='num'>გადმოსარიცხი</th><th>NET %</th><th class='num'>NET ჩასარიცხი</th><th class='num'>გადასახადი</th><th class='num'>მარჟა</th></tr></thead><tbody>"+
+      (rows||"<tr><td colspan='12' class='muted'>ამ კვირაში ტვირთი არ არის</td></tr>")+
+      (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+T.cars+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>"+money(T.comm)+"</td><td></td><td class='num'>"+money(T.send)+"</td><td></td><td class='num'>"+money(T.net)+"</td><td class='num'>"+money(T.tax)+"</td><td class='num'>"+money(T.comm-T.send)+"</td></tr>"):"")+
       "</tbody></table></div>"+
-      "<div class='muted' style='font-size:12px;margin-top:10px'>კომპანიის საკომისიო ითვლება მძღოლების რეესტრის განაკვეთებით (1-მანქ 10%, 2+მანქ 12%, ან რაც რეესტრშია ჩაწერილი). ტვირთები, რომლებსაც დისპეტჩერი მიბმული არ აქვს, ამ ცხრილში არ ჩანს.</div></div>";
+      "<div class='muted' style='font-size:12px;margin-top:10px'>"+
+      (noRate?("<b style='color:var(--warn)'>"+noRate+" დისპეტჩერს განაკვეთი არ აქვს</b> — ჩაწერე უჯრაში. "):"")+
+      (noNet?("<b style='color:var(--warn)'>"+noNet+"-ს NET განაკვეთი აკლია.</b> "):"")+
+      "კომპანიის საკომისიო ითვლება მძღოლების რეესტრის განაკვეთებით (1-მანქ 10%, 2+მანქ 12%). ტვირთები, რომლებსაც დისპეტჩერი მიბმული არ აქვს, ცხრილში არ ჩანს. კვირა ითვლება ტვირთის აღების თარიღით.</div></div>"+
+    "<div class='card p'><h4>ბოლო 4 დასრულებული კვირა — ჯამი</h4>"+
+      "<div style='display:flex;gap:26px;margin-top:10px;flex-wrap:wrap'>"+
+        "<div><div class='muted' style='font-size:11.5px'>ამერიკიდან გადმოსარიცხი</div><div style='font-size:24px;font-weight:750'>"+money(M.send)+"</div></div>"+
+        "<div><div class='muted' style='font-size:11.5px'>ბანკზე ჩასარიცხი (NET)</div><div style='font-size:24px;font-weight:750;color:var(--good)'>"+money(M.net)+"</div></div>"+
+        "<div><div class='muted' style='font-size:11.5px'>გადასახადი</div><div style='font-size:24px;font-weight:750'>"+money(M.send-M.net)+"</div></div>"+
+      "</div>"+
+      "<div class='muted' style='font-size:12px;margin-top:10px'>კვირები: "+last4.map(function(m){ return weekLabel(m); }).join(' · ')+"</div></div>";
 }
 bootstrap();
 </script>
