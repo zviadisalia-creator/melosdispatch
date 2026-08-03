@@ -630,7 +630,7 @@ async function loadLiveLoads(){
   LIVE=all;
 }
 
-function rBoardLive(){
+function boardDrivers_(){
   var L=LIVE||[];
   var byDrv={};
   L.forEach(function(r){
@@ -663,6 +663,10 @@ function rBoardLive(){
     else { d.bucket='idle'; d.active=[]; }
     B[d.bucket].push(d);
   });
+  return {drivers:drivers, B:B};
+}
+function rBoardLive(){
+  var BD=boardDrivers_(), drivers=BD.drivers, B=BD.B;
   var srt=function(a,b){ return (a.disp+a.name).localeCompare(b.disp+b.name); };
   B.loaded.sort(srt); B.next.sort(srt); B.idle.sort(srt);
   function card(d){
@@ -736,58 +740,305 @@ function rLive(){
     `<div class='callout' style='margin-top:14px'><span class='b'>i</span><div>კვირა ითვლება <b>ორშაბათიდან კვირამდე</b> (pickup თარიღით). <span class='muted'>„(მიუბმელი)" = SD-ში მძღოლი არ მიენიჭა.</span></div></div>`;
 }
 
-function rOverview(){
-  const g=REAL.mgmtGlobal;
-  const cd=REAL.capDist||{}; const capTxt=Object.keys(cd).sort().map(k=>`${cd[k]}×${k}-მანქ`).join(' · ');
-  const exc=REAL.exceptions.slice(0,5).map(e=>`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-top:10px"><div><div style="font-weight:600">${esc(e.d)}</div><div class="meta" style="font-size:11.5px">${esc(e.issue)}</div></div><span class="chip ${e.risk}" style="flex:none"><span class="dot"></span>${e.risk==='r'?'რისკი':'ყურადღება'}</span></div>`).join('');
-  $('view').innerHTML=ph('მიმოხილვა',`მთელი კომპანია · Quo დღიური ${gdFull(g.date)} · ფინანსები კვირა ${gdFull(REAL.payrollWeek)}`)+
-    `<div class="kpis">`+
-      kpi('აქტიური მძღოლი',REAL.nDrivers,'',capTxt)+
-      kpi('დისპეტჩერი',REAL.nDispActive||REAL.leaderboard.length,'', (REAL.nDispRoster||21)+' რეესტრში')+
-      kpi('გუნდის ხარისხის ქულა',g.quality,'w','საშ. ქულა: ტვირთები, ფიქაფ/დელივ. ზარები…')+
-      kpi('ღია რისკები',g.openRisks,g.openRisks?'r':'','საეჭვო ქცევა — იხ. ქვემოთ')+
-    `</div>`+
-    `<div class="kpis">`+
-      kpi('კვირის გროსი',money(REAL.totGross),'',gdFull(REAL.payrollWeek)+' კვირა')+
-      kpi('კომპანიაში მოსასვლელი (ჯამი)',money(REAL.payTotal),'',REAL.payCount+' ტვირთი','receivables')+
-      kpi('ვადაგადაცილებული გადახდები',money(REAL.odTotal),'r',REAL.odCount+' ტვირთი','overdue')+
-      kpi('ზარები · '+gdFull(g.date),g.calls,'','Quo დღიური')+
-    `</div>`+
-    `<div class="grid2"><div class="card p"><h4>Quo დღიური აქტივობა <span class="databadge">Quo</span></h4>
-      ${meter('ზარები',g.calls,600,'var(--good)')}${meter('needs coaching',g.needsCoaching,20,'var(--warn)')}${meter('SMS-first',g.smsFirst,20,'var(--serious)')}${meter('ღია რისკები',g.openRisks,10,'var(--crit)')}
-      <div class="muted" style="font-size:11.5px;margin-top:10px">SMS-ების ჯამი (გაგზ./მიღ.) და needs-coaching/რისკების სახელობითი ჩაშლა — Quo-ს დეტალურ მონაცემზე მიბმისას.</div></div>
-      <div class="card p"><h4>ყურადღებას საჭიროებს</h4>${exc||'<div class="muted" style="margin-top:8px">ცარიელია</div>'}</div></div>`;
+/* ---- მიმოხილვა — სრულად ცოცხალი (Super Dispatch + Quo), snapshot-ის გარეშე ---- */
+var OVCS=null, OVCS_LOADING=false;
+function ovLoadCalls_(){
+  if(OVCS!==null || OVCS_LOADING) return;
+  OVCS_LOADING=true;
+  var to=new Date(), from=new Date(Date.now()-30*864e5);
+  sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
+    OVCS=r.data||[]; OVCS_LOADING=false;
+    if(ROLE==='mgmt' && MTAB==='overview') rOverview();
+  },function(e){ console.error(e); OVCS=[]; OVCS_LOADING=false;
+    if(ROLE==='mgmt' && MTAB==='overview') rOverview(); });
 }
-function rDrivers(){
-  const p=REAL.driverPayroll;
-  const catOpts=['—','ცუდი','საშუალო','კარგი','ძალიან კარგი'];
-  const rows=p.map(r=>{
-    const cap=r.cap||1;
-    const cur=DRIVERS_BY_NAME[r.driver]||{}; const enc=encodeURIComponent(r.driver);
-    const sel=`<select class="mini" onchange="saveDriver('${enc}','category',this.value)">${catOpts.map(o=>`<option${((cur.category||'—')===o)?' selected':''}>${o}</option>`).join('')}</select>`;
-    const size=`<input class="mini" style="width:52px" placeholder="ფტ" title="მისაბმელის ზომა (feet) — მალე">`;
-    const winch=`<input type="checkbox" style="width:16px;height:16px"${cur.winch?' checked':''} onchange="saveDriver('${enc}','winch',this.checked)">`;
-    const target=`<input class="mini" style="width:82px" placeholder="$ სამიზნე" value="${cur.target_gross!=null?cur.target_gross:''}" onchange="saveDriver('${enc}','target_gross',this.value)">`;
-    const docs=['DOT','მართვ.','MVR','ბანკი'].map(d=>{const has=(d==='ბანკი'&&r.bank);return `<span class="docchip ${has?'ok':''}">${d}${has?' ✓':' +'}</span>`;}).join('');
-    return `<tr><td>${esc(r.driver)}</td><td>${sel}</td><td>${size}</td><td style="text-align:center">${winch}</td><td>${target}</td><td>${cap}-მანქ</td><td class="num">${r.pct!=null?Math.round(r.pct*100)+'%':'—'}</td><td class="num">${r.ins!=null?money(r.ins):'—'}</td><td>${docs}</td></tr>`;
+function addDays_(s,n){
+  var m=/(\d{4})-(\d{2})-(\d{2})/.exec(String(s||'')); if(!m) return '';
+  var d=new Date(+m[1],+m[2]-1,+m[3]); d.setDate(d.getDate()+n); return ymd_(d);
+}
+function grossOf_(l){ return Number(l.gross!=null?l.gross:l.price)||0; }
+
+function rOverview(){
+  var L=LIVE||[];
+  var today=ymd_(new Date());
+  var thisMon=mondayOf(today) || today;
+  var dowIdx=(new Date().getDay()+6)%7;          // 0 = ორშაბათი
+  var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
+  var inRange=function(a,b){ return L.filter(function(l){ var d=puDay_(l); return d && d>=a && d<=b; }); };
+  var stat=function(A){
+    var s={n:A.length,cars:0,gross:0,drv:{},disp:{}};
+    A.forEach(function(l){ s.cars+=cars_(l); s.gross+=grossOf_(l);
+      if(l.driver_name) s.drv[l.driver_name]=1; if(l.dispatcher_name) s.disp[l.dispatcher_name]=1; });
+    s.nDrv=Object.keys(s.drv).length; s.nDisp=Object.keys(s.disp).length; return s;
+  };
+  /* ეს კვირა vs გასული კვირა — იმავე დღემდე (სამართლიანი შედარება) */
+  var prevMon=addDays_(thisMon,-7);
+  var W=stat(inRange(thisMon, today));
+  var P=stat(inRange(prevMon, addDays_(prevMon,dowIdx)));
+  var dl=function(a,b){
+    if(!b) return '';
+    var p=Math.round((a-b)/b*100);
+    return p>=0 ? " <span style='color:var(--good)'>▲"+p+"%</span>" : " <span style='color:var(--crit)'>▼"+Math.abs(p)+"%</span>";
+  };
+
+  /* ფული */
+  var AR=openAR_();
+  var broker=AR.filter(function(l){ return !ONSITE_[l.payment_terms]; });
+  var late=broker.filter(function(l){ return l._late>0; });
+  var late45=late.filter(function(l){ return l._late>45; });
+  var onsite=AR.filter(function(l){ return ONSITE_[l.payment_terms]; });
+  var noInv=L.filter(function(l){ return l.delivery_completed && !ONSITE_[l.payment_terms] && !l.invoice_sent_at && !l.paid_at; });
+  var noInv30=noInv.filter(function(l){ var t=Date.parse(l.delivery_completed); return !isNaN(t) && (Date.now()-t)/864e5>30; });
+
+  /* დისციპლინა — ბოლო 30 დღე */
+  var cut30=addDays_(today,-30);
+  var R30=inRange(cut30,today);
+  var asgN=R30.length, asgOk=R30.filter(function(l){ return l.driver_id_sd; }).length;
+  var asgPct=asgN?Math.round(asgOk/asgN*100):0;
+  var invNeed=L.filter(function(l){ return l.delivery_completed && String(l.delivery_completed).slice(0,10)>=cut30 && !ONSITE_[l.payment_terms]; });
+  var invOk=invNeed.filter(function(l){ return l.invoice_sent_at; }).length;
+  var invPct=invNeed.length?Math.round(invOk/invNeed.length*100):100;
+  ovLoadCalls_();
+  var callN=0, callOk=0, callReady=(OVCS!==null);
+  if(callReady){ (OVCS||[]).forEach(function(x){ callN+=Number(x.n_loads)||0; callOk+=Number(x.both_ok)||0; }); }
+  var callPct=callN?Math.round(callOk/callN*100):0;
+  var cc=function(p){ return p>=70?'var(--good)':p>=45?'var(--warn)':'var(--crit)'; };
+
+  /* ცოცხალი დაფა */
+  var BD=boardDrivers_(), B=BD.B, actDrv=BD.drivers;
+
+  /* მომდევნო სამუშაო დღე — დაფარვა და ზარები */
+  var nwd=ymd_(nextWorkDay_());
+  var NX=L.filter(function(l){ return puDay_(l)===nwd; });
+  var nxDrv={}; NX.forEach(function(l){ if(l.driver_name) nxDrv[l.driver_name]=1; });
+  var uncovered=actDrv.filter(function(d){ return !nxDrv[d.name] && d.bucket!=='loaded'; });
+  var C=CONTACTS||[];
+  var okBoth=C.filter(function(x){ return (x.pu_call||x.pu_sms)&&(x.del_call||x.del_sms); });
+  var missing=C.filter(function(x){ return !((x.pu_call||x.pu_sms)&&(x.del_call||x.del_sms)); });
+  var missByD={}; missing.forEach(function(x){ var k=x.dispatcher_name||'—'; missByD[k]=(missByD[k]||0)+1; });
+  var missRows=Object.keys(missByD).sort(function(a,b){ return missByD[b]-missByD[a]; }).slice(0,8)
+    .map(function(k){ return "<div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)'><span>"+esc(k)+"</span><b style='color:var(--crit)'>"+missByD[k]+"</b></div>"; }).join('');
+
+  /* ბოლო 8 კვირა */
+  var wks=[];
+  for(var i=7;i>=0;i--){ var mo=addDays_(thisMon,-7*i); wks.push({mo:mo, A:inRange(mo, addDays_(mo,6))}); }
+  var wkMax=Math.max.apply(null, wks.map(function(w){ return stat(w.A).gross; }).concat([1]));
+  var wkRows=wks.map(function(w,i){
+    var s=stat(w.A), prev=i?stat(wks[i-1].A).gross:0;
+    var isNow=(w.mo===thisMon);
+    return "<tr"+(isNow?" style='background:var(--brand-soft)'":"")+"><td><b>"+weekLabel(w.mo)+"</b>"+(isNow?" <span class='chip g' style='padding:1px 6px'>მიმდინარე</span>":"")+"</td>"+
+      "<td class='num'>"+s.n+"</td><td class='num'>"+s.cars+"</td><td class='num'><b>"+money(s.gross)+"</b></td>"+
+      "<td class='num'>"+money(s.n?s.gross/s.n:0)+"</td><td class='num'>"+s.nDrv+"</td>"+
+      "<td class='num'>"+(i&&prev&&!isNow?dl(s.gross,prev):'')+"</td>"+
+      "<td style='width:150px'><div class='track'><i style='width:"+Math.round(s.gross/wkMax*100)+"%;background:"+(isNow?'var(--warn)':'var(--brand)')+"'></i></div></td></tr>";
   }).join('');
-  $('view').innerHTML=ph('მძღოლების რეესტრი',`${p.length} აქტიური მძღოლი`)+
-    `<div class="callout" style="margin-bottom:14px"><span class="b">i</span><div>აქ გაწერ თითო მძღოლის <b>კატეგორიას, მისაბმელის ზომას, ვინჩს, სამიზნე გროსს</b> და ატვირთავ <b>დოკუმენტებს</b> (DOT inspection, მართვის მოწმობა, MVR, საბანკო რეკვიზიტები…). <span class="muted">კატეგორია, ვინჩი და სამიზნე გროსი <b>ცოცხლად ინახება</b> ბაზაში. ზომა (ფტ) და დოკუმენტების ატვირთვა — მალე.</span></div></div>`+
-    `<div class="card p"><div class="tablewrap"><table style="min-width:1040px"><thead><tr><th>მძღოლი</th><th>კატეგორია</th><th>მისაბ. ზომა</th><th>ვინჩი</th><th>სამიზნე გროსი</th><th>ტევადობა</th><th class="num">საკომ.</th><th class="num">დაზღვევა</th><th>დოკუმენტები</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+
+  /* დისპეტჩერების ჭრილი — ბოლო 30 დღე */
+  var byD={};
+  R30.forEach(function(l){ var k=l.dispatcher_name||'(მიუბმელი)';
+    if(!byD[k]) byD[k]={n:0,cars:0,g:0}; byD[k].n++; byD[k].cars+=cars_(l); byD[k].g+=grossOf_(l); });
+  var dk=Object.keys(byD).sort(function(a,b){ return byD[b].g-byD[a].g; });
+  var mxD=Math.max.apply(null,dk.map(function(k){ return byD[k].g; }).concat([1]));
+  var dispBars=dk.map(function(k){
+    return "<div class='meter'><div class='ml'><span>"+esc(k)+"</span><b class='tnum'>"+money(byD[k].g)+" · "+byD[k].n+" ტვ.</b></div>"+
+      "<div class='track'><i style='width:"+Math.round(byD[k].g/mxD*100)+"%;background:"+(k==='(მიუბმელი)'?'var(--muted)':'var(--good)')+"'></i></div></div>";
+  }).join('');
+
+  /* ყურადღებას საჭიროებს */
+  var att=[];
+  if(B.idle.length) att.push({t:'უტვირთოდ მდგარი მძღოლი',v:B.idle.length,s:B.idle.slice(0,4).map(function(d){return d.name;}).join(', ')+(B.idle.length>4?' და სხვ.':''),r:'r',tab:'liveboard'});
+  if(uncovered.length) att.push({t:'მომდევნო დღე დაუფარავი მძღოლი',v:uncovered.length,s:gd(nwd)+'-ზე ტვირთი არ აქვს აღებული',r:'r',tab:'liveboard'});
+  if(missing.length) att.push({t:'დაურეკავი ტვირთი '+gd(nwd)+'-ზე',v:missing.length,s:C.length+' ტვირთიდან · ფიქაფი ან დელივერი დაურეკავია',r:'r',tab:''});
+  if(asgN-asgOk>0) att.push({t:'მძღოლზე მიუბმელი ტვირთი',v:asgN-asgOk,s:'ბოლო 30 დღე · SD-ში მძღოლი არ მიენიჭა',r:'y',tab:'liveloads'});
+  if(noInv30.length) att.push({t:'ინვოისი 30+ დღეა გასაგზავნია',v:noInv30.length,s:money(sum(noInv30))+' · ჩაბარებული, ინვოისის გარეშე',r:'r',tab:'invoices'});
+  if(late45.length) att.push({t:'45+ დღე ვადაგადაცილებული',v:late45.length,s:money(sum(late45))+' · ბროკერზე მისაღები',r:'r',tab:'overdue'});
+  if(onsite.length) att.push({t:'ადგილზე ასაღები, SD-ში მოუნიშნავი',v:onsite.length,s:money(sum(onsite))+' · ჩანაწერის დისციპლინა',r:'y',tab:'receivables'});
+  var attHtml=att.length? att.map(function(a){
+    var click=a.tab?" onclick=\"goM('"+a.tab+"')\" style='cursor:pointer'":"";
+    return "<div"+click+" style='display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)'>"+
+      "<div><div style='font-weight:650'>"+a.t+(a.tab?" <span style='color:var(--muted);font-size:11px'>→</span>":"")+"</div><div class='meta' style='font-size:11.5px'>"+a.s+"</div></div>"+
+      "<span class='chip "+a.r+"' style='flex:none'><span class='dot'></span>"+a.v+"</span></div>";
+  }).join('') : "<div class='muted' style='margin-top:8px'>ყველაფერი წესრიგშია</div>";
+
+  $('view').innerHTML=ph('მიმოხილვა','მთელი კომპანია · ცოცხალი მონაცემი Super Dispatch-იდან და Quo-დან · '+gdFull(today))+
+    "<div class='kpis'>"+
+      kpi('ტვირთი — ეს კვირა',W.n+dl(W.n,P.n),'',weekLabel(thisMon)+' · გასულ კვირას ამ დღისთვის '+P.n)+
+      kpi('მანქანა — ეს კვირა',W.cars+dl(W.cars,P.cars),'','გასულ კვირას ამ დღისთვის '+P.cars)+
+      kpi('გროსი — ეს კვირა',money(W.gross)+dl(W.gross,P.gross),'','გასულ კვირას ამ დღისთვის '+money(P.gross))+
+      kpi('მძღოლი ტვირთით',W.nDrv,'',W.nDisp+' დისპეტჩერი ამ კვირაში')+
+    "</div>"+
+    "<div class='kpis'>"+
+      kpi('ბროკერზე მისაღები',money(sum(broker)),'',broker.length+' ტვირთი','receivables')+
+      kpi('ვადაგადაცილებული',money(sum(late)),late.length?'r':'',late.length+' ტვირთი','overdue')+
+      kpi('ინვოისი გასაგზავნია',money(sum(noInv)),noInv.length?'w':'',noInv.length+' ტვირთი','invoices')+
+      kpi('ადგილზე ასაღები',money(sum(onsite)),'',onsite.length+' ტვირთი · SD-ში მოსანიშნი','receivables')+
+    "</div>"+
+    "<div class='kpis'>"+
+      kpi('ზარები ორივე მხარეს', callReady?(callPct+'%'):'<span class="muted" style="font-size:15px">ითვლება…</span>', callReady?(callPct>=70?'g':'r'):'', callReady?(callOk+' / '+callN+' · ბოლო 30 დღე'):'Quo-ს მონაცემი იტვირთება','leaderboard')+
+      kpi('ინვოისი გაგზავნილი',invPct+'%',invPct>=70?'g':'r',(invNeed.length-invOk)+' დარჩენილი · ბოლო 30 დღე','invoices')+
+      kpi('მძღოლზე მიბმული',asgPct+'%',asgPct>=90?'g':'r',(asgN-asgOk)+' მიუბმელი · ბოლო 30 დღე','liveloads')+
+      kpi('დატვირთული / უტვირთოდ',B.loaded.length+' / '+B.idle.length,B.idle.length?'w':'g',actDrv.length+' აქტიური მძღოლი','liveboard')+
+    "</div>"+
+    "<div class='grid2'>"+
+      "<div class='card p'><h4>მომდევნო სამუშაო დღე — "+gdFull(nwd)+" <span class='databadge'>Quo + SD</span></h4>"+
+        "<div style='display:flex;gap:18px;margin:10px 0 12px'>"+
+          "<div><div class='muted' style='font-size:11.5px'>აღებული ტვირთი</div><div style='font-size:22px;font-weight:750'>"+NX.length+"</div></div>"+
+          "<div><div class='muted' style='font-size:11.5px'>ორივე მხარე დარეკილი</div><div style='font-size:22px;font-weight:750;color:"+(C.length&&okBoth.length===C.length?'var(--good)':'var(--crit)')+"'>"+okBoth.length+" / "+C.length+"</div></div>"+
+          "<div><div class='muted' style='font-size:11.5px'>დაუფარავი მძღოლი</div><div style='font-size:22px;font-weight:750;color:"+(uncovered.length?'var(--crit)':'var(--good)')+"'>"+uncovered.length+"</div></div>"+
+        "</div>"+
+        (missRows? "<div class='muted' style='font-size:11.5px;margin-bottom:4px'>დაურეკავი ტვირთები დისპეტჩერების მიხედვით</div>"+missRows : "<div class='muted' style='font-size:12px'>ყველა ტვირთზე ორივე მხარეა დაკავშირებული ✓</div>")+
+        (uncovered.length? "<div class='muted' style='font-size:11.5px;margin:12px 0 4px'>დაუფარავი მძღოლები — "+gd(nwd)+"-ზე ტვირთი აღებული არ აქვთ</div>"+
+          uncovered.slice(0,10).map(function(d){ return "<div style='display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)'><span>"+esc(d.name)+"</span><span class='muted' style='font-size:11.5px'>"+esc(d.disp)+"</span></div>"; }).join('')+
+          (uncovered.length>10? "<div class='muted' style='font-size:11.5px;margin-top:6px'>და კიდევ "+(uncovered.length-10)+"</div>":"") : "")+
+      "</div>"+
+      "<div class='card p'><h4>ყურადღებას საჭიროებს</h4>"+attHtml+"</div>"+
+    "</div>"+
+    "<div class='card p' style='margin-top:14px'><h4>ბოლო 8 კვირა <span class='databadge' style='background:var(--brand-soft);color:var(--brand)'>SD</span></h4>"+
+      "<div class='tablewrap'><table style='min-width:760px'><thead><tr><th>კვირა</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>გროსი</th><th class='num'>საშ. ფასი</th><th class='num'>მძღოლი</th><th class='num'>ცვლილება</th><th></th></tr></thead><tbody>"+wkRows+"</tbody></table></div>"+
+      "<div class='muted' style='font-size:12px;margin-top:8px'>კვირა = ორშაბათი–კვირა, ტვირთის აღების (pickup) თარიღით. მიმდინარე კვირა ჯერ არ დასრულებულა.</div></div>"+
+    "<div class='card p' style='margin-top:14px'><h4>დისპეტჩერების ჭრილი <span class='muted' style='font-weight:500;font-size:11px'>— ბოლო 30 დღე</span></h4>"+dispBars+
+      "<div class='muted' style='font-size:12px;margin-top:8px'>დეტალური ქულა და ზარების სტატისტიკა — ტაბში <b onclick=\"goM('leaderboard')\" style='cursor:pointer;text-decoration:underline'>რეიტინგი</b>.</div></div>"+
+    "<div class='callout' style='margin-top:14px'><span class='b'>i</span><div>ეს გვერდი მთლიანად <b>ცოცხალ მონაცემზეა</b> — Super Dispatch ყოველ 30 წუთში, Quo-ს ზარები/SMS ყოველ 15 წუთში. Google Sheets-ის მონაწილეობა აქ აღარ არის.</div></div>";
+}
+/* ---- მძღოლების რეესტრი — ცოცხალი სტატისტიკით (drivers ცხრილი + SD) ---- */
+var DRVF='active';
+function setDrvF(v){ DRVF=v; rDrivers(); }
+function rDrivers(){
+  var L=LIVE||[], today=ymd_(new Date());
+  var cut30=addDays_(today,-30), cut90=addDays_(today,-90);
+  var S={};
+  L.forEach(function(l){
+    var nm=l.driver_name; if(!nm) return;
+    if(!S[nm]) S[nm]={n30:0,c30:0,g30:0,n90:0,g90:0,last:'',disp:'—'};
+    var x=S[nm], d=puDay_(l);
+    if(l.dispatcher_name) x.disp=l.dispatcher_name;
+    if(d>x.last) x.last=d;
+    if(d>=cut30){ x.n30++; x.c30+=cars_(l); x.g30+=grossOf_(l); }
+    if(d>=cut90){ x.n90++; x.g90+=grossOf_(l); }
+  });
+  var names={};
+  Object.keys(DRIVERS_BY_NAME).forEach(function(n){ names[n]=1; });
+  Object.keys(S).forEach(function(n){ if(S[n].last>=cut90) names[n]=1; });
+  var A=Object.keys(names).map(function(n){
+    var reg=DRIVERS_BY_NAME[n]||{}, s=S[n]||{n30:0,c30:0,g30:0,n90:0,g90:0,last:'',disp:'—'};
+    return {name:n, reg:reg, inReg:!!DRIVERS_BY_NAME[n], s:s,
+      active:(reg.active!==false) && s.last>=cut30,
+      tgt:(reg.target_gross!=null?Number(reg.target_gross):null)};
+  });
+  var nAct=A.filter(function(d){ return d.active; }).length;
+  var F=A.slice();
+  if(DRVF==='active') F=A.filter(function(d){ return d.active; });
+  if(DRVF==='idle') F=A.filter(function(d){ return !d.active; });
+  if(DRVF==='noreg') F=A.filter(function(d){ return !d.inReg; });
+  if(DRVF==='under') F=A.filter(function(d){ return d.active && d.tgt && d.s.g30/4.33 < d.tgt; });
+  F.sort(function(a,b){ return b.s.g30-a.s.g30; });
+  var catOpts=['—','ცუდი','საშუალო','კარგი','ძალიან კარგი'];
+  var rows=F.map(function(d){
+    var reg=d.reg, enc=encodeURIComponent(d.name);
+    var wkG=d.s.g30/4.33;
+    var sel="<select class='mini' onchange=\"saveDriver('"+enc+"','category',this.value)\">"+catOpts.map(function(o){ return "<option"+(((reg.category||'—')===o)?' selected':'')+">"+o+"</option>"; }).join('')+"</select>";
+    var winch="<input type='checkbox' style='width:16px;height:16px'"+(reg.winch?' checked':'')+" onchange=\"saveDriver('"+enc+"','winch',this.checked)\">";
+    var target="<input class='mini' style='width:80px' placeholder='$ სამიზნე' value='"+(reg.target_gross!=null?reg.target_gross:'')+"' onchange=\"saveDriver('"+enc+"','target_gross',this.value)\">";
+    var tcol = d.tgt ? (wkG>=d.tgt?'var(--good)':(wkG>=d.tgt*0.75?'var(--warn)':'var(--crit)')) : 'var(--ink2)';
+    return "<tr><td><b>"+esc(d.name)+"</b>"+(!d.inReg?" <span class='chip y' style='padding:1px 6px'>რეესტრში არ არის</span>":"")+"</td>"+
+      "<td>"+esc(d.s.disp)+"</td><td>"+sel+"</td><td class='num'>"+(Number(reg.cap)||1)+"-მანქ</td><td style='text-align:center'>"+winch+"</td>"+
+      "<td>"+target+"</td>"+
+      "<td class='num'>"+d.s.n30+"</td><td class='num'>"+d.s.c30+"</td>"+
+      "<td class='num'><b>"+money(d.s.g30)+"</b></td>"+
+      "<td class='num' style='color:"+tcol+";font-weight:"+(d.tgt?700:400)+"'>"+money(wkG)+(d.tgt?(' / '+money(d.tgt)):'')+"</td>"+
+      "<td class='num'>"+(reg.pct!=null?Math.round(reg.pct*100)+'%':'—')+"</td>"+
+      "<td class='num'>"+(reg.insurance!=null?money(reg.insurance):'—')+"</td>"+
+      "<td>"+(d.s.last?gd(d.s.last):'—')+"</td></tr>";
+  }).join('');
+  var chip=function(k,l,n){ return "<span class='chip"+(DRVF===k?' g':'')+"' style='cursor:pointer' onclick=\"setDrvF('"+k+"')\">"+l+" ("+n+")</span>"; };
+  var under=A.filter(function(d){ return d.active && d.tgt && d.s.g30/4.33 < d.tgt; }).length;
+  var noTgt=A.filter(function(d){ return d.active && !d.tgt; }).length;
+  var totG=A.filter(function(d){return d.active;}).reduce(function(s,d){ return s+d.s.g30; },0);
+  $('view').innerHTML=ph('მძღოლების რეესტრი','ცოცხალი სტატისტიკა Super Dispatch-იდან + კატეგორია, ვინჩი და სამიზნე გროსი — ბაზაში')+
+    "<div class='kpis'>"+
+      kpi('აქტიური მძღოლი',nAct,'','ბოლო 30 დღეში ტვირთით')+
+      kpi('გროსი — 30 დღე',money(totG),'',money(totG/4.33)+' / კვირაში')+
+      kpi('სამიზნეს ქვემოთ',under,under?'r':'g','კვირის საშუალო < სამიზნე')+
+      kpi('სამიზნე დაუწესებელი',noTgt,noTgt?'w':'g','შეავსე „სამიზნე გროსი“ სვეტში')+
+    "</div>"+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>i</span><div><b>კატეგორია, ვინჩი და სამიზნე გროსი</b> ცოცხლად ინახება ბაზაში — შეცვლი და მაშინვე შენახულია. დანარჩენი სვეტები ავტომატურად ითვლება Super Dispatch-იდან. <span class='muted'>„კვირის საშ.“ = ბოლო 30 დღის გროსი ÷ 4.33.</span></div></div>"+
+    "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>"+
+      chip('active','აქტიური',nAct)+chip('under','სამიზნეს ქვემოთ',under)+chip('idle','უმოქმედო',A.length-nAct)+chip('noreg','რეესტრში არ არის',A.filter(function(d){return !d.inReg;}).length)+chip('all','ყველა',A.length)+"</div>"+
+    "<div class='tablewrap'><table style='min-width:1180px'><thead><tr><th>მძღოლი</th><th>დისპეტჩერი</th><th>კატეგორია</th><th class='num'>ტევადობა</th><th>ვინჩი</th><th>სამიზნე გროსი</th><th class='num'>ტვირთი 30დღ</th><th class='num'>მანქანა</th><th class='num'>გროსი 30დღ</th><th class='num'>კვირის საშ.</th><th class='num'>საკომ.</th><th class='num'>დაზღვევა</th><th>ბოლო ტვირთი</th></tr></thead><tbody>"+
+      (rows||"<tr><td colspan='13' class='muted'>ცარიელია</td></tr>")+"</tbody></table></div>"+
+    "<div class='muted' style='font-size:12px;margin-top:10px'>„რეესტრში არ არის“ = მძღოლი Super Dispatch-ში ტვირთებზე ჩანს, მაგრამ ბაზის რეესტრში არ არის — საკომისიო/დაზღვევა მისთვის განსაზღვრული არ არის. დოკუმენტების ატვირთვა — შემდეგ ეტაპზე.</div></div>";
+}
+/* ---- მძღოლების სია — მომდევნო სამუშაო დღის დაფარვა, ცოცხლად (SD) ---- */
+var COVF='all';
+function setCovF(v){ COVF=v; rCoverage(); }
+function coverRows_(){
+  var L=LIVE||[], tday=ymd_(nextWorkDay_());
+  var cutD=addDays_(ymd_(new Date()),-30);
+  var byName={};
+  L.forEach(function(r){
+    var nm=r.driver_name||(r.driver_id_sd?('SD '+r.driver_id_sd):'');
+    if(!nm) return;
+    if(!byName[nm]) byName[nm]={name:nm,disp:'—',loads:[],last:''};
+    byName[nm].loads.push(r);
+    if(r.dispatcher_name) byName[nm].disp=r.dispatcher_name;
+    var d=puDay_(r); if(d>byName[nm].last) byName[nm].last=d;
+  });
+  return Object.keys(byName).map(function(k){ return byName[k]; })
+    .filter(function(d){ var reg=DRIVERS_BY_NAME[d.name]; return !reg||reg.active!==false; })
+    .filter(function(d){ return d.last>=cutD; })
+    .map(function(d){
+      var reg=DRIVERS_BY_NAME[d.name]||{};
+      d.cap=Number(reg.cap)||1;
+      d.day=d.loads.filter(function(l){ return puDay_(l)===tday; });
+      d.cars=d.day.reduce(function(s,l){ return s+cars_(l); },0);
+      d.gross=d.day.reduce(function(s,l){ return s+grossOf_(l); },0);
+      d.loaded=d.loads.some(function(l){ return l.status==='picked_up'; });
+      d.color=d.cars>=d.cap?'g':(d.cars>0?'y':'r');
+      return d;
+    })
+    .sort(function(a,b){ return (a.disp+a.name).localeCompare(b.disp+b.name); });
 }
 function rCoverage(){
-  const p=REAL.driverPayroll;
-  const items=p.map((r,i)=>{const cap=r.cap||1; const need=cap; const m=(i*7)%10; const has=m<5?need:(m<8?Math.max(0,need-1):0); return {disp:r.dispatcher||'—',driver:r.driver,cap,need,has};});
-  const full=items.filter(x=>x.has>=x.need), miss=items.filter(x=>x.has>0&&x.has<x.need), none=items.filter(x=>x.has===0);
-  function grp(title,list,color){ if(!list.length) return '';
-    return `<div class="card" style="margin-bottom:12px"><div class="sect" style="padding:13px 15px 2px;color:${color}">${title} · ${list.length}</div>`+
-      `<div class="tablewrap"><table style="min-width:520px"><thead><tr><th>დისპეჩერი</th><th>მძღოლი</th><th class="num">აქვს</th><th class="num">სჭირდება</th></tr></thead><tbody>`+
-      list.map(x=>`<tr><td>${esc(x.disp)}</td><td>${esc(x.driver)}</td><td class="num">${x.has}</td><td class="num">${x.need}</td></tr>`).join('')+`</tbody></table></div></div>`;
-  }
-  $('view').innerHTML=ph('მძღოლების სია — დღის დაფარვა',`ვის აქვს დღე სრულად, ვის აკლია, ვის არ აქვს`)+
-    `<div class="kpis">${kpi('სრულად დაგეგმილი',full.length,'g')}${kpi('აკლია ტვირთი',miss.length,'w')}${kpi('არ აქვს',none.length,none.length?'r':'')}${kpi('სულ მძღოლი',items.length)}</div>`+
-    grp('❌ საერთოდ არ აქვს',none,'var(--crit)')+grp('⚠ ტვირთი აკლია',miss,'var(--warn)')+grp('✓ დღე სრულად დაგეგმილი',full,'var(--good)')+
-    `<div class="callout"><span class="b">i</span><div><b>ეს ჩვენი coverage-ის გულია</b> (შენი „Dispatchers Trucking"-ის მსგავსად). „აქვს/სჭირდება" ცოცხალ რეჟიმში SD-ის ხვალინდელი ბუკინგებიდან და თითო მძღოლის <b>ინდივიდუალური სამიზნიდან</b> გამოითვლება. <span class="muted">ახლა რიცხვები საილუსტრაციოა.</span></div></div>`;
+  var tday=ymd_(nextWorkDay_());
+  var A=coverRows_();
+  var cnt={g:0,y:0,r:0}; A.forEach(function(d){ cnt[d.color]++; });
+  var byD={};
+  A.forEach(function(d){ var k=d.disp||'—'; if(!byD[k]) byD[k]={g:0,y:0,r:0,n:0,cap:0,cars:0}; var x=byD[k];
+    x[d.color]++; x.n++; x.cap+=d.cap; x.cars+=d.cars; });
+  var dn=Object.keys(byD).sort(function(a,b){ return (byD[b].r-byD[a].r)||(byD[b].n-byD[a].n); });
+  var dbars=dn.map(function(k){
+    var x=byD[k], pct=x.cap?Math.round(x.cars/x.cap*100):0;
+    return "<div class='meter'><div class='ml'><span>"+esc(k)+"</span><b class='tnum'>"+x.cars+" / "+x.cap+" მანქანა · "+pct+"%"+
+      (x.r?" <span style='color:var(--crit)'>("+x.r+" დაუბუკავი)</span>":"")+"</b></div>"+
+      "<div class='track'><i style='width:"+Math.min(100,pct)+"%;background:"+(x.r?'var(--crit)':(x.y?'var(--warn)':'var(--good)'))+"'></i></div></div>";
+  }).join('');
+  var F=(COVF==='all')?A:A.filter(function(d){ return d.color===COVF; });
+  var rows=F.map(function(d){
+    var ll=d.day.slice(0,2).map(function(l){
+      return esc(locShort(l.pickup_location))+' → '+esc(locShort(l.delivery_location))+' · '+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'');
+    }).join('<br>');
+    return "<tr><td>"+esc(d.disp)+"</td><td><b>"+esc(d.name)+"</b>"+(d.loaded?" <span class='chip g' style='padding:1px 6px'>გზაშია</span>":"")+"</td>"+
+      "<td class='num'>"+d.cap+"</td><td class='num' style='font-weight:750;color:"+({g:'var(--good)',y:'var(--warn)',r:'var(--crit)'}[d.color])+"'>"+d.cars+"</td>"+
+      "<td class='num'>"+(d.gross?money(d.gross):'—')+"</td>"+
+      "<td class='muted' style='font-size:12px'>"+(ll||'ტვირთი არ არის დაბუკული')+"</td>"+
+      "<td>"+gd(d.last)+"</td>"+
+      "<td><span class='chip "+d.color+"'><span class='dot'></span>"+({g:'დაცული',y:'ნაწილობრივი',r:'დაუბუკავი'}[d.color])+"</span></td></tr>";
+  }).join('');
+  var chip=function(k,l,n){ return "<span class='chip"+(COVF===k?' g':'')+"' style='cursor:pointer' onclick=\"setCovF('"+k+"')\">"+l+" ("+n+")</span>"; };
+  var totCap=A.reduce(function(s,d){ return s+d.cap; },0), totCars=A.reduce(function(s,d){ return s+d.cars; },0);
+  $('view').innerHTML=ph('მძღოლების სია — დაფარვა','მომდევნო სამუშაო დღე: '+gdFull(tday)+' · ითვლება მანქანებით, არა ტვირთებით')+
+    "<div class='kpis'>"+
+      kpi('აქტიური მძღოლი',A.length,'','ბოლო 30 დღეში ტვირთით')+
+      kpi('დაფარვა',(totCap?Math.round(totCars/totCap*100):0)+'%',(totCap&&totCars/totCap>=0.9)?'g':'r',totCars+' / '+totCap+' მანქანა დაბუკული')+
+      kpi('დაუბუკავი მძღოლი',cnt.r,cnt.r?'r':'g','ხვალინდელი ტვირთი არ აქვს')+
+      kpi('ნაწილობრივი',cnt.y,cnt.y?'w':'g','ტევადობაზე ნაკლები')+
+    "</div>"+
+    "<div class='card p' style='margin-bottom:14px'><h4>დისპეტჩერების ჭრილი — "+gd(tday)+"</h4>"+(dbars||"<div class='muted'>მონაცემი არ არის</div>")+"</div>"+
+    "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>"+
+      chip('all','ყველა',A.length)+chip('r','დაუბუკავი',cnt.r)+chip('y','ნაწილობრივი',cnt.y)+chip('g','დაცული',cnt.g)+"</div>"+
+    "<div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დისპეტჩერი</th><th>მძღოლი</th><th class='num'>ტევადობა</th><th class='num'>დაბუკული</th><th class='num'>გროსი</th><th>ტვირთები</th><th>ბოლო ტვირთი</th><th>სტატუსი</th></tr></thead><tbody>"+
+      (rows||"<tr><td colspan='8' class='muted'>ცარიელია</td></tr>")+"</tbody></table></div>"+
+    "<div class='muted' style='font-size:12px;margin-top:10px'>ტევადობა მოდის მძღოლების რეესტრიდან (რამდენი მანქანა ეტევა). დაფარვა ითვლება <b>მანქანებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. „გზაშია“ = ამჟამად ტვირთი აყვანილი აქვს. კვირას გუნდი არ მუშაობს — შაბათის შემდეგ ითვლება ორშაბათი.</div></div>";
 }
 /* ---- რეიტინგი — ცოცხალი დისპეტჩერული ქულა ---- */
 var CSTAT=null, CSTAT_LOADING=false, CSTAT_DAYS=30;
@@ -853,16 +1104,188 @@ function rLeader(){
     '<div class="card p"><div class="tablewrap"><table style="min-width:980px"><thead><tr><th class="num">#</th><th>დისპეტჩერი</th><th>ქულა</th><th class="num">ქულა</th><th class="num">ტვირთი</th><th class="num">მანქანა</th><th class="num">გროსი</th><th class="num">$/ტვირთი</th><th class="num">ზარები</th><th class="num">ინვოისი</th><th class="num">მიბმული</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div class="muted" style="font-size:12px;margin-top:10px">ქულა = ზარები×50% + ინვოისი×30% + მძღოლზე მიბმა×20%. „ზარები" — ფიქაფზეც და დელივერიზეც დაფიქსირდა პასუხგაცემული ზარი ან შემომავალი SMS (Quo). „ინვოისი" — ჩაბარებულ ტვირთებზე გაგზავნილი ინვოისის წილი (on-site გადახდები არ ითვლება). „მიბმული" — ტვირთი Super Dispatch-ში მძღოლზეა მიბმული. ზარების ისტორია Quo-ში 29 ივნისიდან ითვლება, SMS — 21 ივლისიდან.</div></div>';
 }
+/* ---- გამონაკლისები — ცოცხალი წესების ძრავა (SD + Quo), snapshot-ის გარეშე ---- */
+var EXCF='all';
+function setExcF(v){ EXCF=v; rExc(); }
+function excList_(){
+  var L=LIVE||[], out=[], now=Date.now();
+  var dAgo=function(s){ var t=Date.parse(String(s||'')); return isNaN(t)?null:Math.floor((now-t)/864e5); };
+  var today=ymd_(new Date());
+  var nwd=ymd_(nextWorkDay_());
+
+  /* 1. ჩაბარებულია, ინვოისი არ არის (7+ დღე), ფული ჯერ არ შემოსულა */
+  L.forEach(function(l){
+    if(!l.delivery_completed || ONSITE_[l.payment_terms] || l.invoice_sent_at || l.paid_at) return;
+    var d=dAgo(l.delivery_completed); if(d==null || d<7) return;
+    out.push({k:'invoice', r:d>30?'r':'y', disp:l.dispatcher_name||'—', who:l.driver_name||'—',
+      t:'ინვოისი არ არის გაგზავნილი', s:l.order_number+' · '+(l.customer||'—')+' · ჩაბარდა '+d+' დღის წინ · '+money(Number(l.price)||0), n:d, tab:'invoices'});
+  });
+  /* 2. ვადაგადაცილებული 30+ დღე */
+  openAR_().forEach(function(l){
+    if(ONSITE_[l.payment_terms] || l._late<=30) return;
+    out.push({k:'overdue', r:l._late>60?'r':'y', disp:l.dispatcher_name||'—', who:l.customer||'—',
+      t:'გადახდა ვადაგადაცილებულია', s:l.order_number+' · '+(l.customer||'—')+' · '+l._late+' დღე · '+money(Number(l.price)||0), n:l._late, tab:'overdue'});
+  });
+  /* 3. ტვირთი აყვანილია, მაგრამ დიდი ხანია არ ჩაბარებულა */
+  L.forEach(function(l){
+    if(l.status!=='picked_up') return;
+    var d=dAgo(l.pickup_completed||l.pickup_scheduled||l.pickup_week); if(d==null || d<7) return;
+    out.push({k:'stuck', r:d>14?'r':'y', disp:l.dispatcher_name||'—', who:l.driver_name||'—',
+      t:'აყვანილია, ჯერ არ ჩაბარებულა', s:l.order_number+' · '+locShort(l.pickup_location)+' → '+locShort(l.delivery_location)+' · '+d+' დღე გზაში', n:d, tab:'liveloads'});
+  });
+  /* 4. ბოლო 14 დღის ტვირთი მძღოლზე მიუბმელი */
+  var cut14=addDays_(today,-14);
+  L.forEach(function(l){
+    if(l.driver_id_sd) return; var d=puDay_(l); if(!d || d<cut14) return;
+    out.push({k:'unassigned', r:'y', disp:l.dispatcher_name||'—', who:'—',
+      t:'ტვირთი მძღოლზე მიბმული არ არის', s:l.order_number+' · '+gd(d)+' · '+locShort(l.pickup_location)+' → '+locShort(l.delivery_location), n:1, tab:'liveloads'});
+  });
+  /* 5. მომდევნო დღის ტვირთი დაურეკავი */
+  (CONTACTS||[]).forEach(function(x){
+    var pu=(x.pu_call||x.pu_sms), de=(x.del_call||x.del_sms);
+    if(pu&&de) return;
+    var miss=[]; if(!pu) miss.push('ფიქაფი '+fmtPhone_(x.pickup_phone)); if(!de) miss.push('დელივერი '+fmtPhone_(x.delivery_phone));
+    out.push({k:'calls', r:'r', disp:x.dispatcher_name||'—', who:x.driver_name||'—',
+      t:'დაურეკავი — '+gd(nwd), s:x.order_number+' · '+miss.join(' · '), n:1, tab:''});
+  });
+  /* 6. აქტიური მძღოლი უტვირთოდ */
+  var BD=boardDrivers_();
+  BD.B.idle.forEach(function(d){
+    var days=dAgo(d.last); if(days==null) days=0;
+    out.push({k:'idle', r:days>5?'r':'y', disp:d.disp, who:d.name,
+      t:'მძღოლი უტვირთოდ დგას', s:'ბოლო ტვირთი '+gd(d.last)+' · '+days+' დღის წინ', n:days, tab:'liveboard'});
+  });
+  /* 7. ადგილზე აღებული, SD-ში გადახდა მოუნიშნავი (14+ დღე) */
+  L.forEach(function(l){
+    if(!l.delivery_completed || !ONSITE_[l.payment_terms] || l.paid_at) return;
+    var d=dAgo(l.delivery_completed); if(d==null || d<14) return;
+    out.push({k:'onsite', r:'y', disp:l.dispatcher_name||'—', who:l.driver_name||'—',
+      t:'ადგილზე აღებული — SD-ში მოუნიშნავია', s:l.order_number+' · '+String(l.payment_terms||'').replace(/_/g,' ')+' · '+d+' დღე · '+money(Number(l.price)||0), n:d, tab:'receivables'});
+  });
+  out.sort(function(a,b){ if(a.r!==b.r) return a.r==='r'?-1:1; return b.n-a.n; });
+  return out;
+}
 function rExc(){
-  $('view').innerHTML=ph('გამონაკლისები',`მხოლოდ რისკი/ყურადღება — Quo დღიური`)+
-    `<div class="card">`+REAL.exceptions.map(e=>`<div class="driver" style="grid-template-columns:1.3fr 2.4fr auto"><div class="nm">${esc(e.d)}</div><div class="reason ${e.risk}">${esc(e.issue)}</div><span class="chip ${e.risk}"><span class="dot"></span>${e.risk==='r'?'რისკი':'ყურადღება'}</span></div>`).join('')+`</div>`;
+  var A=excList_();
+  var KINDS=[['all','ყველა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['onsite','ადგილზე აღებული']];
+  var cnt={}; A.forEach(function(x){ cnt[x.k]=(cnt[x.k]||0)+1; }); cnt.all=A.length;
+  var F=(EXCF==='all')?A:A.filter(function(x){ return x.k===EXCF; });
+  var byD={}; A.forEach(function(x){ var k=x.disp||'—'; if(!byD[k]) byD[k]={n:0,r:0}; byD[k].n++; if(x.r==='r') byD[k].r++; });
+  var dn=Object.keys(byD).sort(function(a,b){ return byD[b].n-byD[a].n; });
+  var mxN=Math.max.apply(null,dn.map(function(k){ return byD[k].n; }).concat([1]));
+  var dbars=dn.map(function(k){
+    return "<div class='meter'><div class='ml'><span>"+esc(k)+"</span><b class='tnum'>"+byD[k].n+(byD[k].r?" <span style='color:var(--crit)'>("+byD[k].r+" რისკი)</span>":"")+"</b></div>"+
+      "<div class='track'><i style='width:"+Math.round(byD[k].n/mxN*100)+"%;background:"+(byD[k].r?'var(--crit)':'var(--warn)')+"'></i></div></div>";
+  }).join('');
+  var SHOW=300;
+  var rows=F.slice(0,SHOW).map(function(x){
+    var click=x.tab?" onclick=\"goM('"+x.tab+"')\" style='cursor:pointer'":"";
+    return "<tr"+click+"><td><span class='chip "+x.r+"'><span class='dot'></span>"+(x.r==='r'?'რისკი':'ყურადღება')+"</span></td>"+
+      "<td>"+esc(x.disp)+"</td><td>"+esc(x.who)+"</td><td><b>"+esc(x.t)+"</b></td><td class='muted'>"+esc(x.s)+"</td></tr>";
+  }).join('');
+  var chips=KINDS.filter(function(k){ return k[0]==='all'||cnt[k[0]]; }).map(function(k){
+    return "<span class='chip"+(EXCF===k[0]?' g':'')+"' style='cursor:pointer' onclick=\"setExcF('"+k[0]+"')\">"+k[1]+" ("+(cnt[k[0]]||0)+")</span>";
+  }).join('');
+  var nr=A.filter(function(x){ return x.r==='r'; }).length;
+  $('view').innerHTML=ph('გამონაკლისები','ყველაფერი, რაც წესს არღვევს — ცოცხლად Super Dispatch-იდან და Quo-დან')+
+    "<div class='kpis'>"+kpi('სულ გამონაკლისი',A.length,A.length?'w':'g')+
+      kpi('რისკი',nr,nr?'r':'g','დაუყოვნებლივ საჭიროებს რეაგირებას')+
+      kpi('დაურეკავი ტვირთი',cnt.calls||0,(cnt.calls?'r':'g'),'მომდევნო სამუშაო დღე')+
+      kpi('დისპეტჩერი სიაში',dn.length)+"</div>"+
+    "<div class='card p' style='margin-bottom:14px'><h4>დისპეტჩერების ჭრილი</h4>"+(dbars||"<div class='muted'>ცარიელია</div>")+"</div>"+
+    "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>"+chips+"</div>"+
+    "<div class='tablewrap'><table style='min-width:980px'><thead><tr><th>დონე</th><th>დისპეტჩერი</th><th>მძღოლი / კლიენტი</th><th>რა ხდება</th><th>დეტალი</th></tr></thead><tbody>"+
+    (rows||"<tr><td colspan='5' class='muted'>ამ კატეგორიაში გამონაკლისი არ არის ✓</td></tr>")+"</tbody></table></div>"+
+    "<div class='muted' style='font-size:12px;margin-top:10px'>წესები: ინვოისი ჩაბარებიდან 7+ დღეა გასაგზავნი · გადახდა 30+ დღით ვადაგადაცილებული · ტვირთი 7+ დღეა აყვანილი და არ ჩაბარებულა · ბოლო 14 დღის ტვირთი მძღოლზე მიბმული არ არის · მომდევნო სამუშაო დღის ტვირთზე ფიქაფი ან დელივერი დაურეკავია · აქტიური მძღოლი უტვირთოდ დგას · ადგილზე აღებული თანხა 14+ დღეა SD-ში მოუნიშნავია. ნაჩვენებია პირველი "+Math.min(F.length,SHOW)+" "+F.length+"-დან.</div></div>";
+}
+/* ---- ანალიზი — ცოცხალი, პერიოდის ჭრილში (SD) ---- */
+var ANDAYS=30;
+function setAnDays(d){ ANDAYS=d; rAnalysis(); }
+function stateOf_(s){
+  var m=String(s||'').match(/,\s*([A-Z]{2})\s*\d{5}/g);
+  if(m&&m.length){ var mm=/,\s*([A-Z]{2})/.exec(m[m.length-1]); if(mm) return mm[1]; }
+  var m2=String(s||'').match(/\b([A-Z]{2})\b(?!.*\b[A-Z]{2}\b)/);
+  return m2?m2[1]:'—';
 }
 function rAnalysis(){
-  const a=REAL.dispPayroll;
-  const rows=a.map(x=>`<tr><td>${esc(x.disp)}</td><td class="num">${x.drivers}</td><td class="num">${money(x.gross)}</td><td class="num">${money(x.dispSalary)}</td><td class="num">${money(x.revenue)}</td></tr>`).join('');
-  $('view').innerHTML=ph('ანალიზი — დისპეტჩერების ჭრილი',`კვირა ${REAL.payrollWeek} · GrossezSalariez-იდან`)+
-    `<div class="kpis">${kpi('დისპეტჩერი',a.length)}${kpi('მძღოლი',REAL.nDrivers)}${kpi('ჯამ. gross',money(REAL.totGross))}${kpi('კომპ. შემოსავალი',money(REAL.totRevenue),'g')}</div>`+
-    `<div class="card p"><div class="tablewrap"><table style="min-width:560px"><thead><tr><th>დისპეტჩერი</th><th class="num">მძღ.</th><th class="num">gross</th><th class="num">დისპ. ხელფ.</th><th class="num">კომპ. შემოს.</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  var today=ymd_(new Date());
+  var cut=addDays_(today,-ANDAYS);
+  var A=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=cut && d<=today; });
+  var sumG=function(a){ return a.reduce(function(s,l){ return s+grossOf_(l); },0); };
+  var cars=function(a){ return a.reduce(function(s,l){ return s+cars_(l); },0); };
+  var G=sumG(A), CA=cars(A);
+  var wks=Math.max(1, ANDAYS/7);
+
+  /* დისპეტჩერების ჭრილი */
+  var byD={};
+  A.forEach(function(l){
+    var k=l.dispatcher_name||'(მიუბმელი)';
+    if(!byD[k]) byD[k]={n:0,c:0,g:0,drv:{},del:0};
+    var x=byD[k]; x.n++; x.c+=cars_(l); x.g+=grossOf_(l);
+    if(l.driver_name) x.drv[l.driver_name]=1;
+    if(l.status==='delivered') x.del++;
+  });
+  var dk=Object.keys(byD).sort(function(a,b){ return byD[b].g-byD[a].g; });
+  var drows=dk.map(function(k){
+    var x=byD[k], nd=Object.keys(x.drv).length;
+    return "<tr><td><b>"+esc(k)+"</b></td><td class='num'>"+x.n+"</td><td class='num'>"+x.c+"</td>"+
+      "<td class='num'><b>"+money(x.g)+"</b></td><td class='num'>"+money(x.n?x.g/x.n:0)+"</td><td class='num'>"+money(x.c?x.g/x.c:0)+"</td>"+
+      "<td class='num'>"+nd+"</td><td class='num'>"+(nd?(x.n/nd/wks).toFixed(1):'—')+"</td>"+
+      "<td class='num'>"+(x.n?Math.round(x.del/x.n*100):0)+"%</td></tr>";
+  }).join('');
+
+  /* კლიენტები */
+  var byC={};
+  A.forEach(function(l){ var k=l.customer||'—'; if(!byC[k]) byC[k]={n:0,g:0}; byC[k].n++; byC[k].g+=grossOf_(l); });
+  var ck=Object.keys(byC).sort(function(a,b){ return byC[b].g-byC[a].g; });
+  var top=ck.slice(0,15);
+  var mxC=Math.max.apply(null,top.map(function(k){ return byC[k].g; }).concat([1]));
+  var crows=top.map(function(k){
+    var x=byC[k];
+    return "<tr><td>"+esc(k)+"</td><td class='num'>"+x.n+"</td><td class='num'><b>"+money(x.g)+"</b></td>"+
+      "<td class='num'>"+money(x.n?x.g/x.n:0)+"</td><td class='num'>"+(G?Math.round(x.g/G*100):0)+"%</td>"+
+      "<td style='width:140px'><div class='track'><i style='width:"+Math.round(x.g/mxC*100)+"%;background:var(--brand)'></i></div></td></tr>";
+  }).join('');
+  var top5=ck.slice(0,5).reduce(function(s,k){ return s+byC[k].g; },0);
+
+  /* მიმართულებები */
+  var byL={};
+  A.forEach(function(l){ var k=stateOf_(l.pickup_location)+' → '+stateOf_(l.delivery_location);
+    if(!byL[k]) byL[k]={n:0,g:0}; byL[k].n++; byL[k].g+=grossOf_(l); });
+  var lk=Object.keys(byL).sort(function(a,b){ return byL[b].n-byL[a].n; }).slice(0,15);
+  var mxL=Math.max.apply(null,lk.map(function(k){ return byL[k].n; }).concat([1]));
+  var lrows=lk.map(function(k){
+    var x=byL[k];
+    return "<tr><td><b>"+esc(k)+"</b></td><td class='num'>"+x.n+"</td><td class='num'>"+money(x.g)+"</td><td class='num'>"+money(x.n?x.g/x.n:0)+"</td>"+
+      "<td style='width:140px'><div class='track'><i style='width:"+Math.round(x.n/mxL*100)+"%;background:var(--good)'></i></div></td></tr>";
+  }).join('');
+
+  /* ფასების განაწილება */
+  var bk=[['<$500',0,499],['$500–799',500,799],['$800–1099',800,1099],['$1100–1499',1100,1499],['$1500–1999',1500,1999],['$2000+',2000,1e9]];
+  var bs=bk.map(function(b){ var rs=A.filter(function(l){ var g=grossOf_(l); return g>=b[1]&&g<=b[2]; }); return {l:b[0],n:rs.length,g:sumG(rs)}; });
+  var mxB=Math.max.apply(null,bs.map(function(b){ return b.n; }).concat([1]));
+  var brows=bs.map(function(b){
+    return "<div class='meter'><div class='ml'><span>"+b.l+"</span><b class='tnum'>"+b.n+" ტვ. · "+money(b.g)+"</b></div>"+
+      "<div class='track'><i style='width:"+Math.round(b.n/mxB*100)+"%;background:var(--brand)'></i></div></div>";
+  }).join('');
+
+  var chip=function(d,l){ return "<span class='chip"+(ANDAYS===d?' g':'')+"' style='cursor:pointer' onclick='setAnDays("+d+")'>"+l+"</span>"; };
+  var nDrvAll={}; A.forEach(function(l){ if(l.driver_name) nDrvAll[l.driver_name]=1; });
+  $('view').innerHTML=ph('ანალიზი','სად მოდის ფული — დისპეტჩერების, კლიენტებისა და მიმართულებების ჭრილში, ცოცხლად')+
+    "<div style='display:flex;gap:8px;margin-bottom:12px'>"+chip(7,'7 დღე')+chip(30,'30 დღე')+chip(90,'90 დღე')+"</div>"+
+    "<div class='kpis'>"+kpi('ტვირთი',A.length,'',ANDAYS+' დღე')+kpi('მანქანა',CA,'',(A.length?(CA/A.length).toFixed(2):'0')+' მანქ./ტვირთზე')+
+      kpi('გროსი',money(G),'',money(G/wks)+' / კვირაში')+
+      kpi('საშ. ფასი',money(A.length?G/A.length:0),'',money(CA?G/CA:0)+' / მანქანაზე')+"</div>"+
+    "<div class='card p' style='margin-bottom:14px'><h4>დისპეტჩერების ჭრილი</h4><div class='tablewrap'>"+
+      "<table style='min-width:900px'><thead><tr><th>დისპეტჩერი</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>გროსი</th><th class='num'>$/ტვირთი</th><th class='num'>$/მანქანა</th><th class='num'>მძღოლი</th><th class='num'>ტვ./მძღ./კვ.</th><th class='num'>ჩაბარებული</th></tr></thead><tbody>"+drows+"</tbody></table></div>"+
+      "<div class='muted' style='font-size:12px;margin-top:8px'>„ტვ./მძღ./კვ.“ = რამდენ ტვირთს იღებს ერთი მძღოლი კვირაში ამ დისპეტჩერთან. ხელფასის და საკომისიოს ჭრილი — ტაბში <b>დისპ. ხელფასები</b>.</div></div>"+
+    "<div class='grid2'>"+
+      "<div class='card p'><h4>ტოპ კლიენტები</h4><div class='tablewrap'><table style='min-width:520px'><thead><tr><th>კლიენტი</th><th class='num'>ტვ.</th><th class='num'>გროსი</th><th class='num'>საშ.</th><th class='num'>წილი</th><th></th></tr></thead><tbody>"+crows+"</tbody></table></div>"+
+        "<div class='muted' style='font-size:12px;margin-top:8px'>სულ "+ck.length+" კლიენტი. ტოპ 5 იძლევა გროსის <b>"+(G?Math.round(top5/G*100):0)+"%</b>-ს — რაც მეტია, მით მეტია დამოკიდებულების რისკი.</div></div>"+
+      "<div class='card p'><h4>ტოპ მიმართულებები</h4><div class='tablewrap'><table style='min-width:440px'><thead><tr><th>მიმართულება</th><th class='num'>ტვ.</th><th class='num'>გროსი</th><th class='num'>საშ.</th><th></th></tr></thead><tbody>"+lrows+"</tbody></table></div></div>"+
+    "</div>"+
+    "<div class='card p' style='margin-top:14px'><h4>ფასების განაწილება</h4>"+brows+
+      "<div class='muted' style='font-size:12px;margin-top:8px'>გროსი = Super Dispatch-ის price ბროკერის საკომისიოს გამოკლებით. პერიოდში მონაწილეობს "+Object.keys(nDrvAll).length+" მძღოლი.</div></div>";
 }
 /* ---- ინვოისები — გასაგზავნი (ცოცხალი, SD-იდან) ---- */
 var INVD='';
