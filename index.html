@@ -533,7 +533,7 @@ function rBoard(){
       var act='';
       if(kind==='bol') act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a><button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>";
       if(kind==='chk') act="<button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','chk')\">ატვირთულია</button>";
-      return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b><span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
+      return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
     }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
   var callP=(CONTACTS||[]).filter(function(r){ return !((r.pu_call||r.pu_sms) && (r.del_call||r.del_sms)); })
@@ -839,7 +839,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer').is('deleted_at', null).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable').is('deleted_at', null).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -975,6 +975,11 @@ function addDays_(s,n){
   var d=new Date(+m[1],+m[2]-1,+m[3]); d.setDate(d.getDate()+n); return ymd_(d);
 }
 function grossOf_(l){ return Number(l.gross!=null?l.gross:l.price)||0; }
+/* INOP — არამოძრავი ავტომობილი (SD Orders Live → loads.is_inoperable) */
+function inop_(l){ return l && l.is_inoperable===true; }
+function inopChip_(l){
+  return inop_(l) ? " <span class='chip r' style='padding:1px 6px;font-weight:700' title='არამოძრავი — უნდა დაზუსტდეს ტრიალებს/ტრიალდება/მუხრუჭებს'><span class='dot'></span>INOP</span>" : "";
+}
 
 function rOverview(){
   var L=LIVE||[];
@@ -1827,7 +1832,7 @@ function rPlan(){
   }
   var hitRows=hits.map(function(l){
     var off=(puDay_(l)!==tday);
-    return "<tr><td><b>"+esc(l.order_number)+"</b></td><td>"+esc(l.customer||'—')+"</td><td>"+esc(l.driver_name||'—')+"</td>"+
+    return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td><td>"+esc(l.customer||'—')+"</td><td>"+esc(l.driver_name||'—')+"</td>"+
       "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
       "<td class='num'>"+money(grossOf_(l))+"</td>"+
       "<td"+(off?" style='color:var(--crit);font-weight:700'":"")+">"+gd(puDay_(l))+"</td>"+
@@ -1836,7 +1841,7 @@ function rPlan(){
   var planRowsHtml=P.map(function(l){
     var off=(puDay_(l)!==tday);
     var m=l._manual;
-    return "<tr><td><b>"+esc(l.order_number)+"</b>"+(m?" <span class='chip y' style='padding:1px 6px'>ხელით</span>":"")+"</td>"+
+    return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+(m?" <span class='chip y' style='padding:1px 6px'>ხელით</span>":"")+"</td>"+
       "<td>"+(l.driver_name?esc(l.driver_name):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
       "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
       "<td class='num'>"+money(grossOf_(l))+"</td>"+
