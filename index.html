@@ -244,13 +244,26 @@ async function loadData(){
     await loadRates();
     await loadExpenses();
     await loadContacts();
+    await loadAttempts();
+    await loadWaivers();
+    await loadCloses();
   } else {
     await loadLiveLoads();   // RLS scopes loads to this dispatcher only
     const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
     await loadActions();
     await loadContacts();
+    await loadSettingsOnly();
+    await loadAttempts();
+    await loadWaivers();
+    await loadClose();
   }
+}
+async function loadSettingsOnly(){
+  try{ var s=await sb.from('app_settings').select('*');
+    SETT={}; (s.data||[]).forEach(function(x){ if(x.num_value!=null) SETT[x.key]=Number(x.num_value); });
+    if(SETT.usd_gel) USDGEL=SETT.usd_gel;
+  }catch(e){ console.error(e); }
 }
 function startApp(){
   document.getElementById('login').classList.add('hidden');
@@ -297,7 +310,7 @@ function pm(n){return (n==null||!isFinite(n))?'—':'$'+Number(n).toFixed(2);}
 function pymd(s){var m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 
 const DTABS=[['board','ჩემი დაფა'],['liveboard','ჩემი მძღოლები'],['liveloads','ჩემი ტვირთები'],['profile','ჩემი პროფილი'],['worklog','ჩემი Work Log']];
-const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['expenses','ხარჯები']];
+const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['expenses','ხარჯები'],['closes','დახურვები']];
 
 function enterAs(kind){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -337,7 +350,7 @@ function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if
 
 function render(){
   if(ROLE==='disp'){ if(TAB==='board')return rBoard(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
-  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses}[MTAB])();
+  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,closes:rCloses}[MTAB])();
 }
 
 /* ---------- DISPATCHER ---------- */
@@ -347,10 +360,92 @@ function ymd_(d){ var p=function(n){return (n<10?'0':'')+n;}; return d.getFullYe
 function puDay_(r){ return String(r.pickup_scheduled||r.pickup_week||'').slice(0,10); }
 function cars_(l){ return Number(l.vehicle_count)||1; }
 
+/* ---- სტანდარტი, მოთხოვნები და ცვლის დახურვა ---- */
+var ATT={};    // contact_attempts by order_number
+var WAIV={};   // waivers
+function wkey_(disp,day,kind,subj){ return (disp||'')+'|'+day+'|'+kind+'|'+(subj||''); }
+async function loadAttempts(){
+  try{ var r=await sb.rpc('contact_attempts',{p_day:ymd_(nextWorkDay_())}); ATT={};
+    (r.data||[]).forEach(function(a){ ATT[a.order_number]=a; });
+  }catch(e){ console.error(e); ATT={}; }
+}
+async function loadWaivers(){
+  try{ var r=await sb.from('load_waivers').select('*').gte('work_day', addDays_(ymd_(new Date()),-21));
+    WAIV={}; (r.data||[]).forEach(function(w){ WAIV[wkey_(w.dispatcher_name,w.work_day,w.kind,w.order_number)]=w; });
+  }catch(e){ console.error(e); WAIV={}; }
+}
+function waivOf_(kind,subj,day,disp){ return WAIV[wkey_(disp||(USER&&USER.dispatcher)||'',day,kind,subj||'')]||null; }
+function marketFactor_(){ return sett_('market_factor',1); }
+function dayTarget_(driverName){
+  var reg=DRIVERS_BY_NAME[driverName]||{};
+  if(reg.target_gross==null) return null;
+  return Number(reg.target_gross)/6*marketFactor_();
+}
+function stdLevel_(ratio){
+  if(ratio==null) return 'n';
+  var y=sett_('std_yellow_at',0.6);
+  return ratio>=1 ? 'g' : (ratio>=y ? 'y' : 'r');
+}
+/* ---- მოთხოვნის ფანჯარა ---- */
+function waivAsk(kind, subj, label){
+  var day=ymd_(nextWorkDay_());
+  var ex=waivOf_(kind,subj,day);
+  var cur=ex?ex.reason:'';
+  var box=document.getElementById('_waiv');
+  if(!box){ box=document.createElement('div'); box.id='_waiv';
+    box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px';
+    document.body.appendChild(box); }
+  box.innerHTML="<div class='card p' style='max-width:520px;width:100%'>"+
+    "<h4 style='margin-bottom:6px'>ახსნა-განმარტების გაგზავნა</h4>"+
+    "<div class='muted' style='font-size:12px;margin-bottom:10px'>"+esc(label)+"</div>"+
+    "<textarea id='_wtxt' style='width:100%;min-height:110px;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit' placeholder='რატომ ვერ სრულდება სტანდარტი? დაწერე კონკრეტულად — მენეჯმენტი ამას წაიკითხავს.'>"+esc(cur)+"</textarea>"+
+    "<div style='display:flex;gap:8px;margin-top:12px;justify-content:flex-end'>"+
+      "<button class='fixbtn' onclick=\"document.getElementById('_waiv').remove()\">დახურვა</button>"+
+      "<button class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"waivSend('"+kind+"','"+encodeURIComponent(subj||'')+"')\">გაგზავნა</button>"+
+    "</div></div>";
+}
+async function waivSend(kind, encSubj){
+  var subj=decodeURIComponent(encSubj||'');
+  var txt=(document.getElementById('_wtxt')||{}).value||'';
+  if(txt.trim().length<10){ toast('მიზეზი უფრო დეტალურად დაწერე'); return; }
+  var day=ymd_(nextWorkDay_());
+  var row={order_number:subj||null, dispatcher_name:USER.dispatcher, work_day:day, kind:kind,
+           reason:txt.trim(), status:'pending', requested_at:new Date().toISOString(), requested_by:USER.email,
+           decided_at:null, decided_by:null, decision_note:null};
+  try{
+    var ex=waivOf_(kind,subj,day);
+    var res = ex ? await sb.from('load_waivers').update({reason:row.reason,status:'pending',requested_at:row.requested_at,requested_by:row.requested_by,decided_at:null,decided_by:null}).eq('id',ex.id)
+                 : await sb.from('load_waivers').insert(row);
+    if(res.error) throw res.error;
+    await loadWaivers();
+    var b=document.getElementById('_waiv'); if(b) b.remove();
+    toast('მოთხოვნა გაგზავნილია ✓'); render();
+  }catch(e){ console.error(e); toast('ვერ გაიგზავნა'); }
+}
+async function waivDecide(id, status){
+  var note='';
+  if(status==='rejected'){ note=prompt('რატომ არ დასტურდება? (დისპეჩერი ამას დაინახავს)')||''; if(!note.trim()){ toast('მიზეზი საჭიროა'); return; } }
+  try{
+    var res=await sb.from('load_waivers').update({status:status, decided_at:new Date().toISOString(), decided_by:USER.email, decision_note:note||null}).eq('id',id);
+    if(res.error) throw res.error;
+    await loadWaivers(); toast(status==='approved'?'დადასტურდა ✓':'დაბრუნდა'); render();
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+}
+function waivChip_(kind, subj, label, day, disp){
+  var w=waivOf_(kind,subj,day||ymd_(nextWorkDay_()),disp);
+  if(!w) return "<button class='fixbtn' onclick=\"waivAsk('"+kind+"','"+encodeURIComponent(subj||'')+"','"+esc(label).replace(/'/g,"")+"')\">ახსნის გაგზავნა</button>";
+  if(w.status==='approved') return "<span class='chip g'><span class='dot'></span>დადასტურებული</span>";
+  if(w.status==='rejected') return "<span class='chip r' title='"+esc(w.decision_note||'')+"'><span class='dot'></span>დაბრუნებული</span>"+
+    "<button class='fixbtn' style='margin-left:6px' onclick=\"waivAsk('"+kind+"','"+encodeURIComponent(subj||'')+"','"+esc(label).replace(/'/g,"")+"')\">ხელახლა</button>";
+  return "<span class='chip y'><span class='dot'></span>გაგზავნილია — პასუხს ელოდება</span>";
+}
+function waivOk_(kind,subj,day,disp){ var w=waivOf_(kind,subj,day,disp); return !!(w && w.status==='approved'); }
+
+/* ---- ჩემი დაფა ---- */
 function rBoard(){
   var L=LIVE||[];
   var tday=ymd_(nextWorkDay_());
-  var cutD=ymd_(new Date(Date.now()-30*864e5));
+  var cutD=addDays_(ymd_(new Date()),-30);
   var byName={};
   L.forEach(function(r){
     var nm=r.driver_name||(r.driver_id_sd?('SD '+r.driver_id_sd):'');
@@ -359,28 +454,38 @@ function rBoard(){
     byName[nm].loads.push(r);
     var d=puDay_(r); if(d>byName[nm].last) byName[nm].last=d;
   });
-  var list=Object.keys(byName).map(function(k){return byName[k];})
+  var list=Object.keys(byName).map(function(k){ return byName[k]; })
     .filter(function(d){ var reg=DRIVERS_BY_NAME[d.name]; return !reg||reg.active!==false; })
     .filter(function(d){ return d.last>=cutD; })
     .sort(function(a,b){ return a.name.localeCompare(b.name); });
 
-  var cnt={g:0,y:0,r:0}, gaps=[];
+  var cnt={g:0,y:0,r:0,n:0}, gaps=[];
   var cards=list.map(function(d){
     var reg=DRIVERS_BY_NAME[d.name]||{};
     var cap=Number(reg.cap)||1;
     var day=d.loads.filter(function(l){ return puDay_(l)===tday; });
+    var gross=day.reduce(function(s,l){ return s+grossOf_(l); },0);
     var cars=day.reduce(function(s,l){ return s+cars_(l); },0);
-    var color=cars>=cap?'g':(cars>0?'y':'r');
-    cnt[color]++; if(color==='r') gaps.push(d.name);
-    var reason = cars>=cap ? ('დაცული — '+cars+'/'+cap+' მანქანა')
-      : (cars>0 ? (cars+'/'+cap+' მანქანა — ნაწილობრივი დაფარვა') : 'ტვირთი არ არის დაბუკული');
+    var tgt=dayTarget_(d.name);
+    var ratio=(tgt&&tgt>0)?gross/tgt:null;
+    var lvl=stdLevel_(ratio);
+    if(lvl==='n'){ cnt.n++; } else { cnt[lvl]++; }
+    if(lvl==='r') gaps.push(d.name);
+    var ok=(lvl==='g')||waivOk_('standard',d.name,tday);
+    var reason = (tgt==null) ? 'სამიზნე დაწესებული არ არის — რეესტრში შეავსე'
+      : (gross===0 ? ('ტვირთი არ არის აღებული · სამიზნე '+money(tgt))
+        : (money(gross)+' / '+money(tgt)+' · '+Math.round(ratio*100)+'%'));
     var ll=day.slice(0,3).map(function(l){
-      return `<span class="load"><b>${esc(locShort(l.pickup_location))}</b> → ${esc(locShort(l.delivery_location))} · ${money(l.gross!=null?l.gross:l.price)}${cars_(l)>1?` · ${cars_(l)} მანქ.`:''}</span>`;
+      var pm=(Number(l.miles)>0)? (' · $'+(grossOf_(l)/Number(l.miles)).toFixed(2)+'/მი') : '';
+      return "<span class='load'><b>"+esc(locShort(l.pickup_location))+"</b> → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'')+pm+"</span>";
     }).join('');
-    return `<div class="driver"><div class="cap">${cap}</div>
-      <div><div class="nm">${esc(d.name)}</div><div class="meta">${cap}-მანქ. · ბოლო ტვირთი ${gd(d.last)}</div></div>
-      <div class="lw"><div class="loadline">${ll||'<span class="load">ტვირთი არ არის</span>'}</div><div class="reason"${color==='g'?' style="color:var(--good)"':''}>${reason}</div></div>
-      <div class="st"><span class="chip ${color}"><span class="dot"></span>${({g:'მწვანე',y:'ყვითელი',r:'წითელი'})[color]}</span></div></div>`;
+    var act=(lvl==='g'||tgt==null)?'':("<div style='margin-top:6px'>"+waivChip_('standard',d.name,d.name+' — '+reason,tday)+"</div>");
+    return "<div class='driver'><div class='cap'>"+cap+"</div>"+
+      "<div><div class='nm'>"+esc(d.name)+"</div><div class='meta'>"+cap+"-მანქ. · სამიზნე "+(tgt?money(tgt)+'/დღე':'—')+"</div></div>"+
+      "<div class='lw'><div class='loadline'>"+(ll||"<span class='load'>ტვირთი არ არის</span>")+"</div>"+
+        "<div class='reason'"+(lvl==='g'?" style='color:var(--good)'":"")+">"+reason+"</div>"+act+"</div>"+
+      "<div class='st'><span class='chip "+(ok?'g':lvl)+"'><span class='dot'></span>"+
+        (ok?'დაცული':({y:'ნაკლები',r:'ვერ ავსებს',n:'სამიზნე არ არის'}[lvl]))+"</span></div></div>";
   }).join('');
 
   var winCut=new Date(Date.now()-14*864e5).toISOString();
@@ -395,56 +500,93 @@ function rBoard(){
     var dl=(l.payment_terms==='check_on_delivery' && l.delivery_completed && l.delivery_completed>=winCut);
     return (pu||dl) && !actOf_(l.order_number).check_uploaded_at; }).sort(byNew);
 
-  function gate_(title, n, sub, manual){
-    var ok = (n===0);
-    var btn = manual ? '<button class="fixbtn" onclick="fixGate(this)">გასწორება</button>' : '';
-    return '<div class="gate '+(ok?'ok':'no')+'"><div class="ic">'+(ok?'✓':'!')+'</div><div class="t"><b>'+title+'</b><span>'+(ok?'ყველაფერი დახურულია':sub)+'</span></div>'+btn+'</div>';
+  function gate_(title, n, sub, kind, subj){
+    var ok=(n===0)||waivOk_(kind,subj||'',tday);
+    var btn=(n===0)?'':waivChip_(kind,subj||'',title+' — '+sub,tday);
+    return "<div class='gate "+(ok?'ok':'no')+"'><div class='ic'>"+(ok?'✓':'!')+"</div><div class='t'><b>"+title+"</b><span>"+(n===0?'ყველაფერი დახურულია':esc(sub))+"</span></div>"+btn+"</div>";
   }
   function rows_(items, kind){
     if(!items.length) return '';
-    var head=items.slice(0,8).map(function(l){
+    return items.slice(0,8).map(function(l){
       var act='';
-      if(kind==='bol') act='<a class="fixbtn" href="'+esc(l.bol||'#')+'" target="_blank" rel="noopener" style="text-decoration:none;margin-right:6px">BOL</a><button class="fixbtn" onclick="markAct(\''+encodeURIComponent(l.order_number)+'\',\'bol\')">გავაგზავნე</button>';
-      if(kind==='chk') act='<button class="fixbtn" onclick="markAct(\''+encodeURIComponent(l.order_number)+'\',\'chk\')">ატვირთულია</button>';
-      return '<div class="gate" style="padding-left:34px"><div class="ic" style="visibility:hidden">·</div><div class="t"><b>'+esc(l.order_number)+'</b><span>'+esc(l.driver_name||'—')+' · '+esc(locShort(l.pickup_location))+' → '+esc(locShort(l.delivery_location))+' · '+money(l.gross!=null?l.gross:l.price)+'</span></div>'+act+'</div>';
-    }).join('');
-    return head + (items.length>8 ? '<div class="muted" style="padding:4px 15px 12px 49px;font-size:12px">…და კიდევ '+(items.length-8)+'</div>' : '');
+      if(kind==='bol') act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a><button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>";
+      if(kind==='chk') act="<button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','chk')\">ატვირთულია</button>";
+      return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b><span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
+    }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
-
-  var callP=(CONTACTS||[]).filter(function(r){ return !((r.pu_call||r.pu_sms) && (r.del_call||r.del_sms)); });
+  var callP=(CONTACTS||[]).filter(function(r){ return !((r.pu_call||r.pu_sms) && (r.del_call||r.del_sms)); })
+    .filter(function(r){ return !waivOk_('calls',r.order_number,tday); });
   function callRows_(items){
     if(!items.length) return '';
-    return items.slice(0,8).map(function(r){
-      var miss=[];
-      if(!(r.pu_call||r.pu_sms)) miss.push('ფიქაფი ' + fmtPhone_(r.pickup_phone));
-      if(!(r.del_call||r.del_sms)) miss.push('დელივერი ' + fmtPhone_(r.delivery_phone));
-      return '<div class="gate" style="padding-left:34px"><div class="ic" style="visibility:hidden">·</div><div class="t"><b>'+esc(r.order_number)+'</b><span>'+esc(r.driver_name||'—')+' · <span style="color:var(--crit)">'+esc(miss.join(' · '))+'</span> — არ არის დარეკილი</span></div></div>';
-    }).join('') + (items.length>8 ? '<div class="muted" style="padding:4px 15px 12px 49px;font-size:12px">…და კიდევ '+(items.length-8)+'</div>' : '');
+    return items.slice(0,10).map(function(r){
+      var a=ATT[r.order_number]||{};
+      var miss=[], ev=[];
+      if(!(r.pu_call||r.pu_sms)){ miss.push('ფიქაფი '+fmtPhone_(r.pickup_phone));
+        ev.push('ფიქაფზე '+(a.pu_try||0)+' ცდა'+(a.pu_sms_out?(' + '+a.pu_sms_out+' SMS'):'')); }
+      if(!(r.del_call||r.del_sms)){ miss.push('დელივერი '+fmtPhone_(r.delivery_phone));
+        ev.push('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):'')); }
+      var tried=((a.pu_try||0)+(a.del_try||0))>0;
+      return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
+        "<div class='t'><b>"+esc(r.order_number)+"</b><span>"+esc(r.driver_name||'—')+" · <span style='color:var(--crit)'>"+esc(miss.join(' · '))+"</span> — "+
+        (tried? ("<span style='color:var(--warn)'>"+esc(ev.join(' · '))+", პასუხი არ არის</span>") : "<span style='color:var(--crit)'>ცდაც არ ფიქსირდება</span>")+"</span></div>"+
+        waivChip_('calls',r.order_number,'ზარი — '+r.order_number,tday)+"</div>";
+    }).join('') + (items.length>10 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-10)+"</div>" : '');
   }
 
-  var g1ok = list.length>0 && gaps.length===0;
-  var rem = (g1ok?0:1) + (callP.length?1:0) + (bolP.length?1:0) + (invP.length?1:0) + (chkP.length?1:0);
-  var chips=[['g','მწვანე'],['y','ყვითელი'],['r','წითელი']].filter(function(t){return cnt[t[0]];})
-    .map(function(t){ return `<span class="chip ${t[0]}"><span class="dot"></span>${cnt[t[0]]} ${t[1]}</span>`; }).join('');
+  var stdOk = list.length>0 && list.every(function(d){
+    var tgt=dayTarget_(d.name); if(tgt==null) return waivOk_('standard',d.name,tday);
+    var g=d.loads.filter(function(l){ return puDay_(l)===tday; }).reduce(function(s,l){ return s+grossOf_(l); },0);
+    return (g/tgt)>=1 || waivOk_('standard',d.name,tday);
+  });
+  var gBol=(bolP.length===0)||waivOk_('bol','',tday);
+  var gInv=(invP.length===0)||waivOk_('invoice','',tday);
+  var gChk=(chkP.length===0)||waivOk_('check','',tday);
+  var gCall=(callP.length===0);
+  var rem=(stdOk?0:1)+(gCall?0:1)+(gBol?0:1)+(gInv?0:1)+(gChk?0:1);
+  var closed=SCLOSE&&SCLOSE.work_day===tday;
+  var chips=[['g','დაცული'],['y','ნაკლები'],['r','ვერ ავსებს']].filter(function(t){ return cnt[t[0]]; })
+    .map(function(t){ return "<span class='chip "+t[0]+"'><span class='dot'></span>"+cnt[t[0]]+" "+t[1]+"</span>"; }).join('');
+  var pend=Object.keys(WAIV).filter(function(k){ return WAIV[k].status==='pending' && WAIV[k].work_day===tday; }).length;
 
-  $('view').innerHTML=ph('ჩემი დაფა',`${esc(USER.name||'')} · ${list.length} აქტიური მძღოლი · დაფარვა ${gdFull(tday)}-სთვის`)+
-    `<div style="display:flex;gap:8px;margin-bottom:14px">${chips||'<span class="muted">მძღოლი არ არის</span>'}</div>`+
-    `<div class="card" style="margin-bottom:16px">${cards||'<div class="muted" style="padding:14px">ბოლო 30 დღეში აქტიური მძღოლი არ არის</div>'}</div>`+
-    `<div class="sect">ცვლის დახურვა — გასვლის GATE-ები</div>`+
-    `<div class="card" id="closeCard">
-      <div class="gate ${g1ok?'ok':'no'}"><div class="ic">${g1ok?'✓':'!'}</div><div class="t"><b>${gdFull(tday)}-ის ტვირთები დაბუკულია</b><span>${list.length} მძღოლი · ${cnt.g} დაცული · ${cnt.y} ნაწილობრივი · ${cnt.r} დაუბუკავი${gaps.length?' — '+esc(gaps.join(', ')):''}</span></div></div>
-      ${gate_('ზარები · Pickup / Delivery', callP.length, callP.length+' ტვირთზე დარეკვა/დადასტურება არ ჩანს Quo-ში', false)}
-      ${callRows_(callP)}
-      ${gate_('BOL გაგზავნა', bolP.length, bolP.length+' ჩაბარებული ტვირთი ჯერ არ არის მონიშნული', false)}
-      ${rows_(bolP,'bol')}
-      ${gate_('ინვოისის გაგზავნა', invP.length, invP.length+' ჩაბარებული ტვირთი ინვოისის გარეშე — Super Dispatch-ის ჩანაწერით', false)}
-      ${rows_(invP,'inv')}
-      ${gate_('ჩეკის ატვირთვა · Check on Pickup / Delivery', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', false)}
-      ${rows_(chkP,'chk')}
-      ${oldInv?`<div class="muted" style="padding:8px 15px 12px 49px;font-size:12px">14 დღეზე ძველი: <b>${oldInv}</b> ჩაბარებული ტვირთი ინვოისის გარეშე — gate-ს არ ბლოკავს, მაგრამ ფული გამოსაწერია</div>`:''}
-      <div class="closebar"><button class="bigbtn" id="logoutBtn" disabled>ცვლის დახურვა</button><span id="gateCount" class="chip ${rem?'r':'g'}"><span class="dot"></span>${rem?rem+' დარჩენილი':'ყველა gate გავლილია'}</span><span class="muted" style="font-size:12px">ყველა ✓-ის შემდეგ — „მწვანე"</span></div>
-    </div>
-    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>ზარი ჩაითვლება მხოლოდ <b>ნასაუბრები ზარით</b> ან <b>პასუხად მოსული SMS-ით</b> — უპასუხო ზარი არ ითვლება. დანარჩენი gate-ები ითვლის <b>ბოლო 14 დღეს</b>. დაფარვა ითვლება <b>მანქანებით, არა ტვირთებით</b>: 2-მანქანიან მძღოლს ერთი 2-მანქანიანი ტვირთიც სრულად ფარავს. პირველი gate <b>სისტემა ითვლის</b> Super Dispatch-ის ცოცხალი ბუკინგებით — ხელით ვერ გამწვანდება. <span class="muted">დანარჩენი gate-ები ჯერ ხელითაა და თანდათან ავტომატდება.</span></div></div>`;
+  $('view').innerHTML=ph('ჩემი დაფა',esc(USER.name||'')+' · '+list.length+' აქტიური მძღოლი · '+gdFull(tday)+'-ის სტანდარტი')+
+    "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
+      (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
+      (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
+    "<div class='card' style='margin-bottom:16px'>"+(cards||"<div class='muted' style='padding:14px'>ბოლო 30 დღეში აქტიური მძღოლი არ არის</div>")+"</div>"+
+    "<div class='sect'>ცვლის დახურვა — გასვლის GATE-ები</div>"+
+    "<div class='card' id='closeCard'>"+
+      "<div class='gate "+(stdOk?'ok':'no')+"'><div class='ic'>"+(stdOk?'✓':'!')+"</div><div class='t'><b>"+gdFull(tday)+"-ის ტვირთები სტანდარტზეა</b>"+
+        "<span>"+list.length+" მძღოლი · "+cnt.g+" დაცული · "+cnt.y+" ნაკლები · "+cnt.r+" ვერ ავსებს"+(gaps.length?(' — '+esc(gaps.slice(0,4).join(', '))+(gaps.length>4?' და სხვ.':'')):'')+"</span></div></div>"+
+      gate_('ზარები · Pickup / Delivery', callP.length, callP.length+' ტვირთზე კავშირი არ ფიქსირდება', 'calls_all','')+
+      callRows_(callP)+
+      gate_('BOL გაგზავნა', bolP.length, bolP.length+' ჩაბარებული ტვირთი ჯერ არ არის მონიშნული', 'bol','')+
+      rows_(bolP,'bol')+
+      gate_('ინვოისის გაგზავნა', invP.length, invP.length+' ჩაბარებული ტვირთი ინვოისის გარეშე', 'invoice','')+
+      rows_(invP,'inv')+
+      gate_('ჩეკის ატვირთვა', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', 'check','')+
+      rows_(chkP,'chk')+
+      (oldInv?("<div class='muted' style='padding:8px 15px 12px 49px;font-size:12px'>14 დღეზე ძველი: <b>"+oldInv+"</b> ჩაბარებული ტვირთი ინვოისის გარეშე</div>"):'')+
+      "<div class='closebar'>"+
+        "<button class='bigbtn"+((rem===0&&!closed)?' ready':'')+"' id='logoutBtn'"+((rem>0||closed)?' disabled':'')+" onclick='closeShift()'>"+(closed?'ცვლა დახურულია ✓':'ცვლის დახურვა')+"</button>"+
+        "<span id='gateCount' class='chip "+(rem?'r':'g')+"'><span class='dot'></span>"+(rem?rem+' დარჩენილი':'ყველა gate გავლილია')+"</span>"+
+        (closed?("<span class='muted' style='font-size:12px'>"+new Date(SCLOSE.closed_at).toLocaleString('ka-GE')+"</span>"):"<span class='muted' style='font-size:12px'>ყველა ✓-ის შემდეგ — „მწვანე“</span>")+
+      "</div></div>"+
+    "<div class='callout' style='margin-top:14px'><span class='b'>i</span><div><b>სტანდარტი დღის გროსია</b> — რამდენი ტვირთი ან რეისი გააკეთა მძღოლმა, მნიშვნელობა არ აქვს. მნიშვნელოვანია, ხვალინდელი დღის ჯამი აწევს თუ არა მის დღიურ სამიზნეს (კვირის სამიზნე ÷ 6). "+
+      "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
+      "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
+}
+var SCLOSE=null;
+async function loadClose(){
+  try{ var r=await sb.from('shift_close').select('*').eq('work_day', ymd_(nextWorkDay_())).maybeSingle();
+    SCLOSE=r.data||null; }catch(e){ console.error(e); SCLOSE=null; }
+}
+async function closeShift(){
+  try{
+    var row={dispatcher_name:USER.dispatcher, work_day:ymd_(nextWorkDay_()), closed_at:new Date().toISOString(), closed_by:USER.email, gates:{ok:true}};
+    var res=await sb.from('shift_close').upsert(row,{onConflict:'dispatcher_name,work_day'});
+    if(res.error) throw res.error;
+    SCLOSE=row; toast('ცვლა დახურულია ✓'); render();
+  }catch(e){ console.error(e); toast('ვერ დაიხურა'); }
 }
 async function markAct(enc, kind){
   const o=decodeURIComponent(enc); const now=new Date().toISOString();
@@ -666,7 +808,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,vehicle,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer').is('deleted_at', null).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer').is('deleted_at', null).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -1546,6 +1688,71 @@ function rPayroll(){
       "</tbody></table></div>"+
       "<div class='muted' style='font-size:12px;margin-top:10px'>"+(noReg?("<b style='color:var(--warn)'>"+noReg+" მძღოლი რეესტრში არ არის</b> — მათზე ნაგულისხმევი წესი გამოიყენება. დაამატე ისინი <b onclick=\"goM('drivers')\" style='cursor:pointer;text-decoration:underline'>მძღოლების რეესტრში</b>. "):"")+
       "უარყოფითი ხელფასი ნიშნავს, რომ მძღოლმა ადგილზე უფრო მეტი აიღო, ვიდრე ეკუთვნოდა — სხვაობა მისგან ასაღებია. საბანკო რეკვიზიტები ჯერ ბაზაში არ ინახება.</div></div>";
+}
+/* ---- დახურვები და მოთხოვნები (მენეჯმენტი) ---- */
+var SCLOSES=[];
+async function loadCloses(){
+  try{ var r=await sb.from('shift_close').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)).order('closed_at',{ascending:false});
+    SCLOSES=r.data||[]; }catch(e){ console.error(e); SCLOSES=[]; }
+}
+var CLF='pending';
+function setClF(v){ CLF=v; rCloses(); }
+function rCloses(){
+  var tday=ymd_(nextWorkDay_());
+  var W=Object.keys(WAIV).map(function(k){ return WAIV[k]; });
+  var pend=W.filter(function(w){ return w.status==='pending'; }).sort(function(a,b){ return String(b.requested_at).localeCompare(String(a.requested_at)); });
+  var done=W.filter(function(w){ return w.status!=='pending'; }).sort(function(a,b){ return String(b.decided_at||'').localeCompare(String(a.decided_at||'')); });
+  var KIND={standard:'ტვირთის სტანდარტი', calls:'ზარი', calls_all:'ზარები (ყველა)', bol:'BOL', invoice:'ინვოისი', check:'ჩეკი'};
+  var closedToday=SCLOSES.filter(function(c){ return c.work_day===tday; });
+  var closedBy={}; closedToday.forEach(function(c){ closedBy[c.dispatcher_name]=c; });
+  var disps={};
+  (LIVE||[]).forEach(function(l){ if(l.dispatcher_name) disps[l.dispatcher_name]=1; });
+  var dn=Object.keys(disps).sort();
+  var openList=dn.filter(function(d){ return !closedBy[d]; });
+
+  var wrow=function(w,withAct){
+    var age=Math.round((Date.now()-Date.parse(w.requested_at))/36e5);
+    return "<tr><td>"+gd(w.work_day)+"</td><td><b>"+esc(w.dispatcher_name)+"</b></td>"+
+      "<td><span class='chip "+(w.kind==='standard'?'y':'')+"'>"+(KIND[w.kind]||w.kind)+"</span></td>"+
+      "<td>"+esc(w.order_number||'—')+"</td>"+
+      "<td style='max-width:380px'>"+esc(w.reason)+
+        (w.decision_note?("<div class='muted' style='font-size:11.5px;color:var(--crit)'>პასუხი: "+esc(w.decision_note)+"</div>"):"")+"</td>"+
+      "<td class='muted' style='font-size:12px'>"+(age<24?(age+' სთ წინ'):(Math.round(age/24)+' დღის წინ'))+"<br>"+esc(String(w.requested_by||'').split('@')[0])+"</td>"+
+      (withAct
+        ? ("<td style='white-space:nowrap'><button class='fixbtn' style='background:var(--good);color:#fff;border-color:var(--good)' onclick=\"waivDecide('"+w.id+"','approved')\">დადასტურება</button> "+
+           "<button class='fixbtn' onclick=\"waivDecide('"+w.id+"','rejected')\">დაბრუნება</button></td>")
+        : ("<td>"+(w.status==='approved'?"<span class='chip g'><span class='dot'></span>დადასტურებული</span>":"<span class='chip r'><span class='dot'></span>დაბრუნებული</span>")+
+           "<div class='muted' style='font-size:11.5px'>"+esc(String(w.decided_by||'').split('@')[0])+"</div></td>"))+
+      "</tr>";
+  };
+  var crow=function(d){
+    var c=closedBy[d];
+    return "<tr><td><b>"+esc(d)+"</b></td>"+
+      (c? ("<td><span class='chip g'><span class='dot'></span>დახურულია</span></td><td>"+new Date(c.closed_at).toLocaleString('ka-GE')+"</td>")
+        : ("<td><span class='chip r'><span class='dot'></span>ღიაა</span></td><td class='muted'>—</td>"))+
+      "<td class='num'>"+W.filter(function(w){ return w.dispatcher_name===d && w.work_day===tday; }).length+"</td></tr>";
+  };
+  var chip=function(k,l,n){ return "<span class='chip"+(CLF===k?' g':'')+"' style='cursor:pointer' onclick=\"setClF('"+k+"')\">"+l+" ("+n+")</span>"; };
+  var body = (CLF==='pending')
+    ? "<div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დღე</th><th>დისპეტჩერი</th><th>ველი</th><th>ობიექტი</th><th>ახსნა</th><th>გაგზავნილი</th><th>გადაწყვეტილება</th></tr></thead><tbody>"+
+        (pend.map(function(w){ return wrow(w,true); }).join('')||"<tr><td colspan='7' class='muted'>პასუხის მოლოდინში მოთხოვნა არ არის ✓</td></tr>")+"</tbody></table></div>"
+    : (CLF==='closes')
+    ? "<div class='tablewrap'><table style='min-width:640px'><thead><tr><th>დისპეტჩერი</th><th>სტატუსი</th><th>დახურვის დრო</th><th class='num'>მოთხოვნა</th></tr></thead><tbody>"+
+        (dn.map(crow).join('')||"<tr><td colspan='4' class='muted'>დისპეტჩერი არ არის</td></tr>")+"</tbody></table></div>"
+    : "<div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დღე</th><th>დისპეტჩერი</th><th>ველი</th><th>ობიექტი</th><th>ახსნა</th><th>გაგზავნილი</th><th>სტატუსი</th></tr></thead><tbody>"+
+        (done.slice(0,200).map(function(w){ return wrow(w,false); }).join('')||"<tr><td colspan='7' class='muted'>ისტორია ცარიელია</td></tr>")+"</tbody></table></div>";
+
+  $('view').innerHTML=ph('დახურვები და მოთხოვნები','დისპეტჩერების ცვლის დახურვა და სტანდარტიდან გადახვევის ახსნები — '+gdFull(tday))+
+    "<div class='kpis'>"+
+      kpi('პასუხის მოლოდინში',pend.length,pend.length?'r':'g','მოთხოვნა შენს დადასტურებას ელოდება','')+
+      kpi('ცვლა დახურა',closedToday.length,'',dn.length+' დისპეტჩერიდან')+
+      kpi('ჯერ ღიაა',openList.length,openList.length?'w':'g',openList.slice(0,3).join(', ')+(openList.length>3?' და სხვ.':''))+
+      kpi('დადასტურებული (21 დღე)',done.filter(function(w){ return w.status==='approved'; }).length,'g',done.filter(function(w){ return w.status==='rejected'; }).length+' დაბრუნებული')+
+    "</div>"+
+    "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>"+
+      chip('pending','პასუხის მოლოდინში',pend.length)+chip('closes','ცვლის დახურვა',closedToday.length+'/'+dn.length)+chip('history','ისტორია',done.length)+"</div>"+
+    body+
+    "<div class='muted' style='font-size:12px;margin-top:10px'>დისპეჩერი ცვლას ვერ ხურავს, სანამ ყველა gate მწვანე არ არის. თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება, ის აგზავნის ახსნას — შენი <b>დადასტურების</b> შემდეგ ველი მწვანდება. „დაბრუნება“ მოითხოვს მიზეზს და დისპეჩერი მას თავის ეკრანზე ხედავს.</div></div>";
 }
 /* ---- ხარჯები — ყოველთვიური ფიქსირებული ხარჯები (company_expenses) ---- */
 var EXP=[], USDGEL=2.6266, SETT={};
