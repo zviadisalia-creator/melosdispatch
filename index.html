@@ -190,17 +190,18 @@ const SB_URL="https://gdbvmypxndevwaalgvoa.supabase.co";
 const SB_KEY="sb_publishable_JnalNMnmAlzgLIWa6tW1Yw_QqbBEJnz";
 const sb = window.supabase.createClient(SB_URL, SB_KEY);
 let USER = null;            // {email,name,role:'mgmt'|'disp',dispatcher,quality}
-let REAL = {};             // reference data from Supabase
 let RECV = {};             // received marks by order id
 let ODRECV = {};           // overdue received marks
 let DRIVERS_BY_NAME = {};
 let LIVE = [];  // drivers registry rows keyed by name
 let ACT = {};   // load_actions keyed by order_number (BOL sent / check uploaded / dead head)
+let DRATES = {}; // dispatcher_rates keyed by dispatcher_name
 const TERM_ONSITE={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
 function actOf_(o){ return ACT[o]||{}; }
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
 async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()) }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
+async function loadRates(){ try{ const { data } = await sb.from('dispatcher_rates').select('*'); DRATES={}; (data||[]).forEach(function(r){ DRATES[r.dispatcher_name]=r; }); }catch(e){ console.error(e); DRATES={}; } }
 async function loadActions(){ try{ const { data } = await sb.from('load_actions').select('*'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
 
 /* ---------- auth + data bootstrap ---------- */
@@ -233,8 +234,6 @@ async function afterLogin(session){
 }
 async function loadData(){
   if(USER.role==='mgmt'){
-    const { data } = await sb.from('data_snapshot').select('payload').order('taken_at',{ascending:false}).limit(1).maybeSingle();
-    REAL = (data && data.payload) ? data.payload : {};
     const { data:drv } = await sb.from('drivers').select('*');
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
     const { data:pr } = await sb.from('payment_received').select('order_id,received');
@@ -242,12 +241,9 @@ async function loadData(){
     ODRECV=Object.assign({},RECV);
     await loadLiveLoads();
     await loadActions();
+    await loadRates();
     await loadContacts();
   } else {
-    const { data } = await sb.from('dispatcher_snapshot').select('payload').maybeSingle(); // RLS scopes to own row
-    const p=(data && data.payload) ? data.payload : {};
-    REAL={}; REAL.myWeeks=p.weeks||[]; REAL.myDrivers=p.drivers||[]; REAL.myWorkLog=p.workLog||[];
-    if(p.quality!=null) USER.quality=p.quality;
     await loadLiveLoads();   // RLS scopes loads to this dispatcher only
     const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
@@ -299,7 +295,7 @@ function pm(n){return (n==null||!isFinite(n))?'—':'$'+Number(n).toFixed(2);}
 function pymd(s){var m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 
 const DTABS=[['board','ჩემი დაფა'],['liveboard','ჩემი მძღოლები'],['liveloads','ჩემი ტვირთები'],['profile','ჩემი პროფილი'],['worklog','ჩემი Work Log']];
-const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['pnl','P&L']];
+const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები']];
 
 function enterAs(kind){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -339,7 +335,7 @@ function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if
 
 function render(){
   if(ROLE==='disp'){ if(TAB==='board')return rBoard(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
-  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,pnl:rPnl}[MTAB])();
+  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay}[MTAB])();
 }
 
 /* ---------- DISPATCHER ---------- */
@@ -466,27 +462,74 @@ function fixGate(b){const g=b.closest('.gate');g.classList.remove('no');g.classL
   if(rem===0){c.className='chip g';c.innerHTML='<span class="dot"></span>ყველა gate გავლილია';lb.disabled=false;lb.classList.add('ready');lb.textContent='ცვლის დახურვა — მწვანე ✓';}
   else{c.innerHTML='<span class="dot"></span>'+rem+' დარჩენილი';}
 }
+/* ---- ჩემი პროფილი — ცოცხლად (SD loads + Quo), snapshot-ის გარეშე ---- */
+var MYCS=null, MYCS_LOADING=false;
+function myLoadCalls_(){
+  if(MYCS!==null || MYCS_LOADING) return;
+  MYCS_LOADING=true;
+  var to=new Date(), from=new Date(Date.now()-30*864e5);
+  sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
+    MYCS=r.data||[]; MYCS_LOADING=false; if(ROLE==='disp' && TAB==='profile') rProfile();
+  },function(e){ console.error(e); MYCS=[]; MYCS_LOADING=false; if(ROLE==='disp' && TAB==='profile') rProfile(); });
+}
 function rProfile(){
-  const weeks=REAL.myWeeks||[];
-  // aggregate across all weeks (real)
-  const perWeek=weeks.map(w=>{
-    const loads=w.drivers.reduce((a,d)=>a.concat(d.loads),[]);
-    const rev=loads.reduce((s,l)=>s+(l.price||0),0);
-    const miled=loads.filter(l=>l.miles>=5); const mi=miled.reduce((s,l)=>s+l.miles,0); const rv=miled.reduce((s,l)=>s+l.price,0);
-    return {week:w.week, loads:loads.length, rev, pm:mi>0?rv/mi:null};
-  });
-  const totLoads=perWeek.reduce((s,x)=>s+x.loads,0), totRev=perWeek.reduce((s,x)=>s+x.rev,0);
-  const allMiled=weeks.flatMap(w=>w.drivers.flatMap(d=>d.loads)).filter(l=>l.miles>=5);
-  const mi=allMiled.reduce((s,l)=>s+l.miles,0), rv=allMiled.reduce((s,l)=>s+l.price,0);
-  const avg=mi>0?rv/mi:null;
-  const mxRev=Math.max(...perWeek.map(x=>x.rev),1);
-  const trend=perWeek.map(x=>`<div class="meter"><div class="ml"><span>${esc(x.week)}</span><b class="tnum">${money(x.rev)} · ${x.loads} ტვ. · ${pm(x.pm)}/mi</b></div><div class="track"><i style="width:${Math.round(x.rev/mxRev*100)}%;background:var(--brand)"></i></div></div>`).join('');
-  $('view').innerHTML=ph('ჩემი პროფილი — Scorecard',`${USER.name} · ბოლო ${weeks.length} კვირა`)+
-    `<div class="kpis">${kpi('ტვირთი ('+weeks.length+' კვ.)',totLoads)}${kpi('შემოსავალი',money(totRev))}${kpi('საშ. per-mile',pm(avg))}${kpi('ხარისხის ქულა (Quo)',(USER.quality!=null?USER.quality:'—'),'w')}</div>`+
-    `<div class="grid2"><div class="card p"><h4>შემოსავლის ტრენდი <span class="databadge">DisCarry</span></h4>${trend}</div>
-      <div class="card p"><h4>ხარისხის საზომები <span class="databadge">Quo</span></h4>
-      ${meter('ხარისხის ქულა',(USER.quality!=null?USER.quality:0),100,'var(--warn)')}${meter('ზარები (კვირა)',10,60,'var(--brand)')}${meter('რეიტინგში ადგილი','#13/13',100,'var(--brand)',true)}
-      <div style="margin-top:14px;display:grid;gap:9px">${row('მძღოლი',REAL.myDrivers.length)}${row('საშ. კვირის შემოსავალი',money(totRev/weeks.length))}${row('საშ. ტვირთი/კვირა',Math.round(totLoads/weeks.length))}</div></div></div>`;
+  var L=LIVE||[], today=ymd_(new Date());
+  var thisMon=mondayOf(today)||today;
+  var W=[];
+  for(var i=7;i>=0;i--){
+    var mo=addDays_(thisMon,-7*i), end=addDays_(mo,6);
+    var A=L.filter(function(l){ var d=puDay_(l); return d && d>=mo && d<=end; });
+    var g=A.reduce(function(s,l){ return s+grossOf_(l); },0);
+    var c=A.reduce(function(s,l){ return s+cars_(l); },0);
+    var drv={}; A.forEach(function(l){ if(l.driver_name) drv[l.driver_name]=1; });
+    W.push({mo:mo,n:A.length,cars:c,g:g,nd:Object.keys(drv).length});
+  }
+  var cut30=addDays_(today,-30);
+  var R30=L.filter(function(l){ var d=puDay_(l); return d && d>=cut30; });
+  var g30=R30.reduce(function(s,l){ return s+grossOf_(l); },0);
+  var drv30={}; R30.forEach(function(l){ if(l.driver_name) drv30[l.driver_name]=1; });
+  var asgOk=R30.filter(function(l){ return l.driver_id_sd; }).length;
+  var asgPct=R30.length?Math.round(asgOk/R30.length*100):0;
+  var invNeed=L.filter(function(l){ return l.delivery_completed && String(l.delivery_completed).slice(0,10)>=cut30 && !ONSITE_[l.payment_terms]; });
+  var invOk=invNeed.filter(function(l){ return l.invoice_sent_at; }).length;
+  var invPct=invNeed.length?Math.round(invOk/invNeed.length*100):100;
+  myLoadCalls_();
+  var cReady=(MYCS!==null), callN=0, callOk=0;
+  if(cReady){ (MYCS||[]).forEach(function(x){ callN+=Number(x.n_loads)||0; callOk+=Number(x.both_ok)||0; }); }
+  var callPct=callN?Math.round(callOk/callN*100):0;
+  var q=cReady? Math.round(callPct*0.5+invPct*0.3+asgPct*0.2) : null;
+  var cc=function(p){ return p>=70?'var(--good)':p>=45?'var(--warn)':'var(--crit)'; };
+  var mx=Math.max.apply(null,W.map(function(w){ return w.g; }).concat([1]));
+  var trend=W.slice().reverse().map(function(w){
+    return "<div class='meter'><div class='ml'><span>"+weekLabel(w.mo)+(w.mo===thisMon?" <span class='chip g' style='padding:1px 6px'>მიმდინარე</span>":"")+"</span>"+
+      "<b class='tnum'>"+money(w.g)+" · "+w.n+" ტვ. · "+w.cars+" მანქ.</b></div>"+
+      "<div class='track'><i style='width:"+Math.round(w.g/mx*100)+"%;background:"+(w.mo===thisMon?'var(--warn)':'var(--brand)')+"'></i></div></div>";
+  }).join('');
+  var openInv=L.filter(function(l){ return l.delivery_completed && !ONSITE_[l.payment_terms] && !l.invoice_sent_at && !l.paid_at; });
+  $('view').innerHTML=ph('ჩემი პროფილი — Scorecard',esc(USER.name||'')+' · ბოლო 8 კვირა · ცოცხალი მონაცემი')+
+    "<div class='kpis'>"+
+      kpi('ტვირთი — 30 დღე',R30.length,'',Object.keys(drv30).length+' მძღოლი')+
+      kpi('გროსი — 30 დღე',money(g30),'',money(g30/4.33)+' / კვირაში')+
+      kpi('საშ. ფასი',money(R30.length?g30/R30.length:0),'','ერთ ტვირთზე')+
+      kpi('ჩემი ქულა', cReady?q:'<span class="muted" style="font-size:15px">ითვლება…</span>', cReady?(q>=70?'g':(q>=45?'w':'r')):'', 'ზარები 50% + ინვოისი 30% + მიბმა 20%')+
+    "</div>"+
+    "<div class='kpis'>"+
+      kpi('ზარები ორივე მხარეს', cReady?(callPct+'%'):'…', cReady?(callPct>=70?'g':'r'):'', cReady?(callOk+' / '+callN+' · ბოლო 30 დღე'):'Quo იტვირთება')+
+      kpi('ინვოისი გაგზავნილი',invPct+'%',invPct>=70?'g':'r',(invNeed.length-invOk)+' დარჩენილი · ბოლო 30 დღე')+
+      kpi('მძღოლზე მიბმული',asgPct+'%',asgPct>=90?'g':'r',(R30.length-asgOk)+' მიუბმელი · ბოლო 30 დღე')+
+      kpi('ჩემი გასაგზავნი ინვოისი',openInv.length,openInv.length?'r':'g','ჩაბარებული, ინვოისის გარეშე')+
+    "</div>"+
+    "<div class='grid2'><div class='card p'><h4>ჩემი კვირები <span class='databadge' style='background:var(--brand-soft);color:var(--brand)'>SD</span></h4>"+trend+"</div>"+
+      "<div class='card p'><h4>ხარისხის საზომები <span class='databadge'>Quo + SD</span></h4>"+
+        meter('ზარები ორივე მხარეს',(cReady?callPct:0),100,cc(callPct))+
+        meter('ინვოისი გაგზავნილი',invPct,100,cc(invPct))+
+        meter('მძღოლზე მიბმული',asgPct,100,cc(asgPct))+
+        "<div style='margin-top:14px;display:grid;gap:9px'>"+
+          row('მძღოლი (30 დღე)',Object.keys(drv30).length)+
+          row('საშ. კვირის გროსი',money(g30/4.33))+
+          row('საშ. ტვირთი/კვირა',Math.round(R30.length/4.33))+
+        "</div>"+
+        "<div class='muted' style='font-size:11.5px;margin-top:10px'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით.</div></div></div>";
 }
 function row(k,v){return `<div style="display:flex;justify-content:space-between"><span class="ink2">${k}</span><b class="tnum">${v}</b></div>`;}
 function meter(l,v,max,col,txt){var pct=txt?100:Math.round(v/max*100);return `<div class="meter"><div class="ml"><span>${l}</span><b>${txt?v:v}</b></div><div class="track"><i style="width:${pct}%;background:${col}"></i></div></div>`;}
@@ -1105,7 +1148,7 @@ function rLeader(){
     '<div class="muted" style="font-size:12px;margin-top:10px">ქულა = ზარები×50% + ინვოისი×30% + მძღოლზე მიბმა×20%. „ზარები" — ფიქაფზეც და დელივერიზეც დაფიქსირდა პასუხგაცემული ზარი ან შემომავალი SMS (Quo). „ინვოისი" — ჩაბარებულ ტვირთებზე გაგზავნილი ინვოისის წილი (on-site გადახდები არ ითვლება). „მიბმული" — ტვირთი Super Dispatch-ში მძღოლზეა მიბმული. ზარების ისტორია Quo-ში 29 ივნისიდან ითვლება, SMS — 21 ივლისიდან.</div></div>';
 }
 /* ---- გამონაკლისები — ცოცხალი წესების ძრავა (SD + Quo), snapshot-ის გარეშე ---- */
-var EXCF='all';
+var EXCF='core';
 function setExcF(v){ EXCF=v; rExc(); }
 function excList_(){
   var L=LIVE||[], out=[], now=Date.now();
@@ -1167,10 +1210,12 @@ function excList_(){
 }
 function rExc(){
   var A=excList_();
-  var KINDS=[['all','ყველა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['onsite','ადგილზე აღებული']];
+  var KINDS=[['core','ძირითადი'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['onsite','ადგილზე აღებული'],['all','ყველა']];
   var cnt={}; A.forEach(function(x){ cnt[x.k]=(cnt[x.k]||0)+1; }); cnt.all=A.length;
-  var F=(EXCF==='all')?A:A.filter(function(x){ return x.k===EXCF; });
-  var byD={}; A.forEach(function(x){ var k=x.disp||'—'; if(!byD[k]) byD[k]={n:0,r:0}; byD[k].n++; if(x.r==='r') byD[k].r++; });
+  cnt.core=A.length-(cnt.onsite||0);
+  var F=(EXCF==='all')?A:((EXCF==='core')?A.filter(function(x){ return x.k!=='onsite'; }):A.filter(function(x){ return x.k===EXCF; }));
+  var CORE=A.filter(function(x){ return x.k!=='onsite'; });
+  var byD={}; CORE.forEach(function(x){ var k=x.disp||'—'; if(!byD[k]) byD[k]={n:0,r:0}; byD[k].n++; if(x.r==='r') byD[k].r++; });
   var dn=Object.keys(byD).sort(function(a,b){ return byD[b].n-byD[a].n; });
   var mxN=Math.max.apply(null,dn.map(function(k){ return byD[k].n; }).concat([1]));
   var dbars=dn.map(function(k){
@@ -1186,13 +1231,13 @@ function rExc(){
   var chips=KINDS.filter(function(k){ return k[0]==='all'||cnt[k[0]]; }).map(function(k){
     return "<span class='chip"+(EXCF===k[0]?' g':'')+"' style='cursor:pointer' onclick=\"setExcF('"+k[0]+"')\">"+k[1]+" ("+(cnt[k[0]]||0)+")</span>";
   }).join('');
-  var nr=A.filter(function(x){ return x.r==='r'; }).length;
+  var nr=CORE.filter(function(x){ return x.r==='r'; }).length;
   $('view').innerHTML=ph('გამონაკლისები','ყველაფერი, რაც წესს არღვევს — ცოცხლად Super Dispatch-იდან და Quo-დან')+
-    "<div class='kpis'>"+kpi('სულ გამონაკლისი',A.length,A.length?'w':'g')+
+    "<div class='kpis'>"+kpi('ძირითადი გამონაკლისი',cnt.core,cnt.core?'w':'g',(cnt.onsite||0)+' ადგილზე აღებული ცალკე')+
       kpi('რისკი',nr,nr?'r':'g','დაუყოვნებლივ საჭიროებს რეაგირებას')+
       kpi('დაურეკავი ტვირთი',cnt.calls||0,(cnt.calls?'r':'g'),'მომდევნო სამუშაო დღე')+
       kpi('დისპეტჩერი სიაში',dn.length)+"</div>"+
-    "<div class='card p' style='margin-bottom:14px'><h4>დისპეტჩერების ჭრილი</h4>"+(dbars||"<div class='muted'>ცარიელია</div>")+"</div>"+
+    "<div class='card p' style='margin-bottom:14px'><h4>დისპეტჩერების ჭრილი <span class='muted' style='font-weight:500;font-size:11px'>— ადგილზე აღებულის გარეშე</span></h4>"+(dbars||"<div class='muted'>ცარიელია</div>")+"</div>"+
     "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>"+chips+"</div>"+
     "<div class='tablewrap'><table style='min-width:980px'><thead><tr><th>დონე</th><th>დისპეტჩერი</th><th>მძღოლი / კლიენტი</th><th>რა ხდება</th><th>დეტალი</th></tr></thead><tbody>"+
     (rows||"<tr><td colspan='5' class='muted'>ამ კატეგორიაში გამონაკლისი არ არის ✓</td></tr>")+"</tbody></table></div>"+
@@ -1407,36 +1452,157 @@ function rOverdue(){
     '<div class="card p"><div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th class="num">თანხა</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th>სტატუსი</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი — Super Dispatch-ის paid_at. თუ თანხა შემოსულია, მაგრამ აქ ჩანს, ესე იგი Super Dispatch-ში გადახდა არ არის მონიშნული.</div></div>';
 }
+/* ---- მძღოლების ხელფასები — ცოცხლად (SD loads + drivers რეესტრი) ---- */
+var PAYW='';           // არჩეული კვირის ორშაბათი; '' = ბოლო დასრულებული
+var PAYBASE='pickup';  // pickup | delivery
+function setPayW(w){ PAYW=w; rPayroll(); }
+function setPayBase(b){ PAYBASE=b; rPayroll(); }
+function payDay_(l){
+  return (PAYBASE==='delivery') ? String(l.delivery_completed||'').slice(0,10) : puDay_(l);
+}
+function payWeeks_(){
+  var mons={};
+  (LIVE||[]).forEach(function(l){ var m=mondayOf(payDay_(l)); if(m) mons[m]=1; });
+  return Object.keys(mons).sort().reverse().slice(0,12);
+}
+function driverRate_(reg){
+  var cap=Number(reg.cap)||1;
+  var pct=(reg.pct!=null)?Number(reg.pct):(cap>=2?0.12:0.10);
+  var ins=(reg.insurance!=null)?Number(reg.insurance):(cap>=2?300:200);
+  return {cap:cap,pct:pct,ins:ins,dflt:(reg.pct==null||reg.insurance==null)};
+}
 function rPayroll(){
-  const p=REAL.driverPayroll;
-  const rows=p.map(r=>{
-    const disp=(r.gross!=null&&r.pct!=null)?r.gross*r.pct:null;
-    const cz=(r.gross!=null&&disp!=null&&r.ins!=null&&r.salary!=null)?(r.gross-disp-r.ins-r.salary):null;
-    return `<tr><td>${esc(r.driver)}</td><td>${r.cap!=null?r.cap+'-მანქ':'—'}</td><td class="num">${money(r.gross)}</td><td class="num">${disp!=null?'−'+money(disp):'—'}</td><td class="num">${r.ins!=null?'−'+money(r.ins):'—'}</td><td class="num">${cz!=null&&cz>0?'−'+money(cz):(cz!=null?money(cz):'—')}</td><td class="num"><b>${r.salary!=null?money(r.salary):'—'}</b></td><td>${esc(r.bank)||'—'}</td></tr>`;
+  var weeks=payWeeks_();
+  var thisMon=mondayOf(ymd_(new Date()));
+  var wk=PAYW || (weeks.filter(function(m){ return m<thisMon; })[0] || weeks[0] || thisMon);
+  var end=addDays_(wk,6);
+  var A=(LIVE||[]).filter(function(l){ var d=payDay_(l); return d && d>=wk && d<=end; });
+  var by={};
+  A.forEach(function(l){
+    var nm=l.driver_name; if(!nm) return;
+    if(!by[nm]) by[nm]={name:nm,disp:l.dispatcher_name||'—',n:0,cars:0,gross:0,cash:0,cashN:0};
+    var x=by[nm]; if(l.dispatcher_name) x.disp=l.dispatcher_name;
+    x.n++; x.cars+=cars_(l); x.gross+=grossOf_(l);
+    if(ONSITE_[l.payment_terms]){ x.cash+=Number(l.price)||0; x.cashN++; }
+  });
+  var R=Object.keys(by).map(function(k){
+    var x=by[k], reg=DRIVERS_BY_NAME[k]||{}, r=driverRate_(reg);
+    x.pct=r.pct; x.insv=r.ins; x.cap=r.cap; x.dflt=r.dflt; x.inReg=!!DRIVERS_BY_NAME[k];
+    x.comm=x.gross*r.pct;
+    x.pay=x.gross-x.comm-r.ins-x.cash;
+    x.tgt=(reg.target_gross!=null)?Number(reg.target_gross):null;
+    return x;
+  }).sort(function(a,b){ return b.gross-a.gross; });
+  var T=R.reduce(function(s,x){ s.n+=x.n; s.cars+=x.cars; s.gross+=x.gross; s.comm+=x.comm; s.ins+=x.insv; s.cash+=x.cash; s.pay+=x.pay; return s; },
+    {n:0,cars:0,gross:0,comm:0,ins:0,cash:0,pay:0});
+  var noReg=R.filter(function(x){ return !x.inReg; }).length;
+  var neg=R.filter(function(x){ return x.pay<0; }).length;
+  var rows=R.map(function(x){
+    return "<tr><td><b>"+esc(x.name)+"</b>"+(x.inReg?'':" <span class='chip y' style='padding:1px 6px'>რეესტრში არ არის</span>")+"</td>"+
+      "<td>"+esc(x.disp)+"</td><td class='num'>"+x.cap+"-მანქ</td>"+
+      "<td class='num'>"+x.n+"</td><td class='num'>"+x.cars+"</td>"+
+      "<td class='num'><b>"+money(x.gross)+"</b>"+(x.tgt?("<div class='muted' style='font-size:11px;font-weight:400'>სამიზნე "+money(x.tgt)+"</div>"):"")+"</td>"+
+      "<td class='num'>−"+money(x.comm)+"<span class='muted' style='font-weight:400'> ("+Math.round(x.pct*100)+"%)</span></td>"+
+      "<td class='num'>−"+money(x.insv)+"</td>"+
+      "<td class='num'>"+(x.cash?("−"+money(x.cash)+"<span class='muted' style='font-weight:400'> ("+x.cashN+")</span>"):"—")+"</td>"+
+      "<td class='num' style='font-weight:750;color:"+(x.pay<0?'var(--crit)':'var(--ink)')+"'>"+money(x.pay)+"</td></tr>";
   }).join('');
-  $('view').innerHTML=ph('მძღოლების ხელფასები',`კვირა ${gdFull(REAL.payrollWeek)} · ${p.length} მძღოლი`)+
-    `<div class="callout" style="margin-bottom:14px"><span class="b">ƒ</span><div><b>ხელფასი = გროსი − დისპ. საკომისიო − დაზღვევა − Cash/Zelle.</b> 1-მანქ → საკომისიო <b>10%</b> + დაზღვევა <b>$200</b>; 2+მანქ → <b>12%</b> + <b>$300</b>. „ხელფასი" რეალურია DisCarry-დან; „Cash/Zelle" = ნაშთი (მძღოლმა უკვე აიღო).</div></div>`+
-    `<div class="card p"><div class="tablewrap"><table style="min-width:960px"><thead><tr><th>მძღოლი</th><th>მისაბმელის ზომა</th><th class="num">გროსი</th><th class="num">დისპეჩინგის საკომისიო</th><th class="num">დაზღვევა</th><th class="num">Cash/Zelle</th><th class="num">ხელფასი</th><th>ანგარიში (სად ვურიცხავთ)</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="muted" style="font-size:12px;margin-top:10px">შემდეგ: კვირებად დაყოფა + მძღოლზე დაჭერით მისი Work Log; ინდივიდუალური სამიზნე გროსი.</div></div>`;
+  var wsel=weeks.slice(0,10).map(function(m){
+    return "<span class='chip"+(m===wk?' g':'')+"' style='cursor:pointer' onclick=\"setPayW('"+m+"')\">"+weekLabel(m)+"</span>";
+  }).join('');
+  var bchip=function(k,l){ return "<span class='chip"+(PAYBASE===k?' g':'')+"' style='cursor:pointer' onclick=\"setPayBase('"+k+"')\">"+l+"</span>"; };
+  $('view').innerHTML=ph('მძღოლების ხელფასები','კვირა '+weekLabel(wk)+' · ითვლება ცოცხლად Super Dispatch-იდან, Google Sheets-ის გარეშე')+
+    "<div class='kpis'>"+
+      kpi('მძღოლი',R.length,'',T.n+' ტვირთი · '+T.cars+' მანქანა')+
+      kpi('ჯამური გროსი',money(T.gross),'',money(R.length?T.gross/R.length:0)+' საშ. მძღოლზე')+
+      kpi('დისპეჩინგის საკომისიო',money(T.comm),'g','კომპანიის შემოსავალი ამ კვირაზე')+
+      kpi('გასაცემი ხელფასი',money(T.pay),'',(neg?neg+' მძღოლს უარყოფითი ნაშთი':'ბანკით გასარიცხი'),'')+
+    "</div>"+
+    "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>"+wsel+"</div>"+
+    "<div style='display:flex;gap:8px;align-items:center;margin-bottom:12px'><span class='muted' style='font-size:12px'>რომელი თარიღით ითვლება კვირა:</span>"+bchip('pickup','ტვირთის აღება')+bchip('delivery','ჩაბარება')+"</div>"+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>ხელფასი = გროსი − დისპეჩინგის საკომისიო − დაზღვევა − ადგილზე აღებული ფული.</b> საკომისიო და დაზღვევა მოდის მძღოლების რეესტრიდან; თუ იქ შევსებული არ არის, გამოიყენება წესი: 1-მანქ → <b>10% + $200</b>, 2+მანქ → <b>12% + $300</b>. „ადგილზე აღებული“ = cash/check on pickup/delivery — ეს ფული მძღოლმა უკვე აიღო.</div></div>"+
+    "<div class='card p'><div class='tablewrap'><table style='min-width:1040px'><thead><tr><th>მძღოლი</th><th>დისპეტჩერი</th><th class='num'>ტევადობა</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>გროსი</th><th class='num'>საკომისიო</th><th class='num'>დაზღვევა</th><th class='num'>ადგილზე აღებული</th><th class='num'>ხელფასი</th></tr></thead><tbody>"+
+      (rows||"<tr><td colspan='10' class='muted'>ამ კვირაში ტვირთი არ არის</td></tr>")+
+      (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+T.cars+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>−"+money(T.comm)+"</td><td class='num'>−"+money(T.ins)+"</td><td class='num'>−"+money(T.cash)+"</td><td class='num'>"+money(T.pay)+"</td></tr>"):"")+
+      "</tbody></table></div>"+
+      "<div class='muted' style='font-size:12px;margin-top:10px'>"+(noReg?("<b style='color:var(--warn)'>"+noReg+" მძღოლი რეესტრში არ არის</b> — მათზე ნაგულისხმევი წესი გამოიყენება. დაამატე ისინი <b onclick=\"goM('drivers')\" style='cursor:pointer;text-decoration:underline'>მძღოლების რეესტრში</b>. "):"")+
+      "უარყოფითი ხელფასი ნიშნავს, რომ მძღოლმა ადგილზე უფრო მეტი აიღო, ვიდრე ეკუთვნოდა — სხვაობა მისგან ასაღებია. საბანკო რეკვიზიტები ჯერ ბაზაში არ ინახება.</div></div>";
+}
+/* ---- დისპეტჩერების ხელფასები — ცოცხლად (SD loads + dispatcher_rates) ---- */
+var DPW='';
+function setDpW(w){ DPW=w; rDispPay(); }
+async function saveDRate(enc, field, value){
+  var name=decodeURIComponent(enc);
+  var v=(value===''?null:Number(value));
+  if(v!=null && !isFinite(v)){ toast('რიცხვი ჩაწერე'); return; }
+  if(field==='pct' && v!=null) v=v/100;                 // % → წილადი
+  var row={dispatcher_name:name, updated_at:new Date().toISOString(), updated_by:USER.email};
+  row[field]=v;
+  try{
+    var res=await sb.from('dispatcher_rates').upsert(row,{onConflict:'dispatcher_name'});
+    if(res.error) throw res.error;
+    if(!DRATES[name]) DRATES[name]={dispatcher_name:name};
+    DRATES[name][field]=v;
+    toast('შენახულია ✓');
+    if(MTAB==='disppay') rDispPay();
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
 function rDispPay(){
-  const a=REAL.dispPayroll;
-  const rows=a.map(x=>{const rate=x.rate; const cost=rate?x.gross*rate:null; return `<tr><td>${esc(x.disp)}</td><td class="num">${x.drivers}</td><td class="num">${money(x.gross)}</td><td class="num">${rate?(rate*100).toFixed(2)+'%':'—'}</td><td class="num"><b>${money(x.dispSalary)}</b></td><td class="num">${cost!=null?money(cost):'—'}</td></tr>`;}).join('');
-  $('view').innerHTML=ph('დისპეტჩერების ხელფასები',`ხელფასი = მძღოლების gross × განაკვეთი · კვირა ${REAL.payrollWeek}`)+
-    `<div class="callout" style="margin-bottom:14px"><span class="b">ƒ</span><div><b>net 3%</b> (გადასახადებით 3.86%) ან <b>net 4%</b> (5.10%). „ხელფასი" = რასაც დისპეტჩერი იღებს; „კომპ. ღირებ." გადასახადებით — მიდის P&L-ში.</div></div>`+
-    `<div class="card p"><div class="tablewrap"><table style="min-width:640px"><thead><tr><th>დისპეტჩერი</th><th class="num">მძღ.</th><th class="num">მძღ. gross</th><th class="num">განაკვ.</th><th class="num">ხელფასი</th><th class="num">კომპ. ღირებ.</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
-}
-function rPnl(){
-  const revW=REAL.totRevenue, revM=Math.round(revW*4.33), expM=REAL.expTotal, profit=revM-expM;
-  const exp=REAL.expenses.slice().sort((a,b)=>b.amt-a.amt); const mx=Math.max(...exp.map(e=>e.amt),1);
-  const eb=exp.slice(0,10).map(e=>`<div class="meter"><div class="ml"><span>${esc(e.cat)}</span><b class="tnum">${money(e.amt)}</b></div><div class="track"><i style="width:${Math.round(e.amt/mx*100)}%;background:var(--brand)"></i></div></div>`).join('');
-  $('view').innerHTML=ph('P&L — შემოსავალი / ხარჯი',`dispatch-service მოდელი · Geotranspo Inc`)+
-    `<div class="kpis">${kpi('კომპ. შემოსავალი (თვე ≈)',money(revM),'','კვირა '+money(revW)+' ×4.33')}${kpi('ხარჯი (თვე)',money(expM))}${kpi('წმინდა',money(profit),profit>=0?'g':'r')}${kpi('მძღ. gross (კვირა)',money(REAL.totGross),'','pass-through')}</div>`+
-    `<div class="grid2"><div class="card p"><h4>შემოსავალი <span class="muted" style="font-weight:500;font-size:11px">— dispatch fee + დაზღვევა</span></h4>
-      <div class="meter"><div class="ml"><span>კვირის კომპ. შემოსავალი</span><b class="tnum">${money(revW)}</b></div><div class="track"><i style="width:100%;background:var(--good)"></i></div></div>
-      <div class="muted" style="font-size:12px;margin-top:12px">მძღოლების load gross (${money(REAL.totGross)}/კვ.) pass-through-ია — კომპანიის შემოსავალი არ არის.</div></div>
-      <div class="card p"><h4>ხარჯები <span class="databadge">Expenses</span></h4>${eb}</div></div>
-    <div class="callout" style="margin-top:14px"><span class="b">i</span><div>შემოსავალი კვირიდან ×4.33 თვედ. ხარჯები Expenses tab-იდან. timeframe-ის ზუსტ გასწორებას ერთად დავხვეწავთ.</div></div>`;
+  var weeks=(function(){ var m={}; (LIVE||[]).forEach(function(l){ var k=mondayOf(puDay_(l)); if(k) m[k]=1; });
+    return Object.keys(m).sort().reverse().slice(0,12); })();
+  var thisMon=mondayOf(ymd_(new Date()));
+  var wk=DPW || (weeks.filter(function(m){ return m<thisMon; })[0] || weeks[0] || thisMon);
+  var end=addDays_(wk,6);
+  var A=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=wk && d<=end; });
+  var by={};
+  A.forEach(function(l){
+    var k=l.dispatcher_name; if(!k) return;
+    if(!by[k]) by[k]={d:k,n:0,cars:0,gross:0,comm:0,drv:{}};
+    var x=by[k]; x.n++; x.cars+=cars_(l); x.gross+=grossOf_(l);
+    var reg=DRIVERS_BY_NAME[l.driver_name]||{}, r=driverRate_(reg);
+    x.comm+=grossOf_(l)*r.pct;
+    if(l.driver_name) x.drv[l.driver_name]=1;
+  });
+  var R=Object.keys(by).map(function(k){
+    var x=by[k], rt=DRATES[k]||{};
+    x.nDrv=Object.keys(x.drv).length;
+    x.pct=(rt.pct!=null)?Number(rt.pct):null;
+    x.base=(rt.base!=null)?Number(rt.base):null;
+    x.pay=(x.pct!=null||x.base!=null) ? (x.gross*(x.pct||0)+(x.base||0)) : null;
+    x.margin=(x.pay!=null)? (x.comm-x.pay) : null;
+    return x;
+  }).sort(function(a,b){ return b.gross-a.gross; });
+  var T=R.reduce(function(s,x){ s.n+=x.n; s.cars+=x.cars; s.gross+=x.gross; s.comm+=x.comm;
+    if(x.pay!=null){ s.pay+=x.pay; s.known++; } return s; },{n:0,cars:0,gross:0,comm:0,pay:0,known:0});
+  var noRate=R.filter(function(x){ return x.pay==null; }).length;
+  var rows=R.map(function(x){
+    var enc=encodeURIComponent(x.d);
+    var pin="<input class='mini' style='width:64px' placeholder='%' value='"+(x.pct!=null?(Math.round(x.pct*10000)/100):'')+"' onchange=\"saveDRate('"+enc+"','pct',this.value)\">";
+    var bin="<input class='mini' style='width:74px' placeholder='$ ბაზა' value='"+(x.base!=null?x.base:'')+"' onchange=\"saveDRate('"+enc+"','base',this.value)\">";
+    return "<tr><td><b>"+esc(x.d)+"</b></td><td class='num'>"+x.nDrv+"</td><td class='num'>"+x.n+"</td><td class='num'>"+x.cars+"</td>"+
+      "<td class='num'><b>"+money(x.gross)+"</b></td>"+
+      "<td class='num'>"+money(x.comm)+"</td>"+
+      "<td>"+pin+"</td><td>"+bin+"</td>"+
+      "<td class='num' style='font-weight:750'>"+(x.pay!=null?money(x.pay):"<span class='muted' style='font-weight:400'>განაკვეთი არ არის</span>")+"</td>"+
+      "<td class='num' style='color:"+(x.margin==null?'var(--muted)':(x.margin>=0?'var(--good)':'var(--crit)'))+";font-weight:700'>"+(x.margin!=null?money(x.margin):'—')+"</td></tr>";
+  }).join('');
+  var wsel=weeks.slice(0,10).map(function(m){
+    return "<span class='chip"+(m===wk?' g':'')+"' style='cursor:pointer' onclick=\"setDpW('"+m+"')\">"+weekLabel(m)+"</span>";
+  }).join('');
+  $('view').innerHTML=ph('დისპეტჩერების ხელფასები','კვირა '+weekLabel(wk)+' · ხელფასი = მძღოლების გროსი × განაკვეთი (+ ბაზა)')+
+    "<div class='kpis'>"+
+      kpi('დისპეტჩერი',R.length,'',T.n+' ტვირთი · '+T.cars+' მანქანა')+
+      kpi('მძღოლების გროსი',money(T.gross),'','ამ კვირაში')+
+      kpi('კომპანიის საკომისიო',money(T.comm),'g','მძღოლებისგან დაკავებული')+
+      kpi('დისპეტჩერების ხელფასი',money(T.pay),'',(noRate?(noRate+' დისპეტჩერს განაკვეთი არ აქვს'):'ყველა განაკვეთი შევსებულია'))+
+    "</div>"+
+    "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>"+wsel+"</div>"+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>განაკვეთს პირდაპირ ცხრილში წერ</b> — ინახება ბაზაში და ყველა კვირაზე გამოიყენება. „%“ = მძღოლების გროსის პროცენტი, „ბაზა“ = ფიქსირებული თანხა (თუ არის). <b>მარჟა</b> = კომპანიის საკომისიო მინუს დისპეტჩერის ხელფასი.</div></div>"+
+    "<div class='card p'><div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დისპეტჩერი</th><th class='num'>მძღოლი</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>მძღ. გროსი</th><th class='num'>კომპ. საკომისიო</th><th>განაკვეთი %</th><th>ბაზა $</th><th class='num'>ხელფასი</th><th class='num'>მარჟა</th></tr></thead><tbody>"+
+      (rows||"<tr><td colspan='10' class='muted'>ამ კვირაში ტვირთი არ არის</td></tr>")+
+      (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+T.cars+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>"+money(T.comm)+"</td><td></td><td></td><td class='num'>"+money(T.pay)+"</td><td class='num'>"+money(T.comm-T.pay)+"</td></tr>"):"")+
+      "</tbody></table></div>"+
+      "<div class='muted' style='font-size:12px;margin-top:10px'>კომპანიის საკომისიო ითვლება მძღოლების რეესტრის განაკვეთებით (1-მანქ 10%, 2+მანქ 12%, ან რაც რეესტრშია ჩაწერილი). ტვირთები, რომლებსაც დისპეტჩერი მიბმული არ აქვს, ამ ცხრილში არ ჩანს.</div></div>";
 }
 bootstrap();
 </script>
