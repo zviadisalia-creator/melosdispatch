@@ -198,6 +198,79 @@ let ACT = {};   // load_actions keyed by order_number (BOL sent / check uploaded
 let DRATES = {}; // dispatcher_rates keyed by dispatcher_name
 let BFLAG = {}; // broker_flags keyed by customer (inspection in broker's own app)
 const TERM_ONSITE={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
+/* ---- ბროკერები, რომლებსაც თავიანთი აპლიკაცია აქვთ ----
+   ამათზე Super Dispatch-იდან BOL/ინვოისის გაგზავნა საჭირო არ არის.
+   სახელი ხელით იწერება, ამიტომ შედარება შემწყნარებელია: რეგისტრი,
+   პუნქტუაცია, დაშორება და გამოტოვებული/შეცდომით აკრეფილი ასოც დასაშვებია. */
+var NOPAPER=[
+  {name:'Montway',                        k:[['montway']]},
+  {name:'Metrogistics an ACERTUS Company',k:[['metrogistics']]},
+  {name:'Acertus',                        k:[['acertus']]},
+  {name:'Metroloads',                     k:[['metroloads']]},
+  {name:'CarsArrive',                     k:[['carsarrive']]},
+  {name:'RunBuggy',                       k:[['runbuggy']]},
+  {name:'United Road',                    k:[['united'],['road','rd']]}
+];
+var BNOISE={inc:1,llc:1,ltd:1,limited:1,corp:1,corporation:1,co:1,company:1,companies:1,
+  group:1,holdings:1,the:1,an:1,a:1,of:1,and:1,usa:1,us:1,llp:1,plc:1,
+  transport:1,transports:1,transportation:1,trans:1,logistics:1,logistic:1,
+  auto:1,autos:1,automotive:1,carrier:1,carriers:1,shipping:1,express:1,
+  services:1,service:1,solutions:1,solution:1,intl:1,international:1};
+function bTokens_(s){
+  return String(s==null?'':s).toLowerCase().replace(/&/g,' and ')
+    .split(/[^a-z0-9]+/).filter(function(w){ return w && !BNOISE[w]; });
+}
+function bLev_(a,b){
+  var m=a.length,n=b.length;
+  if(!m) return n; if(!n) return m;
+  if(Math.abs(m-n)>4) return 99;
+  var prev=[],cur=[],i,j;
+  for(j=0;j<=n;j++) prev[j]=j;
+  for(i=1;i<=m;i++){
+    cur[0]=i;
+    for(j=1;j<=n;j++){ cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a.charAt(i-1)===b.charAt(j-1)?0:1)); }
+    for(j=0;j<=n;j++) prev[j]=cur[j];
+  }
+  return prev[n];
+}
+function bTol_(n){ return n<=4?0 : n<=7?1 : n<=11?2 : 3; }
+function bHasKey_(key, tokens, joined){
+  if(joined.indexOf(key)>=0) return true;
+  var tol=bTol_(key.length);
+  if(!tol) return false;
+  for(var i=0;i<tokens.length;i++){ if(bLev_(tokens[i],key)<=tol) return true; }
+  for(var w=Math.max(1,key.length-tol); w<=key.length+tol; w++){
+    for(var st=0; st+w<=joined.length; st++){ if(bLev_(joined.substr(st,w),key)<=tol) return true; }
+  }
+  return false;
+}
+function bMatch_(groups, customer){
+  var tokens=bTokens_(customer);
+  if(!tokens.length) return false;
+  var joined=tokens.join('');
+  for(var i=0;i<groups.length;i++){
+    var alt=groups[i], ok=false;
+    for(var j=0;j<alt.length;j++){ if(bHasKey_(alt[j],tokens,joined)){ ok=true; break; } }
+    if(!ok) return false;
+  }
+  return true;
+}
+var NPCACHE={};
+function noPaperName_(cust){
+  var key=String(cust==null?'':cust);
+  if(NPCACHE[key]!==undefined) return NPCACHE[key];
+  var hit=null;
+  for(var i=0;i<NOPAPER.length;i++){ if(bMatch_(NOPAPER[i].k,key)){ hit=NOPAPER[i].name; break; } }
+  NPCACHE[key]=hit; return hit;
+}
+/* ბროკერს თავისი აპი აქვს — BOL/ინვოისი SD-დან არ სჭირდება */
+function noPaper_(l){ return !!(l && noPaperName_(l.customer)); }
+function noPaperChip_(l){
+  var n=l&&noPaperName_(l.customer);
+  return n ? "<span class='chip' title='"+esc(n)+" — თავისი აპლიკაცია აქვს, SD-დან BOL/ინვოისი არ სჭირდება'>თავისი აპი</span>" : "";
+}
+/* ინვოისი საჭიროა? არა — თუ ადგილზე იხდიან ან ბროკერს თავისი აპი აქვს */
+function invNeeded_(l){ return !!l && !TERM_ONSITE[l.payment_terms] && !noPaper_(l); }
 function actOf_(o){ return ACT[o]||{}; }
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
@@ -206,6 +279,7 @@ async function loadBrokerFlags(){ try{ const { data } = await sb.from('broker_fl
 function assignExpected_(l){
   if(!l) return false;
   if(BFLAG[l.customer]) return false;                                   // ინსპექცია ბროკერის აპში
+  if(noPaper_(l)) return false;                                         // ბროკერს თავისი აპი აქვს
   var reg=DRIVERS_BY_NAME[l.driver_name]||{};
   if(reg.no_pre_assign) return false;                                   // ტექნიკურად სუსტი მძღოლი
   return true;
@@ -513,10 +587,10 @@ function rBoard(){
   var winCut=new Date(Date.now()-14*864e5).toISOString();
   var delivered=L.filter(function(l){ return l.delivery_completed && l.delivery_completed>=winCut; });
   var older=L.filter(function(l){ return l.delivery_completed && l.delivery_completed<winCut; });
-  var oldInv=older.filter(function(l){ return !TERM_ONSITE[l.payment_terms] && !l.invoice_sent_at; }).length;
+  var oldInv=older.filter(function(l){ return invNeeded_(l) && !l.invoice_sent_at; }).length;
   var byNew=function(a,b){ return String(b.delivery_completed||'').localeCompare(String(a.delivery_completed||'')); };
-  var bolP=delivered.filter(function(l){ return !actOf_(l.order_number).bol_sent_at; }).sort(byNew);
-  var invP=delivered.filter(function(l){ return !TERM_ONSITE[l.payment_terms] && !l.invoice_sent_at; }).sort(byNew);
+  var bolP=delivered.filter(function(l){ return !actOf_(l.order_number).bol_sent_at && !noPaper_(l); }).sort(byNew);
+  var invP=delivered.filter(function(l){ return invNeeded_(l) && !l.invoice_sent_at; }).sort(byNew);
   var chkP=L.filter(function(l){
     var pu=(l.payment_terms==='check_on_pickup' && l.pickup_completed && l.pickup_completed>=winCut);
     var dl=(l.payment_terms==='check_on_delivery' && l.delivery_completed && l.delivery_completed>=winCut);
@@ -660,7 +734,7 @@ function rProfile(){
   var drv30={}; R30.forEach(function(l){ if(l.driver_name) drv30[l.driver_name]=1; });
   var asgOk=R30.filter(function(l){ return l.driver_id_sd; }).length;
   var asgPct=R30.length?Math.round(asgOk/R30.length*100):0;
-  var invNeed=L.filter(function(l){ return l.delivery_completed && String(l.delivery_completed).slice(0,10)>=cut30 && !ONSITE_[l.payment_terms]; });
+  var invNeed=L.filter(function(l){ return l.delivery_completed && String(l.delivery_completed).slice(0,10)>=cut30 && invNeeded_(l); });
   var invOk=invNeed.filter(function(l){ return l.invoice_sent_at; }).length;
   var invPct=invNeed.length?Math.round(invOk/invNeed.length*100):100;
   myLoadCalls_();
@@ -675,7 +749,7 @@ function rProfile(){
       "<b class='tnum'>"+money(w.g)+" · "+w.n+" ტვ. · "+w.cars+" მანქ.</b></div>"+
       "<div class='track'><i style='width:"+Math.round(w.g/mx*100)+"%;background:"+(w.mo===thisMon?'var(--warn)':'var(--brand)')+"'></i></div></div>";
   }).join('');
-  var openInv=L.filter(function(l){ return l.delivery_completed && !ONSITE_[l.payment_terms] && !l.invoice_sent_at && !l.paid_at; });
+  var openInv=L.filter(function(l){ return l.delivery_completed && invNeeded_(l) && !l.invoice_sent_at && !l.paid_at; });
   $('view').innerHTML=ph('ჩემი პროფილი — Scorecard',esc(USER.name||'')+' · ბოლო 8 კვირა · ცოცხალი მონაცემი')+
     "<div class='kpis'>"+
       kpi('ტვირთი — 30 დღე',R30.length,'',Object.keys(drv30).length+' მძღოლი')+
@@ -1010,7 +1084,7 @@ function rOverview(){
   var late=broker.filter(function(l){ return l._late>0; });
   var late45=late.filter(function(l){ return l._late>45; });
   var onsite=AR.filter(function(l){ return ONSITE_[l.payment_terms]; });
-  var noInv=L.filter(function(l){ return l.delivery_completed && !ONSITE_[l.payment_terms] && !l.invoice_sent_at && !l.paid_at; });
+  var noInv=L.filter(function(l){ return l.delivery_completed && invNeeded_(l) && !l.invoice_sent_at && !l.paid_at; });
   var noInv30=noInv.filter(function(l){ var t=Date.parse(l.delivery_completed); return !isNaN(t) && (Date.now()-t)/864e5>30; });
 
   /* დისციპლინა — ბოლო 30 დღე */
@@ -1019,7 +1093,7 @@ function rOverview(){
   var R30a=R30.filter(assignExpected_);
   var asgN=R30a.length, asgOk=R30a.filter(function(l){ return l.driver_id_sd; }).length;
   var asgPct=asgN?Math.round(asgOk/asgN*100):0;
-  var invNeed=L.filter(function(l){ return l.delivery_completed && String(l.delivery_completed).slice(0,10)>=cut30 && !ONSITE_[l.payment_terms]; });
+  var invNeed=L.filter(function(l){ return l.delivery_completed && String(l.delivery_completed).slice(0,10)>=cut30 && invNeeded_(l); });
   var invOk=invNeed.filter(function(l){ return l.invoice_sent_at; }).length;
   var invPct=invNeed.length?Math.round(invOk/invNeed.length*100):100;
   ovLoadCalls_();
@@ -1310,7 +1384,7 @@ function rLeader(){
     var x=by[k];
     x.n++; x.cars+=cars_(l); x.gross+=Number(l.gross)||0;
     if(l.driver_id_sd) x.assigned++;
-    if(l.delivery_completed && !ONS[l.payment_terms]){ x.delNeed++; if(l.invoice_sent_at) x.delOk++; }
+    if(l.delivery_completed && invNeeded_(l)){ x.delNeed++; if(l.invoice_sent_at) x.delOk++; }
   });
   var A=Object.keys(by).map(function(k){
     var x=by[k], c=CSTAT[k]||{n_loads:0,both_ok:0};
@@ -1357,7 +1431,7 @@ function excList_(){
 
   /* 1. ჩაბარებულია, ინვოისი არ არის (7+ დღე), ფული ჯერ არ შემოსულა */
   L.forEach(function(l){
-    if(!l.delivery_completed || ONSITE_[l.payment_terms] || l.invoice_sent_at || l.paid_at) return;
+    if(!l.delivery_completed || !invNeeded_(l) || l.invoice_sent_at || l.paid_at) return;
     var d=dAgo(l.delivery_completed); if(d==null || d<7) return;
     out.push({k:'invoice', r:d>30?'r':'y', disp:l.dispatcher_name||'—', who:l.driver_name||'—',
       t:'ინვოისი არ არის გაგზავნილი', s:l.order_number+' · '+(l.customer||'—')+' · ჩაბარდა '+d+' დღის წინ · '+money(Number(l.price)||0), n:d, tab:'invoices'});
@@ -1546,7 +1620,7 @@ var INVN=[];
 function selInv(i){ INVD=(i<0)?'':(INVN[i]||''); rInv(); }
 function rInv(){
   var ONS={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
-  var CAND=(LIVE||[]).filter(function(l){ return l.delivery_completed && !ONS[l.payment_terms] && !l.invoice_sent_at; });
+  var CAND=(LIVE||[]).filter(function(l){ return l.delivery_completed && invNeeded_(l) && !l.invoice_sent_at; });
   var PAIDNOINV=CAND.filter(function(l){ return l.paid_at; });
   var L=CAND.filter(function(l){ return !l.paid_at; });
   var now=Date.now();
@@ -1605,7 +1679,7 @@ function rRecv(){
   var broker=A.filter(function(l){ return !ONSITE_[l.payment_terms]; });
   var onsite=A.filter(function(l){ return ONSITE_[l.payment_terms]; });
   var late=broker.filter(function(l){ return l._late>0; });
-  var noInv=broker.filter(function(l){ return !l.invoice_sent_at; });
+  var noInv=broker.filter(function(l){ return !l.invoice_sent_at && !noPaper_(l); });
   var F=broker.slice();
   if(RECVF==='late') F=late.slice();
   if(RECVF==='noinv') F=noInv.slice();
@@ -1616,7 +1690,7 @@ function rRecv(){
   var rows=F.slice(0,SHOW).map(function(l){
     return '<tr><td>'+esc(l.order_number||'')+'</td><td>'+esc(l.customer||'—')+'</td><td>'+esc(l.dispatcher_name||'—')+'</td>'+
       '<td>'+gd(String(l.delivery_completed).slice(0,10))+'</td>'+
-      '<td>'+(l.invoice_sent_at?gd(String(l.invoice_sent_at).slice(0,10)):'<span style="color:var(--crit)">არ არის</span>')+'</td>'+
+      '<td>'+(l.invoice_sent_at?gd(String(l.invoice_sent_at).slice(0,10)):(noPaper_(l)?noPaperChip_(l):'<span style="color:var(--crit)">არ არის</span>'))+'</td>'+
       '<td>'+(l._due?gd(new Date(l._due).toISOString().slice(0,10)):'—')+'</td>'+
       '<td class="num" style="color:'+col(l._late)+';font-weight:'+(l._late>0?750:400)+'">'+(l._late>0?(l._late+' დღე'):'—')+'</td>'+
       '<td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td>'+
