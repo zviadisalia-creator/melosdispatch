@@ -272,6 +272,7 @@ async function saveDriver(encName, field, value){
   let v=value;
   if(field==='winch') v=!!value;
   else if(field==='target_gross'){ v=(value===''?null:Number(value)); if(v!=null && !isFinite(v)){ toast('რიცხვი ჩაწერე'); return; } }
+  else if(field==='cap'){ v=(value===''?null:Number(value)); if(v!=null && !isFinite(v)){ toast('რიცხვი ჩაწერე'); return; } }
   else if(field==='category' && v==='—') v=null;
   try{
     const { error } = await sb.from('drivers').update({[field]:v, updated_at:new Date().toISOString(), updated_by:USER.email}).eq('name',name);
@@ -944,36 +945,48 @@ function rOverview(){
       "<div class='muted' style='font-size:12px;margin-top:8px'>დეტალური ქულა და ზარების სტატისტიკა — ტაბში <b onclick=\"goM('leaderboard')\" style='cursor:pointer;text-decoration:underline'>რეიტინგი</b>.</div></div>"+
     "<div class='callout' style='margin-top:14px'><span class='b'>i</span><div>ეს გვერდი მთლიანად <b>ცოცხალ მონაცემზეა</b> — Super Dispatch ყოველ 30 წუთში, Quo-ს ზარები/SMS ყოველ 15 წუთში. Google Sheets-ის მონაწილეობა აქ აღარ არის.</div></div>";
 }
-/* ---- მძღოლების რეესტრი — ცოცხალი სტატისტიკით (drivers ცხრილი + SD) ---- */
+/* ---- მძღოლების რეესტრი — ცოცხალი სტატისტიკა + რედაქტირებადი ტევადობა/სამიზნე ---- */
 var DRVF='active';
 function setDrvF(v){ DRVF=v; rDrivers(); }
 function rDrivers(){
   var L=LIVE||[], today=ymd_(new Date());
-  var cut30=addDays_(today,-30), cut90=addDays_(today,-90);
-  var S={};
+  var cut30=addDays_(today,-30), cut56=addDays_(today,-56), cut90=addDays_(today,-90);
+  var S={}, DD={};
   L.forEach(function(l){
     var nm=l.driver_name; if(!nm) return;
-    if(!S[nm]) S[nm]={n30:0,c30:0,g30:0,n90:0,g90:0,last:'',disp:'—'};
+    if(!S[nm]) S[nm]={n30:0,c30:0,g30:0,last:'',disp:'—',wk:{}};
     var x=S[nm], d=puDay_(l);
     if(l.dispatcher_name) x.disp=l.dispatcher_name;
     if(d>x.last) x.last=d;
     if(d>=cut30){ x.n30++; x.c30+=cars_(l); x.g30+=grossOf_(l); }
-    if(d>=cut90){ x.n90++; x.g90+=grossOf_(l); }
+    if(d>=cut56){ var w=mondayOf(d); if(w){ x.wk[w]=(x.wk[w]||0)+grossOf_(l); }
+      var k=nm+'|'+d; DD[k]=(DD[k]||0)+cars_(l); }
   });
+  Object.keys(DD).forEach(function(k){ var nm=k.split('|')[0]; if(!S[nm]) return;
+    (S[nm].days=S[nm].days||[]).push(DD[k]); });
+  var qq=function(a,p){ var s=a.slice().sort(function(x,y){ return x-y; }); return s.length?s[Math.max(0,Math.floor((s.length-1)*p))]:0; };
   var names={};
   Object.keys(DRIVERS_BY_NAME).forEach(function(n){ names[n]=1; });
   Object.keys(S).forEach(function(n){ if(S[n].last>=cut90) names[n]=1; });
   var A=Object.keys(names).map(function(n){
-    var reg=DRIVERS_BY_NAME[n]||{}, s=S[n]||{n30:0,c30:0,g30:0,n90:0,g90:0,last:'',disp:'—'};
+    var reg=DRIVERS_BY_NAME[n]||{}, s=S[n]||{n30:0,c30:0,g30:0,last:'',disp:'—',wk:{},days:[]};
+    var days=s.days||[];
+    var wks=Object.keys(s.wk||{}).map(function(k){ return s.wk[k]; });
     return {name:n, reg:reg, inReg:!!DRIVERS_BY_NAME[n], s:s,
+      obsMed:days.length?qq(days,.5):null, obsP75:days.length?qq(days,.75):null,
+      obsMax:days.length?Math.max.apply(null,days):null, obsDays:days.length,
+      wkMed:wks.length?qq(wks,.5):null,
       active:(reg.active!==false) && s.last>=cut30,
+      cap:(reg.cap!=null?Number(reg.cap):null),
       tgt:(reg.target_gross!=null?Number(reg.target_gross):null)};
   });
   var nAct=A.filter(function(d){ return d.active; }).length;
+  var capOff=A.filter(function(d){ return d.active && d.cap!=null && d.obsP75!=null && d.obsP75>d.cap; }).length;
   var F=A.slice();
   if(DRVF==='active') F=A.filter(function(d){ return d.active; });
   if(DRVF==='idle') F=A.filter(function(d){ return !d.active; });
-  if(DRVF==='noreg') F=A.filter(function(d){ return !d.inReg; });
+  if(DRVF==='capoff') F=A.filter(function(d){ return d.active && d.cap!=null && d.obsP75!=null && d.obsP75>d.cap; });
+  if(DRVF==='notgt') F=A.filter(function(d){ return d.active && !d.tgt; });
   if(DRVF==='under') F=A.filter(function(d){ return d.active && d.tgt && d.s.g30/4.33 < d.tgt; });
   F.sort(function(a,b){ return b.s.g30-a.s.g30; });
   var catOpts=['—','ცუდი','საშუალო','კარგი','ძალიან კარგი'];
@@ -981,36 +994,41 @@ function rDrivers(){
     var reg=d.reg, enc=encodeURIComponent(d.name);
     var wkG=d.s.g30/4.33;
     var sel="<select class='mini' onchange=\"saveDriver('"+enc+"','category',this.value)\">"+catOpts.map(function(o){ return "<option"+(((reg.category||'—')===o)?' selected':'')+">"+o+"</option>"; }).join('')+"</select>";
+    var capSel="<select class='mini' onchange=\"saveDriver('"+enc+"','cap',this.value)\">"+['1','2','3','4','5'].map(function(o){ return "<option"+((String(d.cap||1)===o)?' selected':'')+">"+o+"</option>"; }).join('')+"</select>";
     var winch="<input type='checkbox' style='width:16px;height:16px'"+(reg.winch?' checked':'')+" onchange=\"saveDriver('"+enc+"','winch',this.checked)\">";
-    var target="<input class='mini' style='width:80px' placeholder='$ სამიზნე' value='"+(reg.target_gross!=null?reg.target_gross:'')+"' onchange=\"saveDriver('"+enc+"','target_gross',this.value)\">";
+    var target="<input class='mini' style='width:78px' placeholder='$ სამიზნე' value='"+(reg.target_gross!=null?reg.target_gross:'')+"' onchange=\"saveDriver('"+enc+"','target_gross',this.value)\">";
+    var off=(d.cap!=null && d.obsP75!=null && d.obsP75>d.cap);
+    var obs=(d.obsDays? ("<b"+(off?" style='color:var(--crit)'":"")+">"+d.obsMed+" / "+d.obsP75+"</b> <span class='muted'>· მაქს "+d.obsMax+"</span>") : "<span class='muted'>—</span>");
     var tcol = d.tgt ? (wkG>=d.tgt?'var(--good)':(wkG>=d.tgt*0.75?'var(--warn)':'var(--crit)')) : 'var(--ink2)';
     return "<tr><td><b>"+esc(d.name)+"</b>"+(!d.inReg?" <span class='chip y' style='padding:1px 6px'>რეესტრში არ არის</span>":"")+"</td>"+
-      "<td>"+esc(d.s.disp)+"</td><td>"+sel+"</td><td class='num'>"+(Number(reg.cap)||1)+"-მანქ</td><td style='text-align:center'>"+winch+"</td>"+
+      "<td>"+esc(d.s.disp)+"</td>"+
+      "<td>"+capSel+"</td>"+
+      "<td class='num'>"+obs+"</td>"+
+      "<td>"+sel+"</td><td style='text-align:center'>"+winch+"</td>"+
       "<td>"+target+"</td>"+
+      "<td class='num'>"+(d.wkMed!=null?money(d.wkMed):'—')+"</td>"+
       "<td class='num'>"+d.s.n30+"</td><td class='num'>"+d.s.c30+"</td>"+
       "<td class='num'><b>"+money(d.s.g30)+"</b></td>"+
       "<td class='num' style='color:"+tcol+";font-weight:"+(d.tgt?700:400)+"'>"+money(wkG)+(d.tgt?(' / '+money(d.tgt)):'')+"</td>"+
-      "<td class='num'>"+(reg.pct!=null?Math.round(reg.pct*100)+'%':'—')+"</td>"+
-      "<td class='num'>"+(reg.insurance!=null?money(reg.insurance):'—')+"</td>"+
       "<td>"+(d.s.last?gd(d.s.last):'—')+"</td></tr>";
   }).join('');
   var chip=function(k,l,n){ return "<span class='chip"+(DRVF===k?' g':'')+"' style='cursor:pointer' onclick=\"setDrvF('"+k+"')\">"+l+" ("+n+")</span>"; };
   var under=A.filter(function(d){ return d.active && d.tgt && d.s.g30/4.33 < d.tgt; }).length;
   var noTgt=A.filter(function(d){ return d.active && !d.tgt; }).length;
   var totG=A.filter(function(d){return d.active;}).reduce(function(s,d){ return s+d.s.g30; },0);
-  $('view').innerHTML=ph('მძღოლების რეესტრი','ცოცხალი სტატისტიკა Super Dispatch-იდან + კატეგორია, ვინჩი და სამიზნე გროსი — ბაზაში')+
+  $('view').innerHTML=ph('მძღოლების რეესტრი','მისაბმელის ზომა, სამიზნე გროსი და ცოცხალი სტატისტიკა Super Dispatch-იდან')+
     "<div class='kpis'>"+
       kpi('აქტიური მძღოლი',nAct,'','ბოლო 30 დღეში ტვირთით')+
-      kpi('გროსი — 30 დღე',money(totG),'',money(totG/4.33)+' / კვირაში')+
+      kpi('ზომა არ ემთხვევა ფაქტს',capOff,capOff?'r':'g','რეესტრზე მეტ მანქანას იღებს','')+
+      kpi('სამიზნე დაუწესებელი',noTgt,noTgt?'w':'g','„სამიზნე გროსი“ სვეტი')+
       kpi('სამიზნეს ქვემოთ',under,under?'r':'g','კვირის საშუალო < სამიზნე')+
-      kpi('სამიზნე დაუწესებელი',noTgt,noTgt?'w':'g','შეავსე „სამიზნე გროსი“ სვეტში')+
     "</div>"+
-    "<div class='callout' style='margin-bottom:14px'><span class='b'>i</span><div><b>კატეგორია, ვინჩი და სამიზნე გროსი</b> ცოცხლად ინახება ბაზაში — შეცვლი და მაშინვე შენახულია. დანარჩენი სვეტები ავტომატურად ითვლება Super Dispatch-იდან. <span class='muted'>„კვირის საშ.“ = ბოლო 30 დღის გროსი ÷ 4.33.</span></div></div>"+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>i</span><div><b>„ფაქტი (მანქ/დღეში)“ ითვლება Super Dispatch-იდან</b> — ბოლო 8 კვირაში რამდენ მანქანას იღებდა ერთ დღეს: შუალედი / ზედა 25% / მაქსიმუმი. თუ ეს რიცხვი მისაბმელის ზომაზე მეტია, ან ზომაა მოძველებული, ან მძღოლი დღეში ორ რეისს აკეთებს. <b>ზომა და სამიზნე გროსი პირდაპირ ცხრილში იცვლება</b> და მაშინვე ინახება.</div></div>"+
     "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>"+
-      chip('active','აქტიური',nAct)+chip('under','სამიზნეს ქვემოთ',under)+chip('idle','უმოქმედო',A.length-nAct)+chip('noreg','რეესტრში არ არის',A.filter(function(d){return !d.inReg;}).length)+chip('all','ყველა',A.length)+"</div>"+
-    "<div class='tablewrap'><table style='min-width:1180px'><thead><tr><th>მძღოლი</th><th>დისპეტჩერი</th><th>კატეგორია</th><th class='num'>ტევადობა</th><th>ვინჩი</th><th>სამიზნე გროსი</th><th class='num'>ტვირთი 30დღ</th><th class='num'>მანქანა</th><th class='num'>გროსი 30დღ</th><th class='num'>კვირის საშ.</th><th class='num'>საკომ.</th><th class='num'>დაზღვევა</th><th>ბოლო ტვირთი</th></tr></thead><tbody>"+
+      chip('active','აქტიური',nAct)+chip('capoff','ზომა ≠ ფაქტი',capOff)+chip('notgt','სამიზნის გარეშე',noTgt)+chip('under','სამიზნეს ქვემოთ',under)+chip('idle','უმოქმედო',A.length-nAct)+chip('all','ყველა',A.length)+"</div>"+
+    "<div class='tablewrap'><table style='min-width:1240px'><thead><tr><th>მძღოლი</th><th>დისპეტჩერი</th><th>მისაბ. ზომა</th><th class='num'>ფაქტი მანქ/დღე</th><th>კატეგორია</th><th>ვინჩი</th><th>სამიზნე გროსი</th><th class='num'>ფაქტ. კვირა</th><th class='num'>ტვირთი 30დღ</th><th class='num'>მანქანა</th><th class='num'>გროსი 30დღ</th><th class='num'>კვირის საშ.</th><th>ბოლო ტვირთი</th></tr></thead><tbody>"+
       (rows||"<tr><td colspan='13' class='muted'>ცარიელია</td></tr>")+"</tbody></table></div>"+
-    "<div class='muted' style='font-size:12px;margin-top:10px'>„რეესტრში არ არის“ = მძღოლი Super Dispatch-ში ტვირთებზე ჩანს, მაგრამ ბაზის რეესტრში არ არის — საკომისიო/დაზღვევა მისთვის განსაზღვრული არ არის. დოკუმენტების ატვირთვა — შემდეგ ეტაპზე.</div></div>";
+    "<div class='muted' style='font-size:12px;margin-top:10px'>„ფაქტ. კვირა“ = ბოლო 8 კვირის შუალედური კვირის გროსი — ამაზე დაყრდნობითაა შემოთავაზებული სამიზნე. „კვირის საშ.“ = ბოლო 30 დღის გროსი ÷ 4.33.</div></div>";
 }
 /* ---- მძღოლების სია — მომდევნო სამუშაო დღის დაფარვა, ცოცხლად (SD) ---- */
 var COVF='all';
