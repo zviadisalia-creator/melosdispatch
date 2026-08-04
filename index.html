@@ -644,10 +644,12 @@ function rBoard(){
     return items.slice(0,8).map(function(l){
       var act='';
       if(kind==='bol') act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a><button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>";
-      if(kind==='chk'){ var a0=actOf_(l.order_number);
+      if(kind==='chk'){ var a0=actOf_(l.order_number), e0=encodeURIComponent(l.order_number);
         act=(a0.check_path?("<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(a0.check_path)+"');return false\" style='text-decoration:none;margin-right:6px'>ნახვა</a>"):"")+
-          "<label class='fixbtn' style='cursor:pointer'>ჩეკის ატვირთვა<input type='file' accept='image/*,application/pdf' capture='environment' style='display:none' onchange=\"upCheck('"+encodeURIComponent(l.order_number)+"',this)\"></label>"; }
-      return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
+          "<button class='fixbtn' style='margin-right:6px' onclick=\"chkArm('"+e0+"')\">ჩასმა Ctrl+V</button>"+
+          "<label class='fixbtn' style='cursor:pointer'>ფაილი<input type='file' accept='image/*,application/pdf' capture='environment' style='display:none' onchange=\"upCheck('"+e0+"',this)\"></label>"; }
+      var dz=(kind==='chk')?(" ondragover=\"event.preventDefault()\" ondrop=\"chkDrop('"+encodeURIComponent(l.order_number)+"',event)\" title='ჩეკის ფოტო აქ ჩააგდე ან დააჭირე „ჩასმა Ctrl+V“'"):"";
+      return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
     }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
   var callP=(CONTACTS||[]).filter(function(r){ return !((r.pu_call||r.pu_sms) && (r.del_call||r.del_sms)); })
@@ -726,10 +728,44 @@ async function closeShift(){
     SCLOSE=row; toast('ცვლა დახურულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ დაიხურა'); }
 }
+var CHKARM=null;
+function chkArm(enc){
+  CHKARM=decodeURIComponent(enc);
+  toast('WhatsApp-ში დააკოპირე ჩეკის ფოტო და აქ დააჭირე Ctrl+V');
+}
+document.addEventListener('paste', function(ev){
+  if(!CHKARM) return;
+  var items=(ev.clipboardData&&ev.clipboardData.items)||[];
+  for(var i=0;i<items.length;i++){
+    if(items[i].type && items[i].type.indexOf('image')===0){
+      var f=items[i].getAsFile();
+      if(f){ ev.preventDefault(); var on=CHKARM; CHKARM=null; upCheckFile(on,f); return; }
+    }
+  }
+});
+function chkDrop(enc, ev){
+  ev.preventDefault(); ev.stopPropagation();
+  var dt=ev.dataTransfer; if(!dt) return;
+  var f=(dt.files&&dt.files[0])||null;
+  if(f){ upCheckFile(decodeURIComponent(enc), f); return; }
+  var url=dt.getData('text/uri-list')||dt.getData('text/plain')||'';
+  if(/^https?:|^blob:|^data:/.test(url)) upCheckUrl(decodeURIComponent(enc), url);
+}
+async function upCheckUrl(on, url){
+  try{
+    toast('იტვირთება…');
+    var r=await fetch(url); var b=await r.blob();
+    if(!/^image\//.test(b.type||'') && !/pdf/.test(b.type||'')) throw new Error('ფაილი სურათი არ არის');
+    await upCheckFile(on, new File([b],'check.'+((b.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/g,'')),{type:b.type}));
+  }catch(e){ console.error(e); toast('ვერ ჩაიტვირთა — სცადე Ctrl+V'); }
+}
 async function upCheck(enc, input){
   var on=decodeURIComponent(enc);
   var f=input && input.files && input.files[0];
   if(!f){ return; }
+  return upCheckFile(on, f);
+}
+async function upCheckFile(on, f){
   if(f.size > 15*1024*1024){ toast('ფაილი 15MB-ზე დიდია'); return; }
   toast('იტვირთება…');
   try{
@@ -1832,7 +1868,7 @@ async function loadLedger(){
   try{ var r=await sb.from('driver_ledger').select('*'); DLED=r.data||[]; }catch(e){ console.error(e); DLED=[]; }
   try{ var p=await sb.from('driver_payout').select('*'); DPAY={}; (p.data||[]).forEach(function(x){ DPAY[x.driver_name+'|'+x.week]=x; }); }catch(e){ console.error(e); DPAY={}; }
 }
-var LKIND={advance:{l:'ავანსი / სესხი',s:-1},deduction:{l:'დაქვითვა',s:-1},bonus:{l:'პრემია',s:1},
+var LKIND={advance:{l:'ავანსი / სესხი',s:-1},deduction:{l:'დაქვითვა',s:-1},
   carry:{l:'წინა კვირის ნაშთი',s:-1},tip_dispatcher:{l:'დისპეტჩერს აჩუქა',s:-1}};
 function ledOf_(name,wk){ return DLED.filter(function(x){ return x.driver_name===name && String(x.week)===wk; }); }
 function ledSum_(name,wk){
@@ -1845,8 +1881,8 @@ function tipSum_(name,wk){
 function payoutOf_(name,wk){ return DPAY[name+'|'+wk]||null; }
 async function ledAdd(encName, wk){
   var name=decodeURIComponent(encName);
-  var kind=prompt('რა ტიპია?\n1 — ავანსი / სესხი (გამოაკლდება)\n2 — დაქვითვა (გამოაკლდება)\n3 — პრემია (დაემატება)\n4 — წინა კვირის ნაშთი (გამოაკლდება)\n5 — დისპეტჩერს აჩუქა (ხელფასზე არ მოქმედებს)','1');
-  var map={'1':'advance','2':'deduction','3':'bonus','4':'carry','5':'tip_dispatcher'};
+  var kind=prompt('რა ტიპია?\n1 — ავანსი / სესხი (გამოაკლდება)\n2 — დაქვითვა (გამოაკლდება)\n3 — წინა კვირის ნაშთი (გამოაკლდება)\n4 — დისპეტჩერს აჩუქა (მძღოლს აკლდება, დისპეტჩერს ემატება)','1');
+  var map={'1':'advance','2':'deduction','3':'carry','4':'tip_dispatcher'};
   var k=map[String(kind||'').trim()]; if(!k) return;
   var amt=prompt('თანხა ($):','');
   var a=Number(String(amt||'').replace(/[^0-9.]/g,''));
@@ -1980,7 +2016,7 @@ function rPayroll(){
     "</div>"+
     "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px'>"+wsel+"</div>"+
     "<div style='display:flex;gap:8px;align-items:center;margin-bottom:12px'><span class='muted' style='font-size:12px'>რომელი თარიღით ითვლება კვირა:</span>"+bchip('pickup','ტვირთის აღება')+bchip('delivery','ჩაბარება')+"</div>"+
-    "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>ხელფასი = გროსი − დისპეჩინგის საკომისიო − დაზღვევა − ადგილზე აღებული ფული.</b> საკომისიო და დაზღვევა მოდის მძღოლების რეესტრიდან; თუ იქ შევსებული არ არის, გამოიყენება წესი: 1-მანქ → <b>10% + $200</b>, 2+მანქ → <b>12% + $300</b>. „ადგილზე აღებული“ = cash/check on pickup/delivery — ეს ფული მძღოლმა უკვე აიღო. <b>კორექტირება</b> — ავანსი/სესხი, დაქვითვა, პრემია და წინა კვირის მინუსი. „↩ ნაშთი“ ღილაკი წინა კვირის უარყოფით ბალანსს ავტომატურად გადმოიტანს. „დისპეტჩერს აჩუქა“ მხოლოდ აღირიცხება, მძღოლის ხელფასს არ ცვლის.</div></div>"+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>ƒ</span><div><b>ხელფასი = გროსი − დისპეჩინგის საკომისიო − დაზღვევა − ადგილზე აღებული ფული.</b> საკომისიო და დაზღვევა მოდის მძღოლების რეესტრიდან; თუ იქ შევსებული არ არის, გამოიყენება წესი: 1-მანქ → <b>10% + $200</b>, 2+მანქ → <b>12% + $300</b>. „ადგილზე აღებული“ = cash/check on pickup/delivery — ეს ფული მძღოლმა უკვე აიღო. <b>კორექტირება</b> — ავანსი/სესხი, დაქვითვა და წინა კვირის მინუსი. „↩ ნაშთი“ ღილაკი წინა კვირის უარყოფით ბალანსს ავტომატურად გადმოიტანს. „დისპეტჩერს აჩუქა“ მძღოლს აკლდება და იმავე თანხით იმ დისპეტჩერს ემატება.</div></div>"+
     "<div class='card p'><div class='tablewrap'><table style='min-width:1420px'><thead><tr><th>მძღოლი</th><th>დისპეტჩერი</th><th class='num'>ტევადობა</th><th class='num'>ტვირთი</th><th class='num'>მანქანა</th><th class='num'>გროსი</th><th class='num'>საკომისიო</th><th class='num'>დაზღვევა</th><th class='num'>ადგილზე აღებული</th><th class='num'>ხელფასი</th><th class='num'>კორექტირება</th><th class='num'>საბოლოო</th><th>გადარიცხვა</th></tr></thead><tbody>"+
       (rows||"<tr><td colspan='13' class='muted'>ამ კვირაში ტვირთი არ არის</td></tr>")+
       (R.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+T.cars+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>−"+money(T.comm)+"</td><td class='num'>−"+money(T.ins)+"</td><td class='num'>−"+money(T.cash)+"</td><td class='num'>"+money(T.pay)+"</td><td class='num'>"+(T.adj?((T.adj>0?'+':'')+money(T.adj)):'—')+"</td><td class='num'>"+money(T.final)+"</td><td class='num'>"+T.paidN+"/"+R.length+"</td></tr>"):"")+
