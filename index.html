@@ -189,7 +189,9 @@
 <script>
 const SB_URL="https://gdbvmypxndevwaalgvoa.supabase.co";
 const SB_KEY="sb_publishable_JnalNMnmAlzgLIWa6tW1Yw_QqbBEJnz";
-const sb = window.supabase.createClient(SB_URL, SB_KEY);
+const sb = window.supabase.createClient(SB_URL, SB_KEY, {
+  auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage: window.localStorage }
+});
 let USER = null;            // {email,name,role:'mgmt'|'disp',dispatcher,quality}
 let RECV = {};             // received marks by order id
 let ODRECV = {};           // overdue received marks
@@ -335,6 +337,34 @@ function permOf_(name){
   var reg=DRIVERS_BY_NAME[name]||DIRBY[name];
   return (reg && reg.dispatcher_name) ? {dispatcher_name:reg.dispatcher_name} : null;
 }
+/* მძღოლი ისვენებს — დისპეტჩერი ნიშნავს, მენეჯმენტი ხედავს და ნებისმიერ დროს ხსნის */
+function offOf_(name, day){
+  day=day||workToday_();
+  var a=DASG.filter(function(p){ return p.driver_name===name && p.kind==='off'
+    && (!p.from_day || p.from_day<=day) && (!p.to_day || p.to_day>=day); });
+  return a.length? a[a.length-1] : null;
+}
+async function offSet(encName){
+  var name=decodeURIComponent(encName);
+  var to=prompt('რომელი რიცხვის ჩათვლით ისვენებს '+name+'? (წწწწ-თთ-რრ, ცარიელი = ვადის გარეშე)', addDays_(workToday_(),7));
+  if(to===null) return;
+  to=String(to).trim();
+  if(to && !/^\d{4}-\d{2}-\d{2}$/.test(to)){ toast('თარიღი ასე ჩაწერე: 2026-08-11'); return; }
+  var why=prompt('მიზეზი (მენეჯმენტი დაინახავს):','შვებულება');
+  if(why===null) return;
+  if(String(why).trim().length<3){ toast('მიზეზი ჩაწერე'); return; }
+  try{
+    await assignSave({driver_name:name, dispatcher_name:USER.dispatcher, kind:'off',
+      from_day:workToday_(), to_day:(to||null), reason:String(why).trim(), created_by:USER.email});
+    toast('მონიშნულია — ისვენებს ✓'); render();
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+}
+async function offEnd(id){
+  if(!confirm('დავაბრუნო მძღოლი სამუშაოდ?')) return;
+  try{ var r=await sb.from('driver_assignment').update({canceled_at:new Date().toISOString(),canceled_by:USER.email}).eq('id',id);
+    if(r.error) throw r.error; await loadAssign(); toast('დაბრუნდა'); render();
+  }catch(e){ console.error(e); toast('ვერ მოხერხდა'); }
+}
 function coverOf_(name, day){
   day=day||workToday_();
   var a=DASG.filter(function(p){ return p.driver_name===name && p.kind==='cover'
@@ -404,6 +434,7 @@ function covRes_(){
   Object.keys(DRIVERS_BY_NAME).forEach(function(n){ seen[n]=1; });
   var names=Object.keys(seen).filter(function(n){
     if(!driverActive_(n)) return false;
+    if(offOf_(n,day)) return false;
     if(dispOfDriver_(n,day)===USER.dispatcher) return false;
     return n.toLowerCase().indexOf(q)>=0;
   }).sort().slice(0,12);
@@ -462,19 +493,47 @@ function showLogin(msg){
 }
 async function bootstrap(){
   try{
-    const { data:{ session } } = await sb.auth.getSession();
+    var r=await sb.auth.getSession();
+    var session=r && r.data ? r.data.session : null;
+    if(!session){
+      /* ზოგჯერ ტოკენი მეხსიერებაშია, მაგრამ პირველ წამში ჯერ არ წაკითხულა */
+      await new Promise(function(f){ setTimeout(f,600); });
+      var r2=await sb.auth.getSession();
+      session = r2 && r2.data ? r2.data.session : null;
+    }
     if(!session){ showLogin(); return; }
     await afterLogin(session);
-  }catch(e){ console.error(e); showLogin('შესვლა ვერ მოხერხდა — სცადე თავიდan'); }
+  }catch(e){ console.error(e); showLogin('ვერ ჩაიტვირთა: '+((e&&e.message)||e)+' — განაახლე გვერდი'); }
 }
+/* სესია არ უნდა დაიკარგოს გვერდის განახლებაზე: ტოკენის განახლებისას
+   აპლიკაცია ისევ იტვირთება, გამოსვლა კი მხოლოდ ნამდვილ SIGNED_OUT-ზე ხდება */
+try{
+  sb.auth.onAuthStateChange(function(ev, session){
+    if(ev==='SIGNED_OUT'){ USER=null; showLogin(); return; }
+    if((ev==='SIGNED_IN'||ev==='TOKEN_REFRESHED') && session && !USER){ afterLogin(session); }
+  });
+}catch(e){ console.error(e); }
+var AUTHBUSY=false;
 async function afterLogin(session){
+  if(AUTHBUSY) return; AUTHBUSY=true;
+  try{ await afterLogin_(session); } finally { AUTHBUSY=false; }
+}
+async function afterLogin_(session){
   const email=(session.user.email||'').toLowerCase();
-  const { data:me, error } = await sb.from('access_allowlist').select('*').eq('email', email).maybeSingle();
-  if(error){ console.error(error); showLogin('შეცდომა — სცადე თავიდan'); return; }
+  var me=null, err=null;
+  for(var t=0;t<2;t++){
+    var q=await sb.from('access_allowlist').select('*').eq('email', email).maybeSingle();
+    if(!q.error){ me=q.data; err=null; break; }
+    err=q.error; await new Promise(function(f){ setTimeout(f,700); });
+  }
+  /* ქსელის/ბაზის შეცდომაზე სესიას არ ვშლით — თორემ განახლება „გამოსვლად" გამოიყურება */
+  if(err){ console.error(err); showLogin('ბაზასთან კავშირი ვერ დამყარდა — განაახლე გვერდი ('+(err.message||'')+')'); return; }
   if(!me || !me.active){ await sb.auth.signOut(); showLogin('ამ ანგარიშს ('+email+') წვდომა არ აქვს. მიმართე მენეჯმენტს.'); return; }
   USER={ email, name:me.dispatcher_name, role:(me.role==='management'?'mgmt':'disp'), dispatcher:me.dispatcher_name, quality:null };
-  await loadData();
+  var loadErr=null;
+  try{ await loadData(); }catch(e){ console.error(e); loadErr=e; }
   startApp();
+  if(loadErr) toast('ნაწილი მონაცემებისა ვერ ჩაიტვირთა — განაახლე გვერდი');
 }
 async function loadData(){
   if(USER.role==='mgmt'){
@@ -800,7 +859,16 @@ function rBoard(){
     .filter(function(d){ return d.last>=cutD || dispOfDriver_(d.name,tday)===USER.dispatcher; })
     .sort(function(a,b){ return a.name.localeCompare(b.name); });
 
+  var resting=list.filter(function(d){ return !!offOf_(d.name,tday); });
+  list=list.filter(function(d){ return !offOf_(d.name,tday); });
   var cnt={g:0,y:0,r:0,n:0}, gaps=[];
+  var restHtml=resting.map(function(d){
+    var o=offOf_(d.name,tday);
+    return "<div class='driver' style='opacity:.62'><div class='cap'>—</div>"+
+      "<div><div class='nm'>"+esc(d.name)+"</div><div class='meta'>"+esc(o.reason||'')+"</div></div>"+
+      "<div class='lw'><div class='reason'>ისვენებს "+(o.to_day?(gd(o.to_day)+'-ის ჩათვლით'):'ვადის გარეშე')+" · სტანდარტში არ ითვლება</div></div>"+
+      "<div class='st'><button class='fixbtn' onclick=\"offEnd('"+o.id+"')\">დაბრუნება</button></div></div>";
+  }).join('');
   var cards=list.map(function(d){
     var reg=DRIVERS_BY_NAME[d.name]||{};
     var cap=Number(reg.cap)||1;
@@ -820,7 +888,8 @@ function rBoard(){
       return "<span class='load'><span class='oid'>"+esc(l.order_number)+"</span> <b>"+esc(locShort(l.pickup_location))+"</b> → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'')+pm+man+off+
         " <a href='#' title='ხვალინდელი დღიდან მოხსნა' style='color:var(--muted);text-decoration:none;font-weight:700' onclick=\"planDrop('"+encodeURIComponent(l.order_number)+"');return false\">×</a></span>";
     }).join('');
-    var act=(lvl==='g'||tgt==null)?'':("<div style='margin-top:6px'>"+waivChip_('standard',d.name,d.name+' — '+reason,tday)+"</div>");
+    var restBtn="<button class='fixbtn' onclick=\"offSet('"+encodeURIComponent(d.name)+"')\">მძღოლი ისვენებს</button>";
+    var act="<div style='margin-top:6px'>"+((lvl==='g'||tgt==null)?'':(waivChip_('standard',d.name,d.name+' — '+reason,tday)+' '))+restBtn+"</div>";
     var cov=coverOf_(d.name,tday);
     var covChip=(cov&&cov.dispatcher_name===USER.dispatcher)?" <span class='chip y' style='padding:0 6px;font-size:10px'>დროებით ჩემთან</span>":"";
     return "<div class='driver'><div class='cap'>"+cap+"</div>"+
@@ -901,17 +970,17 @@ function rBoard(){
     .map(function(t){ return "<span class='chip "+t[0]+"'><span class='dot'></span>"+cnt[t[0]]+" "+t[1]+"</span>"; }).join('');
   var pend=Object.keys(WAIV).filter(function(k){ return WAIV[k].status==='pending' && WAIV[k].work_day===tday; }).length;
 
-  $('view').innerHTML=ph('ჩემი დაფა',esc(USER.name||'')+' · '+list.length+' აქტიური მძღოლი · '+gdFull(tday)+'-ის სტანდარტი')+
+  $('view').innerHTML=ph('ჩემი დაფა',esc(USER.name||'')+' · '+list.length+' აქტიური მძღოლი'+(resting.length?(' · '+resting.length+' ისვენებს'):'')+' · '+gdFull(tday)+'-ის სტანდარტი')+
     "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
       (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
       (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
-    "<div class='card' style='margin-bottom:16px'>"+(cards||"<div class='muted' style='padding:14px'>ბოლო 30 დღეში აქტიური მძღოლი არ არის</div>")+"</div>"+
-    addBox_(tday)+
+    "<div class='card' style='margin-bottom:16px'>"+(cards||"<div class='muted' style='padding:14px'>ბოლო 30 დღეში აქტიური მძღოლი არ არის</div>")+restHtml+"</div>"+
+    addBox_(tday, list)+
     coverBox_()+
     "<div class='sect'>ცვლის დახურვა — გასვლის GATE-ები</div>"+
     "<div class='card' id='closeCard'>"+
       "<div class='gate "+(stdOk?'ok':'no')+"'><div class='ic'>"+(stdOk?'✓':'!')+"</div><div class='t'><b>"+gdFull(tday)+"-ის ტვირთები სტანდარტზეა</b>"+
-        "<span>"+list.length+" მძღოლი · "+cnt.g+" დაცული · "+cnt.y+" ნაკლები · "+cnt.r+" ვერ ავსებს"+(gaps.length?(' — '+esc(gaps.slice(0,4).join(', '))+(gaps.length>4?' და სხვ.':'')):'')+"</span></div></div>"+
+        "<span>"+list.length+" მძღოლი"+(resting.length?(' · '+resting.length+' ისვენებს'):'')+" · "+cnt.g+" დაცული · "+cnt.y+" ნაკლები · "+cnt.r+" ვერ ავსებს"+(gaps.length?(' — '+esc(gaps.slice(0,4).join(', '))+(gaps.length>4?' და სხვ.':'')):'')+"</span></div></div>"+
       gate_('ზარები · Pickup / Delivery', callP.length, callP.length+' ტვირთზე კავშირი არ ფიქსირდება', 'calls_all','')+
       callRows_(callP)+
       (noPhoneP.length? ("<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'><b>"+noPhoneP.length+"</b> ტვირთს SD-ში ნომერი არ წერია ("+
@@ -1597,19 +1666,21 @@ var DRVF='active';
 /* მენეჯმენტისთვის — ვინ ვისთან არის დროებით გადაბარებული */
 function covAdminHtml_(){
   var day=workToday_();
-  var covs=DASG.filter(function(p){ return p.kind==='cover' && (!p.to_day || p.to_day>=day); });
+  var covs=DASG.filter(function(p){ return (p.kind==='cover'||p.kind==='off') && (!p.to_day || p.to_day>=day); });
   var rows=covs.map(function(p){
     var perm=permOf_(p.driver_name);
+    var isOff=(p.kind==='off');
     return "<tr><td><b>"+esc(p.driver_name)+"</b></td><td>"+esc((perm&&perm.dispatcher_name)||'—')+"</td>"+
-      "<td><b>"+esc(p.dispatcher_name)+"</b></td><td>"+gd(p.from_day)+" — "+(p.to_day?gd(p.to_day):'ვადის გარეშე')+"</td>"+
+      "<td>"+(isOff? "<span class='chip y' style='padding:1px 7px'>ისვენებს</span>" : "<b>"+esc(p.dispatcher_name)+"</b>")+"</td>"+
+      "<td>"+gd(p.from_day)+" — "+(p.to_day?gd(p.to_day):'ვადის გარეშე')+"</td>"+
       "<td class='muted' style='font-size:11.5px'>"+esc(p.reason||'')+"</td>"+
       "<td class='muted' style='font-size:11.5px'>"+esc(p.created_by||'')+"</td>"+
-      "<td><button class='fixbtn' onclick=\"coverEnd('"+p.id+"')\">დასრულება</button></td></tr>";
+      "<td><button class='fixbtn' onclick=\""+(isOff?'offEnd':'coverEnd')+"('"+p.id+"')\">დასრულება</button></td></tr>";
   }).join('');
-  return "<div class='card p' style='margin-top:14px'><h4>დროებითი გადაბარებები</h4>"+
-    "<div class='muted' style='font-size:12px;margin-bottom:8px'>დისპეტჩერს შეუძლია კოლეგის მძღოლი დროებით გადმოიბაროს — დამტკიცება არ სჭირდება, მაგრამ აქ ყველაფერი ჩანს და ნებისმიერ მომენტში შეგიძლია დაასრულო. მუდმივ მიმაგრებას მხოლოდ მენეჯმენტი ცვლის (ცხრილში „დისპეტჩერი“).</div>"+
-    (rows? ("<div class='tablewrap'><table style='min-width:900px'><thead><tr><th>მძღოლი</th><th>მუდმივი</th><th>დროებით</th><th>პერიოდი</th><th>მიზეზი</th><th>ვინ აიღო</th><th></th></tr></thead><tbody>"+rows+"</tbody></table></div>")
-          : "<div class='muted'>ამ მომენტში აქტიური გადაბარება არ არის</div>")+"</div>";
+  return "<div class='card p' style='margin-top:14px'><h4>გადაბარებები და დასვენებები</h4>"+
+    "<div class='muted' style='font-size:12px;margin-bottom:8px'>დისპეტჩერს შეუძლია კოლეგის მძღოლი დროებით გადმოიბაროს, ან თავისი მძღოლი „ისვენებს“-ად მონიშნოს (მაშინ ის დღიურ სტანდარტში აღარ ითვლება). დამტკიცება არ სჭირდება, მაგრამ ყველაფერი აქ ჩანს და ნებისმიერ მომენტში შეგიძლია დაასრულო. მუდმივ მიმაგრებას მხოლოდ მენეჯმენტი ცვლის (ცხრილში „დისპეტჩერი“).</div>"+
+    (rows? ("<div class='tablewrap'><table style='min-width:900px'><thead><tr><th>მძღოლი</th><th>მუდმივი დისპეტჩერი</th><th>სტატუსი</th><th>პერიოდი</th><th>მიზეზი</th><th>ვინ მონიშნა</th><th></th></tr></thead><tbody>"+rows+"</tbody></table></div>")
+          : "<div class='muted'>ამ მომენტში აქტიური გადაბარება ან დასვენება არ არის</div>")+"</div>";
 }
 function setDrvF(v){ DRVF=v; rDrivers(); }
 function rDrivers(){
@@ -2507,11 +2578,14 @@ function addRes_(day){
   return "<div class='tablewrap' style='margin-top:10px'><table style='min-width:960px'><thead><tr><th>Order ID</th><th>ბროკერი</th><th>მძღოლი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
     (rows||"<tr><td colspan='8' class='muted'>ვერაფერი მოიძებნა</td></tr>")+"</tbody></table></div>";
 }
-function addBox_(day){
+function addBox_(day, boardList){
   var P=planLoads_(day);
   var gross=P.reduce(function(s,l){ return s+grossOf_(l); },0);
   var drv={}; P.forEach(function(l){ if(drvName_(l)) drv[drvName_(l)]=1; });
-  var selHtml=P.map(function(l){
+  /* ბარათებზე უკვე ნაჩვენები ტვირთები აქ აღარ მეორდება */
+  var shown={}; (boardList||[]).forEach(function(d){ shown[d.name]=1; });
+  var rest=P.filter(function(l){ return !drvName_(l) || !shown[drvName_(l)]; });
+  var selHtml=rest.map(function(l){
     var mi=Number(l.miles)||0;
     return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td>"+
       "<td>"+(drvName_(l)?esc(drvName_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
@@ -2539,8 +2613,11 @@ function addBox_(day){
   return "<div class='card p' style='margin-bottom:16px'><h4>ხვალინდელი სია — "+gdFull(day)+"</h4>"+
     "<div class='muted' style='font-size:12px;margin-bottom:8px'>სიას <b>შენ ავსებ</b>: მოძებნე Order ID-ით, ბროკერით ან მძღოლით და დაამატე. ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
       "<b>"+P.length+"</b> ტვირთი · "+Object.keys(drv).length+" მძღოლი · "+money(gross)+"</div>"+
-    "<div class='tablewrap'><table style='min-width:1040px'><thead><tr><th>Order ID</th><th>მძღოლი</th><th>ბროკერი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th class='num'>$/მილი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
-      (selHtml||"<tr><td colspan='9' class='muted'>ჯერ არაფერი აგირჩევია — ქვემოთ მოძებნე და დაამატე</td></tr>")+"</tbody></table></div>"+
+    (rest.length? ("<div class='tablewrap'><table style='min-width:1040px'><thead><tr><th>Order ID</th><th>მძღოლი</th><th>ბროკერი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th class='num'>$/მილი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
+      selHtml+"</tbody></table></div>"
+      +"<div class='muted' style='font-size:11.5px;margin-top:6px'>ამ ტვირთებს მძღოლი არ ჰყავს ან მისი მძღოლი დაფაზე არ ჩანს — დანარჩენები მძღოლების ბარათებზეა.</div>")
+     : (P.length? "<div class='muted' style='font-size:12px'>ყველა არჩეული ტვირთი ზემოთ, მძღოლების ბარათებზე ჩანს — იქვე შეგიძლია მოხსნა „×“-ით.</div>"
+                : "<div class='muted' style='font-size:12px'>ჯერ არაფერი აგირჩევია — ქვემოთ მოძებნე და დაამატე.</div>"))+
     "<div style='margin-top:12px'><input class='mini' id='addQ' style='width:340px;padding:8px' placeholder='Order ID, ბროკერი ან მძღოლი…' value='"+esc(PQ)+"' oninput=\"setPQ(this.value)\"></div>"+
     "<div id='addRes'>"+addRes_(day)+"</div>"+
     (mineHint.length? ("<div style='margin-top:14px;padding-top:12px;border-top:1px solid var(--line)'>"+
