@@ -276,6 +276,17 @@ function actOf_(o){ return ACT[o]||{}; }
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
 async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()) }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
+/* გამოცხადებულ სიაზე — ზარები ზუსტად იმ ტვირთებზე მოწმდება, რაც დისპეტჩერმა აირჩია */
+let PCONT = [];
+async function loadPlanContacts(){
+  try{
+    var ons=planLoads_(ymd_(nextWorkDay_())).map(function(l){ return l.order_number; });
+    if(!ons.length){ PCONT=[]; return; }
+    const { data, error } = await sb.rpc('contact_check_orders', { p_orders: ons });
+    if(error) throw error;
+    PCONT = data || [];
+  }catch(e){ console.error(e); PCONT = []; }
+}
 var BFALL={};   // broker_flags — ყველა ჩანაწერი, customer-ის მიხედვით
 async function loadBrokerFlags(){
   try{ const { data } = await sb.from('broker_flags').select('*');
@@ -483,6 +494,7 @@ async function loadData(){
     await loadBrokerFlags();
     await loadPlan();
     await loadAssign();
+    await loadPlanContacts();
     await loadLedger();
   } else {
     await loadLiveLoads();   // RLS scopes loads to this dispatcher only
@@ -496,6 +508,7 @@ async function loadData(){
     await loadAttempts();
     await loadWaivers();
     await loadAssign();
+    await loadPlanContacts();
     await loadClose();
   }
 }
@@ -651,11 +664,29 @@ function stdLevel_(ratio){
      გამონაკლისი — თუ ერთი მანქანაც ავსებს დღიურ გეგმას, ჩაითვლება. */
 function shortMi_(){ return sett_('short_miles',350); }
 function loadMiles_(l){ var m=Number(l&&l.miles); return (m>0)?m:0; }
+/* მძღოლი, რომელსაც მანქანა უკვე აყვანილი აქვს და ხვალ ჯერ კიდევ გზაშია */
+function transitMi_(){ return sett_('transit_miles',1000); }
+function inTransit_(name, tday){
+  var L=LIVE||[];
+  for(var i=0;i<L.length;i++){
+    var l=L[i];
+    if(l.driver_name!==name || l.status!=='picked_up' || l.delivery_completed) continue;
+    var dl=String(l.delivery_scheduled||'').slice(0,10);
+    var mi=Number(l.miles)||0;
+    if((dl && dl>=tday) || mi>=transitMi_()) return {l:l, dl:dl, mi:mi};
+  }
+  return null;
+}
 function driverStd_(name, day){
   var reg=DRIVERS_BY_NAME[name]||{};
   var cap=Number(reg.cap)||1;
   var tgt=dayTarget_(name);
   var n=day.length;
+  if(!n){
+    var tr=inTransit_(name, ymd_(nextWorkDay_()));
+    if(tr) return {ok:true,lvl:'g',cap:cap,tgt:tgt,gross:0,cars:0,transit:true,
+      reason:'გზაშია — '+(tr.dl?(gd(tr.dl)+'-ს აბარებს'):(Math.round(tr.mi)+' მილიანი რეისი'))+' · ხვალინდელი ტვირთი არ სჭირდება'};
+  }
   var gross=day.reduce(function(s,l){ return s+grossOf_(l); },0);
   var cars=day.reduce(function(s,l){ return s+cars_(l); },0);
   var hitTgt=(tgt!=null && tgt>0 && gross>=tgt);
@@ -783,8 +814,9 @@ function rBoard(){
     var reason=st.reason;
     var ll=day.slice(0,3).map(function(l){
       var pm=(Number(l.miles)>0)? (' · $'+(grossOf_(l)/Number(l.miles)).toFixed(2)+'/მი') : '';
-      var man=l._manual?" <span class='chip y' style='padding:0 5px;font-size:10px'>ხელით</span>":"";
-      var off=(puDay_(l)!==tday)?" <span style='color:var(--crit);font-size:10.5px'>SD-ში სხვა თარიღია</span>":"";
+      var dd=delDay_(l);
+      var man=dd?(" · ჩაბარება "+gd(dd)):"";
+      var off=(puDay_(l)!==tday)?" <span style='color:var(--muted);font-size:10.5px'>SD: "+gd(puDay_(l))+"</span>":"";
       return "<span class='load'><span class='oid'>"+esc(l.order_number)+"</span> <b>"+esc(locShort(l.pickup_location))+"</b> → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'')+pm+man+off+
         " <a href='#' title='ხვალინდელი დღიდან მოხსნა' style='color:var(--muted);text-decoration:none;font-weight:700' onclick=\"planDrop('"+encodeURIComponent(l.order_number)+"');return false\">×</a></span>";
     }).join('');
@@ -831,7 +863,7 @@ function rBoard(){
       return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
     }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
-  var CC=(CONTACTS||[]).filter(function(r){ return mineWork_(r) && !r.not_required && callNeeded_(r.order_number); });
+  var CC=(PCONT||[]).filter(function(r){ return !r.not_required && callNeeded_(r.order_number); });
   var puOk_=function(r){ return !!(r.pu_missing || r.pu_call || r.pu_sms); };
   var delOk_=function(r){ return !!(r.del_missing || r.del_call || r.del_sms); };
   var callP=CC.filter(function(r){ return !(puOk_(r) && delOk_(r)); })
@@ -896,6 +928,8 @@ function rBoard(){
         (closed?("<span class='muted' style='font-size:12px'>"+new Date(SCLOSE.closed_at).toLocaleString('ka-GE')+"</span>"):"<span class='muted' style='font-size:12px'>ყველა ✓-ის შემდეგ — „მწვანე“</span>")+
       "</div></div>"+
     "<div class='callout' style='margin-top:14px'><span class='b'>i</span><div><b>სამუშაო დასრულებულია, თუ ოთხივე პირობა სრულდება:</b> ტვირთები სტანდარტზეა · ფიქაფზეც და დელივერზეც დარეკილია · სადაც საჭირო იყო, ინვოისი და BOL გაგზავნილია · ჩეკი ატვირთულია. "+
+      "<b>ხვალინდელ სიას თვითონ ავსებ</b> — მოძებნე Order ID-ით და დაამატე; ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
+      "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და ხვალ ჯერ კიდევ გზაშია</b> (ჩაბარება ხვალ ან მოგვიანებით, ან რეისი ≥"+transitMi_()+" მილი) — ხვალინდელი ტვირთი არ მოეთხოვება. "+
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
       "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
@@ -2424,16 +2458,20 @@ function planRows_(day, disp){
   return DPLAN.filter(function(p){ return p.work_day===day && (!d || p.dispatcher_name===d); });
 }
 /* დღის ტვირთები = SD-ის თარიღით ავტომატური, მინუს მოხსნილი, პლუს ხელით დამატებული */
+/* ხვალინდელი სია = მხოლოდ ის, რაც დისპეტჩერმა თვითონ აირჩია.
+   SD-ის აღების თარიღი აღარაა წყარო — ის ხშირად მოძველებულია. */
 function planLoads_(day, disp){
   var d=disp||(USER&&USER.dispatcher)||'';
-  var rows=planRows_(day,d);
-  var removed={}, added={};
-  rows.forEach(function(p){ if(p.action==='remove') removed[p.order_number]=p; else added[p.order_number]=p; });
-  var auto=(LIVE||[]).filter(function(l){ return puDay_(l)===day && !removed[l.order_number] && (d===USER.dispatcher ? mineWork_(l) : (l.dispatcher_name===d)); });
-  var have={}; auto.forEach(function(l){ have[l.order_number]=1; });
-  var extra=(LIVE||[]).filter(function(l){ return added[l.order_number] && !have[l.order_number]; });
-  extra.forEach(function(l){ l._manual=added[l.order_number]; });
-  return auto.concat(extra);
+  var added={};
+  planRows_(day,d).forEach(function(p){ if(p.action!=='remove') added[p.order_number]=p; });
+  var byOn={}; (LIVE||[]).forEach(function(l){ byOn[l.order_number]=l; });
+  var out=[];
+  Object.keys(added).forEach(function(on){
+    var l=byOn[on]; if(!l) return;
+    l._manual=added[on]; out.push(l);
+  });
+  out.sort(function(a,b){ return String(a.driver_name||'').localeCompare(String(b.driver_name||'')); });
+  return out;
 }
 function planOrders_(day, disp){
   var m={}; planLoads_(day,disp).forEach(function(l){ m[l.order_number]=1; }); return m;
@@ -2446,6 +2484,7 @@ function planDrop(enc){
   if(m) return planUndo(m.id);
   return planAdd(enc,'remove');
 }
+function delDay_(l){ return String(l&&(l.delivery_completed||l.delivery_scheduled)||'').slice(0,10); }
 function addRes_(day){
   var q=String(PQ||'').trim().toLowerCase();
   if(q.length<2) return "<div class='muted' style='font-size:12px;margin-top:8px'>ჩაწერე მინიმუმ 2 სიმბოლო — Order ID, ბროკერი ან მძღოლი</div>";
@@ -2458,45 +2497,59 @@ function addRes_(day){
         || String(drvName_(l)||'').toLowerCase().indexOf(q)>=0;
   }).slice(0,12);
   var rows=hits.map(function(l){
-    var off=(puDay_(l)!==day);
-    return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td><td>"+esc(l.customer||'—')+"</td><td>"+esc(drvName_(l)||'—')+"</td>"+
+    return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td><td>"+esc(l.customer||'—')+"</td>"+
+      "<td>"+(drvName_(l)?esc(drvName_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
       "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
       "<td class='num'>"+money(grossOf_(l))+"</td>"+
-      "<td"+(off?" style='color:var(--crit);font-weight:700'":"")+">"+gd(puDay_(l))+"</td>"+
+      "<td>"+gd(puDay_(l))+"</td><td>"+gd(delDay_(l))+"</td>"+
       "<td><button class='fixbtn' onclick=\"planAdd('"+encodeURIComponent(l.order_number)+"','add')\">დამატება</button></td></tr>";
   }).join('');
-  return "<div class='tablewrap' style='margin-top:10px'><table style='min-width:880px'><thead><tr><th>Order ID</th><th>ბროკერი</th><th>მძღოლი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th>SD თარიღი</th><th></th></tr></thead><tbody>"+
-    (rows||"<tr><td colspan='7' class='muted'>ვერაფერი მოიძებნა</td></tr>")+"</tbody></table></div>";
+  return "<div class='tablewrap' style='margin-top:10px'><table style='min-width:960px'><thead><tr><th>Order ID</th><th>ბროკერი</th><th>მძღოლი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
+    (rows||"<tr><td colspan='8' class='muted'>ვერაფერი მოიძებნა</td></tr>")+"</tbody></table></div>";
 }
 function addBox_(day){
   var P=planLoads_(day);
-  var rows=planRows_(day);
-  var manual=rows.filter(function(p){ return p.action==='add'; });
-  var removed=rows.filter(function(p){ return p.action==='remove'; });
-  var mism=P.filter(function(l){ return puDay_(l)!==day; }).length;
-  var remHtml=removed.map(function(p){
-    return "<div style='display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)'>"+
-      "<div><b>"+esc(p.order_number)+"</b> <span class='muted' style='font-size:11.5px'>"+esc(p.reason||'')+"</span></div>"+
-      "<button class='fixbtn' onclick=\"planUndo('"+p.id+"')\">დაბრუნება</button></div>";
+  var gross=P.reduce(function(s,l){ return s+grossOf_(l); },0);
+  var drv={}; P.forEach(function(l){ if(drvName_(l)) drv[drvName_(l)]=1; });
+  var selHtml=P.map(function(l){
+    var mi=Number(l.miles)||0;
+    return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td>"+
+      "<td>"+(drvName_(l)?esc(drvName_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
+      "<td>"+esc(l.customer||'—')+"</td>"+
+      "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
+      "<td class='num'>"+money(grossOf_(l))+"</td>"+
+      "<td class='num'>"+(mi>0?('$'+(grossOf_(l)/mi).toFixed(2)):'—')+"</td>"+
+      "<td>"+gd(puDay_(l))+"</td><td>"+gd(delDay_(l))+"</td>"+
+      "<td><button class='fixbtn' onclick=\"planDrop('"+encodeURIComponent(l.order_number)+"')\">მოხსნა</button></td></tr>";
   }).join('');
-  /* ხვალინდელი ტვირთი, რომელსაც SD-ში მძღოლი არ მიბმია — არავის Work Log-ში არ ჯდება */
+  /* შენიშვნა: SD-ში ხვალინდელი თარიღი უწერია, სიაში კი არ არის */
   var inPlan_=planOrders_(day);
-  var orphan=(LIVE||[]).filter(function(l){ return puDay_(l)===day && !l.driver_name && !l.dispatcher_name && !inPlan_[l.order_number]; });
-  var orphHtml=orphan.slice(0,10).map(function(l){
+  var hint=(LIVE||[]).filter(function(l){
+    return puDay_(l)===day && !inPlan_[l.order_number] && l.status!=='delivered' && !l.pickup_completed;
+  });
+  var mineHint=hint.filter(mineWork_);
+  var freeHint=hint.filter(function(l){ return !l.driver_name && !l.dispatcher_name; });
+  var hintRow=function(l){
     return "<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)'>"+
       "<div><b>"+esc(l.order_number)+"</b> <span class='muted' style='font-size:11.5px'>"+esc(l.customer||'—')+" · "+
-        esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+
-      "<button class='fixbtn' onclick=\"planAdd('"+encodeURIComponent(l.order_number)+"','add')\">ჩემია</button></div>";
-  }).join('');
-  return "<div class='card p' style='margin-bottom:16px'><h4>ტვირთის დამატება — "+gdFull(day)+"</h4>"+
-    "<div class='muted' style='font-size:12px;margin-bottom:8px'>სია ავტომატურად ივსება Super Dispatch-ის აღების თარიღით. აქ მხოლოდ მაშინ ჩაერევი, თუ ტვირთი რეალურად ხვალ აიღება, მაგრამ SD-ში სხვა თარიღი უწერია. "+
-      "<b>"+P.length+"</b> ტვირთი ხვალ"+(manual.length?(" · <b>"+manual.length+"</b> ხელით დამატებული"):"")+(mism?(" · <b style='color:var(--crit)'>"+mism+"</b> SD-ში სხვა თარიღით"):"")+"</div>"+
-    "<input class='mini' id='addQ' style='width:340px;padding:8px' placeholder='Order ID, ბროკერი ან მძღოლი…' value='"+esc(PQ)+"' oninput=\"setPQ(this.value)\">"+
+        (drvName_(l)?esc(drvName_(l))+" · ":"")+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+
+        " · "+money(grossOf_(l))+" · ჩაბარება "+gd(delDay_(l))+"</span></div>"+
+      "<button class='fixbtn' onclick=\"planAdd('"+encodeURIComponent(l.order_number)+"','add')\">დამატება</button></div>";
+  };
+  return "<div class='card p' style='margin-bottom:16px'><h4>ხვალინდელი სია — "+gdFull(day)+"</h4>"+
+    "<div class='muted' style='font-size:12px;margin-bottom:8px'>სიას <b>შენ ავსებ</b>: მოძებნე Order ID-ით, ბროკერით ან მძღოლით და დაამატე. ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
+      "<b>"+P.length+"</b> ტვირთი · "+Object.keys(drv).length+" მძღოლი · "+money(gross)+"</div>"+
+    "<div class='tablewrap'><table style='min-width:1040px'><thead><tr><th>Order ID</th><th>მძღოლი</th><th>ბროკერი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th class='num'>$/მილი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
+      (selHtml||"<tr><td colspan='9' class='muted'>ჯერ არაფერი აგირჩევია — ქვემოთ მოძებნე და დაამატე</td></tr>")+"</tbody></table></div>"+
+    "<div style='margin-top:12px'><input class='mini' id='addQ' style='width:340px;padding:8px' placeholder='Order ID, ბროკერი ან მძღოლი…' value='"+esc(PQ)+"' oninput=\"setPQ(this.value)\"></div>"+
     "<div id='addRes'>"+addRes_(day)+"</div>"+
-    (orphan.length? ("<div style='margin-top:14px;padding-top:12px;border-top:1px solid var(--line)'>"+
-       "<div class='muted' style='font-size:12px;margin-bottom:6px'><b style='color:var(--warn)'>"+orphan.length+"</b> ხვალინდელ ტვირთს SD-ში მძღოლი არ მიბმია — ვერავის დაფაზე ჯდება. მიაბი მძღოლი SD-ში, ან თუ შენია, დააჭირე „ჩემია“.</div>"+
-       orphHtml+(orphan.length>10?("<div class='muted' style='font-size:11.5px;padding-top:6px'>…და კიდევ "+(orphan.length-10)+"</div>"):"")+"</div>"):"")+
-    (removed.length? ("<div style='margin-top:14px;padding-top:12px;border-top:1px solid var(--line)'><div class='muted' style='font-size:12px;margin-bottom:6px'>ხელით მოხსნილი ტვირთები</div>"+remHtml+"</div>"):"")+
+    (mineHint.length? ("<div style='margin-top:14px;padding-top:12px;border-top:1px solid var(--line)'>"+
+       "<div class='muted' style='font-size:12px;margin-bottom:6px'>SD-ში ხვალინდელი თარიღი უწერია, სიაში კი არ არის — <b>"+mineHint.length+"</b></div>"+
+       mineHint.slice(0,8).map(hintRow).join('')+"</div>"):"")+
+    (freeHint.length? ("<div style='margin-top:14px;padding-top:12px;border-top:1px solid var(--line)'>"+
+       "<div class='muted' style='font-size:12px;margin-bottom:6px'><b style='color:var(--warn)'>"+freeHint.length+"</b> ხვალინდელ ტვირთს SD-ში მძღოლი არ მიბმია — ვერავის დაფაზე ჯდება. მიაბი მძღოლი SD-ში, ან თუ შენია, დაამატე.</div>"+
+       freeHint.slice(0,8).map(hintRow).join('')+
+       (freeHint.length>8?("<div class='muted' style='font-size:11.5px;padding-top:6px'>…და კიდევ "+(freeHint.length-8)+"</div>"):"")+"</div>"):"")+
     "</div>";
 }
 async function planAdd(enc, action){
@@ -2514,12 +2567,12 @@ async function planAdd(enc, action){
              sd_pickup_date:(l?puDay_(l):null), created_by:USER.email, created_at:new Date().toISOString()};
     var res=await sb.from('day_plan').upsert(row,{onConflict:'dispatcher_name,work_day,order_number'});
     if(res.error) throw res.error;
-    await loadPlan(); PQ=''; toast(action==='add'?'დაემატა ✓':'მოიხსნა ✓'); render();
+    await loadPlan(); await loadPlanContacts(); PQ=''; toast(action==='add'?'დაემატა ✓':'მოიხსნა ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
 async function planUndo(id){
   try{ var res=await sb.from('day_plan').delete().eq('id',id);
-    if(res.error) throw res.error; await loadPlan(); toast('დაბრუნდა'); render();
+    if(res.error) throw res.error; await loadPlan(); await loadPlanContacts(); toast('მოიხსნა'); render();
   }catch(e){ console.error(e); toast('ვერ მოხერხდა'); }
 }
 function setPQ(v){
@@ -2557,7 +2610,7 @@ function rPlan(){
   var manual=rows.filter(function(p){ return p.action==='add'; });
   var gross=P.reduce(function(s,l){ return s+grossOf_(l); },0);
   var drv={}; P.forEach(function(l){ if(drvName_(l)) drv[drvName_(l)]=1; });
-  var mism=P.filter(function(l){ return puDay_(l)!==tday; });
+  var noDrv=P.filter(function(l){ return !drvName_(l); });
   /* გუშინდელის (ან ბოლო დახურული დღის) შედარება */
   var prev=addDays_(tday,-1); if(new Date(prev+'T12:00:00Z').getUTCDay()===0) prev=addDays_(prev,-1);
   var R=reconcile_(prev, USER.dispatcher);
@@ -2577,12 +2630,12 @@ function rPlan(){
   $('view').innerHTML=ph('გეგმა და რეალობა',gdFull(tday)+' · '+P.length+' ტვირთი · '+Object.keys(drv).length+' მძღოლი · '+money(gross))+
     "<div class='kpis'>"+
       kpi('ტვირთი ხვალ',P.length,'',money(gross)+' ჯამში')+
-      kpi('ხელით დამატებული',manual.length,manual.length?'w':'','SD-ში სხვა თარიღით')+
-      kpi('თარიღი არ ემთხვევა',mism.length,mism.length?'r':'g','SD-ში გასასწორებელია')+
+      kpi('მძღოლი მიბმული არ არის',noDrv.length,noDrv.length?'r':'g','SD-ში მიაბი')+
+      kpi('მძღოლი გეგმაში',Object.keys(drv).length,'','ხვალინდელ სიაში')+
       kpi('მზაობა — '+gd(prev),(R.ready!=null?R.ready+'%':'—'),(R.ready!=null&&R.ready>=80?'g':'r'),
           (R.orders? (R.lateBooked.length+' ტვირთი საღამოს სიაში არ იყო'):'გაყინული სია არ არის'))+
     "</div>"+
-    "<div class='callout' style='margin-bottom:14px'><span class='b'>i</span><div>ხვალინდელი ტვირთები <b>„ჩემი დაფაზე“</b> ჩანს — იქვეა „ტვირთის დამატება“ და თითოეული ტვირთის მოხსნა. აქ მხოლოდ <b>შედეგია</b>: რა დაპირდა დისპეტჩერი საღამოს და რა მოხდა სინამდვილეში.</div></div>"+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>i</span><div>ხვალინდელ სიას <b>„ჩემი დაფაზე“</b> ავსებ. აქ მხოლოდ <b>შედეგია</b>: რა დაპირდა დისპეტჩერი საღამოს და რა მოხდა სინამდვილეში.</div></div>"+
     "<div class='card p'><h4>"+gdFull(prev)+" — რა მოხდა სინამდვილეში</h4>"+recHtml+
       "<div class='muted' style='font-size:12px;margin-top:10px'>ეს შედარება ავტომატურია და ახსნით არ იშლება. „საღამოს სიაში არ იყო“ ნიშნავს, რომ ტვირთი მეორე დღეს აიღეს — ანუ წინა საღამოს მზად არ იყო.</div></div>";
 }
