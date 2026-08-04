@@ -743,7 +743,7 @@ function waivOk_(kind,subj,day,disp){ var w=waivOf_(kind,subj,day,disp); return 
 
 /* ---- ჩემი დაფა ---- */
 function rBoard(){
-  var L=LIVE||[];
+  var L=myLoads_();          /* ატრიბუციის გარეშე სხვისი ტვირთი აქ არ უნდა შემოვიდეს */
   var tday=ymd_(nextWorkDay_());
   var cutD=addDays_(workToday_(),-30);
   var byName={};
@@ -831,7 +831,7 @@ function rBoard(){
       return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
     }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
-  var CC=(CONTACTS||[]).filter(function(r){ return !r.not_required && callNeeded_(r.order_number); });
+  var CC=(CONTACTS||[]).filter(function(r){ return mineWork_(r) && !r.not_required && callNeeded_(r.order_number); });
   var puOk_=function(r){ return !!(r.pu_missing || r.pu_call || r.pu_sms); };
   var delOk_=function(r){ return !!(r.del_missing || r.del_call || r.del_sms); };
   var callP=CC.filter(function(r){ return !(puOk_(r) && delOk_(r)); })
@@ -1299,7 +1299,8 @@ function boardDrivers_(){
       var p2=function(n){ return String(n).padStart(2,'0'); };
       cut=dd.getFullYear()+'-'+p2(dd.getMonth()+1)+'-'+p2(dd.getDate()); } }
   var drivers=Object.keys(byDrv).map(function(k){ return byDrv[k]; }).filter(function(d){
-    var reg=DRIVERS_BY_NAME[d.name]; if(reg && reg.active===false) return false;
+    if(!driverActive_(d.name)) return false;
+    if(USER && USER.role!=='mgmt'){ var own=dispOfDriver_(d.name); if(own && own!==USER.dispatcher) return false; }
     d.last='';
     d.loads.forEach(function(l){ if(l.pickup_week && l.pickup_week>d.last) d.last=l.pickup_week; });
     return !cut || d.last>=cut;
@@ -1350,7 +1351,7 @@ function rBoardLive(){
 }
 
 function rLive(){
-  var L=LIVE||[];
+  var L=myLoads_();
   function GR(r){ return Number(r.gross != null ? r.gross : r.price) || 0; }
   var gross=L.reduce(function(s,r){ return s+GR(r); },0);
   var st={delivered:0,picked_up:0,new:0}; L.forEach(function(r){ if(st[r.status]!=null) st[r.status]++; });
