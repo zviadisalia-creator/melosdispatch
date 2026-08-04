@@ -644,7 +644,9 @@ function rBoard(){
     return items.slice(0,8).map(function(l){
       var act='';
       if(kind==='bol') act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a><button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>";
-      if(kind==='chk') act="<button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','chk')\">ატვირთულია</button>";
+      if(kind==='chk'){ var a0=actOf_(l.order_number);
+        act=(a0.check_path?("<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(a0.check_path)+"');return false\" style='text-decoration:none;margin-right:6px'>ნახვა</a>"):"")+
+          "<label class='fixbtn' style='cursor:pointer'>ჩეკის ატვირთვა<input type='file' accept='image/*,application/pdf' capture='environment' style='display:none' onchange=\"upCheck('"+encodeURIComponent(l.order_number)+"',this)\"></label>"; }
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
     }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
@@ -723,6 +725,31 @@ async function closeShift(){
     if(res.error) throw res.error;
     SCLOSE=row; toast('ცვლა დახურულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ დაიხურა'); }
+}
+async function upCheck(enc, input){
+  var on=decodeURIComponent(enc);
+  var f=input && input.files && input.files[0];
+  if(!f){ return; }
+  if(f.size > 15*1024*1024){ toast('ფაილი 15MB-ზე დიდია'); return; }
+  toast('იტვირთება…');
+  try{
+    var ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
+    var path=on.replace(/[^A-Za-z0-9_-]/g,'_')+'/'+Date.now()+'.'+ext;
+    var up=await sb.storage.from('checks').upload(path, f, {upsert:true, contentType:f.type||'image/jpeg'});
+    if(up.error) throw up.error;
+    var now=new Date().toISOString();
+    var res=await sb.from('load_actions').upsert({order_number:on, check_path:path, check_uploaded_at:now, check_by:USER.email},{onConflict:'order_number'});
+    if(res.error) throw res.error;
+    await loadActions(); toast('ჩეკი ატვირთულია ✓'); render();
+  }catch(e){ console.error(e); toast('ვერ აიტვირთა — '+(e&&e.message?e.message:'')); }
+}
+async function openCheck(encPath){
+  var p=decodeURIComponent(encPath);
+  try{
+    var r=await sb.storage.from('checks').createSignedUrl(p, 600);
+    if(r.error||!r.data) throw (r.error||new Error('no url'));
+    window.open(r.data.signedUrl,'_blank','noopener');
+  }catch(e){ console.error(e); toast('ვერ გაიხსნა'); }
 }
 async function markAct(enc, kind){
   const o=decodeURIComponent(enc); const now=new Date().toISOString();
@@ -1709,6 +1736,15 @@ function openAR_(){
 var RECVF='broker';
 function setRecvF(v){ RECVF=v; rRecv(); }
 var ONSITE_={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
+/* ჩეკის უჯრა — ატვირთულია თუ არა და ბმული ნახვისთვის */
+function chkCell_(l){
+  var needs=(String(l.payment_terms||'').indexOf('check')>=0);
+  var a=actOf_(l.order_number);
+  if(a.check_path) return "<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(a.check_path)+"');return false\" style='text-decoration:none'>ნახვა</a>";
+  if(a.check_uploaded_at) return "<span class='chip y' title='ძველი ჩანაწერი — მხოლოდ მონიშვნაა, ფაილი არ არის'><span class='dot'></span>მონიშნულია</span>";
+  if(needs) return "<span class='chip r'><span class='dot'></span>არ არის</span>";
+  return "<span class='muted'>—</span>";
+}
 function rRecv(){
   var A=openAR_();
   var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
@@ -1730,6 +1766,7 @@ function rRecv(){
       '<td>'+(l._due?gd(new Date(l._due).toISOString().slice(0,10)):'—')+'</td>'+
       '<td class="num" style="color:'+col(l._late)+';font-weight:'+(l._late>0?750:400)+'">'+(l._late>0?(l._late+' დღე'):'—')+'</td>'+
       '<td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td>'+
+      '<td>'+chkCell_(l)+'</td>'+
       '<td class="num">'+money(Number(l.price)||0)+'</td></tr>';
   }).join('');
   var chip=function(k,l,n){ return '<span class="chip'+(RECVF===k?' g':'')+'" style="cursor:pointer" onclick="setRecvF(\''+k+'\')">'+l+' ('+n+')</span>'; };
@@ -1739,7 +1776,7 @@ function rRecv(){
       kpi('ინვოისი გასაგზავნია',money(sum(noInv)),'w',noInv.length+' ტვირთი','invoices')+
       kpi('ადგილზე ასაღები (cash/check)',money(sum(onsite)),'w',onsite.length+' ტვირთი')+'</div>'+
     '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+chip('broker','ბროკერზე',broker.length)+chip('late','ვადაგადაცილებული',late.length)+chip('noinv','ინვოისის გარეშე',noInv.length)+chip('onsite','ადგილზე (cash/check)',onsite.length)+'</div>'+
-    '<div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th>ჩაბარება</th><th>ინვოისი</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th>ჩაბარება</th><th>ინვოისი</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th>ჩეკი</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი მოდის პირდაპირ Super Dispatch-იდან (paid_at) — ხელით მონიშვნა აღარ სჭირდება. „ადგილზე ასაღები" — cash/check on pickup/delivery: თანხა მძღოლმა ალბათ უკვე აიღო, მაგრამ Super Dispatch-ში გადახდა მონიშნული არ არის; ეს ჩანაწერის დისციპლინაა და არა დავალიანება. ვადა = ინვოისის გაგზავნის დღე (ან ჩაბარება, თუ ინვოისი არ არის) + Terms. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან.</div></div>';
 }
 function rOverdue(){
@@ -1796,7 +1833,7 @@ async function loadLedger(){
   try{ var p=await sb.from('driver_payout').select('*'); DPAY={}; (p.data||[]).forEach(function(x){ DPAY[x.driver_name+'|'+x.week]=x; }); }catch(e){ console.error(e); DPAY={}; }
 }
 var LKIND={advance:{l:'ავანსი / სესხი',s:-1},deduction:{l:'დაქვითვა',s:-1},bonus:{l:'პრემია',s:1},
-  carry:{l:'წინა კვირის ნაშთი',s:-1},tip_dispatcher:{l:'დისპეტჩერს აჩუქა',s:0}};
+  carry:{l:'წინა კვირის ნაშთი',s:-1},tip_dispatcher:{l:'დისპეტჩერს აჩუქა',s:-1}};
 function ledOf_(name,wk){ return DLED.filter(function(x){ return x.driver_name===name && String(x.week)===wk; }); }
 function ledSum_(name,wk){
   return ledOf_(name,wk).reduce(function(a,x){ var k=LKIND[x.kind]||{s:0}; return a + k.s*(Number(x.amount)||0); },0);
@@ -1814,9 +1851,17 @@ async function ledAdd(encName, wk){
   var amt=prompt('თანხა ($):','');
   var a=Number(String(amt||'').replace(/[^0-9.]/g,''));
   if(!isFinite(a)||a<=0){ toast('თანხა ჩაწერე'); return; }
+  var disp=null;
+  if(k==='tip_dispatcher'){
+    var names=Object.keys(DRATES).sort();
+    disp=prompt('რომელ დისპეტჩერს აჩუქა? (ზუსტი სახელი)\n\n'+names.join('\n'),'');
+    disp=String(disp||'').trim();
+    if(!disp){ toast('დისპეტჩერი მიუთითე'); return; }
+    if(names.length && names.indexOf(disp)<0 && !confirm('„'+disp+'" განაკვეთების სიაში არ არის. მაინც შევინახო?')) return;
+  }
   var note=prompt('კომენტარი (რისთვის):','')||'';
   try{
-    var res=await sb.from('driver_ledger').insert({driver_name:name,week:wk,kind:k,amount:a,note:note,created_by:USER.email});
+    var res=await sb.from('driver_ledger').insert({driver_name:name,week:wk,kind:k,amount:a,note:note,dispatcher_name:disp,created_by:USER.email});
     if(res.error) throw res.error;
     await loadLedger(); toast('დაემატა ✓'); rPayroll();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
@@ -1908,7 +1953,7 @@ function rPayroll(){
         (x.tip?("<div class='muted' style='font-size:11px'>ჩუქება "+money(x.tip)+"</div>"):"")+
         ledOf_(x.name,wk).map(function(e){ var k=LKIND[e.kind]||{l:e.kind,s:0};
           return "<div class='muted' style='font-size:11px'>"+esc(k.l)+" "+(k.s<0?'−':(k.s>0?'+':''))+money(Number(e.amount)||0)+
-            (e.note?(" · "+esc(String(e.note).slice(0,28))):"")+
+            (e.dispatcher_name?(" → "+esc(e.dispatcher_name)):"")+(e.note?(" · "+esc(String(e.note).slice(0,28))):"")+
             " <span style='cursor:pointer;color:var(--crit)' onclick=\"ledDel('"+e.id+"')\">✕</span></div>"; }).join('')+
         "<div style='margin-top:3px'><button class='fixbtn' onclick=\"ledAdd('"+encodeURIComponent(x.name)+"','"+wk+"')\">+</button> "+
         "<button class='fixbtn' title='წინა კვირის მინუსის გადმოტანა' onclick=\"carryPrev('"+encodeURIComponent(x.name)+"','"+wk+"')\">↩ ნაშთი</button></div>"+
@@ -2407,6 +2452,13 @@ async function saveDRate(enc, field, value){
     if(MTAB==='disppay') rDispPay();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
+/* დისპეტჩერისთვის მძღოლების ჩუქებები პერიოდში */
+function tipsToDisp_(disp, from, to){
+  return (DLED||[]).filter(function(x){
+    if(x.kind!=='tip_dispatcher' || x.dispatcher_name!==disp) return false;
+    var w=String(x.week||''); return w>=from && w<=to;
+  }).reduce(function(a,x){ return a+(Number(x.amount)||0); },0);
+}
 function dpRows_(from, to){
   var TX=taxes_();
   var A=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=from && d<=to; });
@@ -2428,6 +2480,7 @@ function dpRows_(from, to){
     x.net=(x.npct!=null)? x.gross*x.npct : null;
     x.send=(x.pct!=null)? x.gross*x.pct : null;             // რასაც დღეს გზავნის
     x.reqSend=(x.reqPct!=null)? x.gross*x.reqPct : x.send;  // რაც უნდა გაიგზავნოს
+    x.tips=tipsToDisp_(k, from, to);
     x.gap=(x.reqSend!=null&&x.send!=null)? (x.reqSend-x.send) : null;
     x.tax=(x.reqSend!=null&&x.net!=null)? (x.reqSend-x.net) : null;   // საშემოს. + თანამშრ. საპენსიო
     x.pens=(x.reqSend!=null)? x.reqSend*TX.pr : null;                  // დამსაქმებლის საპენსიო
@@ -2473,7 +2526,8 @@ function rDispPay(){
       "<td class='num'><b>"+money(x.gross)+"</b></td>"+
       "<td class='num'>"+money(x.comm)+"</td>"+
       "<td>"+nin+"</td>"+
-      "<td class='num' style='font-weight:750;color:var(--good)'>"+(x.net!=null?money(x.net):'—')+"</td>"+
+      "<td class='num' style='font-weight:750;color:var(--good)'>"+(x.net!=null?money(x.net):'—')+
+        (x.tips?("<div class='muted' style='font-size:11px;font-weight:400;color:var(--good)'>+ჩუქება "+money(x.tips)+"</div>"):"")+"</td>"+
       "<td>"+pin+"</td>"+
       "<td class='num'>"+(x.reqPct!=null?("<b"+(off?" style='color:var(--crit)'":"")+">"+(Math.round(x.reqPct*1000000)/10000)+"%</b>"):'—')+"</td>"+
       "<td class='num' style='font-weight:750'>"+(x.reqSend!=null?money(x.reqSend):'—')+
