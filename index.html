@@ -776,15 +776,27 @@ function stdLevel_(ratio){
 function shortMi_(){ return sett_('short_miles',350); }
 function loadMiles_(l){ var m=Number(l&&l.miles); return (m>0)?m:0; }
 /* მძღოლი, რომელსაც მანქანა უკვე აყვანილი აქვს და ხვალ ჯერ კიდევ გზაშია */
-function transitMi_(){ return sett_('transit_miles',1000); }
+function transitMi_(){ return sett_('transit_miles_per_day',1000); }
+/* რომელ დღეს თავისუფლდება მძღოლი: SD-ის ჩაბარების თარიღი, ან — თუ არ წერია —
+   აღების დღეს + მილები/დღეში (ნაგულისხმევი 1000 მილი დღეში).
+   მაგ. 1407 მილი, აღება 4 აგვ → 2 დღე გზა → 6 აგვისტოს აბარებს, ე.ი. იმ დღეს
+   უკვე თავისუფალია და ტვირთი სჭირდება. */
+function freeDay_(l){
+  var pu=String(l.pickup_completed||l.pickup_scheduled||'').slice(0,10);
+  var mi=Number(l.miles)||0;
+  /* მილები — ობიექტური და ხელით ვერ შეიცვლება; SD-ის ჩაბარების თარიღი ხშირად
+     მოძველებულია, ამიტომ ის მხოლოდ მაშინ, თუ მილები არ ვიცით */
+  if(pu && mi) return addDays_(pu, Math.max(1, Math.ceil(mi/transitMi_())));
+  return String(l.delivery_scheduled||'').slice(0,10);
+}
 function inTransit_(name, tday){
   var L=LIVE||[];
   for(var i=0;i<L.length;i++){
     var l=L[i];
     if(l.driver_name!==name || l.status!=='picked_up' || l.delivery_completed) continue;
-    var dl=String(l.delivery_scheduled||'').slice(0,10);
-    var mi=Number(l.miles)||0;
-    if((dl && dl>=tday) || mi>=transitMi_()) return {l:l, dl:dl, mi:mi};
+    var fd=freeDay_(l);
+    /* დაფარულია მხოლოდ მაშინ, თუ იმ დღეს ჯერ კიდევ გზაშია — ჩაბარების დღეს არა */
+    if(fd && fd>tday) return {l:l, dl:fd, mi:Number(l.miles)||0};
   }
   return null;
 }
@@ -796,7 +808,7 @@ function driverStd_(name, day){
   if(!n){
     var tr=inTransit_(name, ymd_(nextWorkDay_()));
     if(tr) return {ok:true,lvl:'g',cap:cap,tgt:tgt,gross:0,cars:0,transit:true,
-      reason:'გზაშია — '+(tr.dl?(gd(tr.dl)+'-ს აბარებს'):(Math.round(tr.mi)+' მილიანი რეისი'))+' · ხვალინდელი ტვირთი არ სჭირდება'};
+      reason:'გზაშია'+(tr.mi?(' — '+Math.round(tr.mi)+' მილიანი რეისი'):'')+(tr.dl?(' · თავისუფლდება '+gd(tr.dl)):'')+' · '+gdFull(ymd_(nextWorkDay_()))+'-ს ტვირთი არ სჭირდება'};
   }
   var gross=day.reduce(function(s,l){ return s+grossOf_(l); },0);
   var cars=day.reduce(function(s,l){ return s+cars_(l); },0);
@@ -931,7 +943,8 @@ function rBoard(){
     if(lvl==='n'){ cnt.n++; } else { cnt[lvl]++; }
     if(lvl==='r') gaps.push(d.name);
     var ok=st.ok||waivOk_('standard',d.name,tday);
-    var reason=st.reason;
+    /* ტვირთი რომ არ არის, ზემოთ უკვე წერია — ქვემოთ იმავეს გამეორება ზედმეტია */
+    var reason=(day.length||st.transit)?st.reason:'';
     var ll=day.slice(0,3).map(function(l){
       var pm=(Number(l.miles)>0)? (' · $'+(grossOf_(l)/Number(l.miles)).toFixed(2)+'/მი') : '';
       var dd=delDay_(l);
@@ -945,9 +958,9 @@ function rBoard(){
     var cov=coverOf_(d.name,tday);
     var covChip=(cov&&cov.dispatcher_name===MYD())?" <span class='chip y' style='padding:0 6px;font-size:10px'>დროებით ჩემთან</span>":"";
     return "<div class='driver'><div class='cap'>"+cap+"</div>"+
-      "<div><div class='nm'>"+esc(d.name)+covChip+"</div><div class='meta'>"+cap+"-მანქ. · "+(cap>=2?('სრული მარშრუტი '+cap+' მანქანა'):('მოკლე ≤'+shortMi_()+' მილი'))+(tgt?(' · გეგმა '+money(tgt)+'/დღე'):'')+"</div></div>"+
-      "<div class='lw'><div class='loadline'>"+(ll||"<span class='load'>ტვირთი არ არის</span>")+"</div>"+
-        "<div class='reason'"+(lvl==='g'?" style='color:var(--good)'":"")+">"+reason+"</div>"+act+"</div>"+
+      "<div><div class='nm'>"+esc(d.name)+covChip+"</div><div class='meta'>"+cap+"-მანქანიანი"+(tgt?(' · გეგმა '+money(tgt)+'/დღე'):'')+"</div></div>"+
+      "<div class='lw'><div class='loadline'>"+(ll||"<span class='load'>ტვირთი არ აქვს SD-ზე მიმაგრებული მძღოლს</span>")+"</div>"+
+        (reason?("<div class='reason'"+(lvl==='g'?" style='color:var(--good)'":"")+">"+reason+"</div>"):'')+act+"</div>"+
       "<div class='st'><span class='chip "+(ok?'g':lvl)+"'><span class='dot'></span>"+
         (ok?'დასრულებული':({y:'ნაკლები',r:'ვერ ავსებს',n:'სამიზნე არ არის'}[lvl]))+"</span></div></div>";
   }).join('');
@@ -1022,7 +1035,7 @@ function rBoard(){
     .map(function(t){ return "<span class='chip "+t[0]+"'><span class='dot'></span>"+cnt[t[0]]+" "+t[1]+"</span>"; }).join('');
   var pend=Object.keys(WAIV).filter(function(k){ return WAIV[k].status==='pending' && WAIV[k].work_day===tday; }).length;
 
-  $('view').innerHTML=ph('ჩემი დაფა',esc(MYD()||USER.name||'')+' · '+list.length+' აქტიური მძღოლი'+(resting.length?(' · '+resting.length+' ისვენებს'):'')+' · '+gdFull(tday)+'-ის სტანდარტი')+
+  $('view').innerHTML=ph('ჩემი დაფა',esc(MYD()||USER.name||'')+' · '+list.length+' აქტიური მძღოლი'+(resting.length?(' · '+resting.length+' ისვენებს'):'')+' · '+gdFull(tday))+
     "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
       (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
       (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
@@ -1050,7 +1063,7 @@ function rBoard(){
       "</div></div>"+
     "<div class='callout' style='margin-top:14px'><span class='b'>i</span><div><b>სამუშაო დასრულებულია, თუ ოთხივე პირობა სრულდება:</b> ტვირთები სტანდარტზეა · ფიქაფზეც და დელივერზეც დარეკილია · სადაც საჭირო იყო, ინვოისი და BOL გაგზავნილია · ჩეკი ატვირთულია. "+
       "<b>ხვალინდელ სიას თვითონ ავსებ</b> — მოძებნე Order ID-ით და დაამატე; ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
-      "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და ხვალ ჯერ კიდევ გზაშია</b> (ჩაბარება ხვალ ან მოგვიანებით, ან რეისი ≥"+transitMi_()+" მილი) — ხვალინდელი ტვირთი არ მოეთხოვება. "+
+      "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და იმ დღეს ჯერ კიდევ გზაშია</b> — ტვირთი არ მოეთხოვება. თავისუფლდება იმ დღეს, როცა აბარებს: SD-ის ჩაბარების თარიღით, ან თუ არ წერია — აღების დღეს + "+transitMi_()+" მილი დღეში (მაგ. 1 400 მილი 4 რიცხვში აღებული → 6 რიცხვში აბარებს, ე.ი. იმ დღეს ტვირთი <b>სჭირდება</b>). "+
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
       "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
@@ -1393,7 +1406,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable').is('deleted_at', null).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable').is('deleted_at', null).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
