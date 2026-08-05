@@ -177,8 +177,13 @@
       <button id="rDisp" class="on" onclick="setRole('disp')">დისპეტჩერი</button>
       <button id="rMgmt" onclick="setRole('mgmt')">მენეჯმენტი</button>
     </div>
+    <select id="viewas" onchange="enterViewAs(this.value)" style="display:none;border:1px solid var(--border);background:var(--page);color:var(--ink);border-radius:999px;padding:6px 10px;font-weight:620;font-size:12.5px;max-width:230px"></select>
     <button class="iconbtn" onclick="toggleTheme()">◐</button>
     <div class="who"><div class="ava" id="uav">ა</div><div class="txwrap"><div class="nm" id="unm">ანი ქომეთიანი</div><div class="rl" id="url">დისპეტჩერი</div></div></div>
+  </div>
+  <div id="vaBar" style="display:none;background:#b45309;color:#fff;padding:7px 16px;font-size:12.5px;font-weight:640;display:none">
+    <span id="vaTxt"></span>
+    <button onclick="enterViewAs('')" style="margin-left:12px;border:0;background:rgba(255,255,255,.22);color:#fff;border-radius:7px;padding:3px 10px;font-weight:700;cursor:pointer">დაბრუნება მენეჯმენტში</button>
   </div>
   <div class="tabs" id="tabsDisp"></div>
   <div class="tabs hidden" id="tabsMgmt"></div>
@@ -193,6 +198,16 @@ const sb = window.supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage: window.localStorage }
 });
 let USER = null;            // {email,name,role:'mgmt'|'disp',dispatcher,quality}
+/* ---- „დისპეტჩერის ხედით ყურება" (act-as) ----
+   მხოლოდ SUPERADMIN-ს უჩანს. ჩართვისას აპლიკაცია იქცევა ისე, თითქოს არჩეული
+   დისპეტჩერი შემოვიდა — მათ შორის ჩაწერებიც მის სახელზე მიდის, ხოლო
+   created_by / closed_by / requested_by რჩება ნამდვილი (ვინც გააკეთა). */
+const SUPERADMIN = ['zviadisalia@gmail.com'];
+let VIEWAS = null;          // დისპეტჩერის სახელი, ვისი ხედითაც ვუყურებთ
+let DISPLIST = [];          // allowlist-ის აქტიური დისპეტჩერები
+function isSuper(){ return !!(USER && SUPERADMIN.indexOf((USER.email||'').toLowerCase())>=0); }
+function MYD(){ return VIEWAS || (USER && USER.dispatcher) || ''; }
+function isMgmtView(){ return !!(USER && USER.role==='mgmt' && !VIEWAS); }
 let RECV = {};             // received marks by order id
 let ODRECV = {};           // overdue received marks
 let DRIVERS_BY_NAME = {};
@@ -354,7 +369,7 @@ async function offSet(encName){
   if(why===null) return;
   if(String(why).trim().length<3){ toast('მიზეზი ჩაწერე'); return; }
   try{
-    await assignSave({driver_name:name, dispatcher_name:USER.dispatcher, kind:'off',
+    await assignSave({driver_name:name, dispatcher_name:MYD(), kind:'off',
       from_day:workToday_(), to_day:(to||null), reason:String(why).trim(), created_by:USER.email});
     toast('მონიშნულია — ისვენებს ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
@@ -407,7 +422,7 @@ async function coverTake(encName){
   if(why===null) return;
   if(String(why).trim().length<3){ toast('მიზეზი ჩაწერე'); return; }
   try{
-    await assignSave({driver_name:name,dispatcher_name:USER.dispatcher,kind:'cover',
+    await assignSave({driver_name:name,dispatcher_name:MYD(),kind:'cover',
       from_day:workToday_(), to_day:(to||null), reason:String(why).trim(), created_by:USER.email});
     toast('გადმობარებულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
@@ -435,7 +450,7 @@ function covRes_(){
   var names=Object.keys(seen).filter(function(n){
     if(!driverActive_(n)) return false;
     if(offOf_(n,day)) return false;
-    if(dispOfDriver_(n,day)===USER.dispatcher) return false;
+    if(dispOfDriver_(n,day)===MYD()) return false;
     return n.toLowerCase().indexOf(q)>=0;
   }).sort().slice(0,12);
   if(!names.length) return "<div class='muted' style='font-size:12px;margin-top:8px'>ვერაფერი მოიძებნა</div>";
@@ -448,10 +463,10 @@ function covRes_(){
 }
 function coverBox_(){
   var day=workToday_();
-  var mine=DASG.filter(function(p){ return p.kind==='cover' && p.dispatcher_name===USER.dispatcher
+  var mine=DASG.filter(function(p){ return p.kind==='cover' && p.dispatcher_name===MYD()
     && (!p.to_day || p.to_day>=day); });
-  var away=DASG.filter(function(p){ return p.kind==='cover' && p.dispatcher_name!==USER.dispatcher
-    && (!p.to_day || p.to_day>=day) && (permOf_(p.driver_name)||{}).dispatcher_name===USER.dispatcher; });
+  var away=DASG.filter(function(p){ return p.kind==='cover' && p.dispatcher_name!==MYD()
+    && (!p.to_day || p.to_day>=day) && (permOf_(p.driver_name)||{}).dispatcher_name===MYD(); });
   var mineHtml=mine.map(function(p){
     return "<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)'>"+
       "<div><b>"+esc(p.driver_name)+"</b> <span class='muted' style='font-size:11.5px'>"+esc(p.reason||'')+
@@ -555,6 +570,7 @@ async function loadData(){
     await loadAssign();
     await loadPlanContacts();
     await loadLedger();
+    await loadDispatchers();
   } else {
     await loadLiveLoads();   // RLS scopes loads to this dispatcher only
     const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
@@ -571,6 +587,41 @@ async function loadData(){
     await loadClose();
   }
 }
+async function loadDispatchers(){
+  try{ var r=await sb.from('access_allowlist').select('dispatcher_name,role,active').eq('active',true);
+    DISPLIST=(r.data||[]).filter(function(x){ return x.role==='dispatcher'; })
+      .map(function(x){ return x.dispatcher_name; })
+      .filter(function(v,i,a){ return v && a.indexOf(v)===i; })
+      .sort(function(a,b){ return a.localeCompare(b,'ka'); });
+  }catch(e){ console.error(e); DISPLIST=[]; }
+  buildViewAs();
+}
+function buildViewAs(){
+  var el=document.getElementById('viewas'); if(!el) return;
+  if(!isSuper() || !USER || USER.role!=='mgmt' || !DISPLIST.length){ el.style.display='none'; return; }
+  el.innerHTML='<option value="">👁 დისპეტჩერის ხედი…</option>'+
+    DISPLIST.map(function(n){ return '<option value="'+esc(n)+'"'+(VIEWAS===n?' selected':'')+'>'+esc(n)+'</option>'; }).join('');
+  el.style.display='';
+}
+/* ხედის გადართვა — მონაცემები უკვე ჩატვირთულია (მენეჯმენტი ყველაფერს ხედავს),
+   ცალკე მხოლოდ ცვლის დახურვის სტრიქონი იკითხება არჩეულ დისპეტჩერზე. */
+async function enterViewAs(name){
+  if(!isSuper() || !USER || USER.role!=='mgmt') return;
+  name=(name||'').trim();
+  VIEWAS = name || null;
+  MYCS=null; MYCS_LOADING=false;            /* ზარების სტატისტიკა თავიდან */
+  var bar=document.getElementById('vaBar'), tx=document.getElementById('vaTxt');
+  if(VIEWAS){
+    try{ await loadClose(); }catch(e){ console.error(e); }
+    if(bar){ bar.style.display='block'; }
+    if(tx){ tx.textContent='⚠ ხედავ და მოქმედებ '+VIEWAS+'-ის სახელით. ყველა ცვლილება მის ანგარიშზე აისახება (ჩანაწერში რჩება, რომ შენ გააკეთე).'; }
+  } else {
+    SCLOSE=null;
+    if(bar){ bar.style.display='none'; }
+  }
+  buildViewAs();
+  setRole(VIEWAS?'disp':'mgmt');
+}
 async function loadSettingsOnly(){
   try{ var s=await sb.from('app_settings').select('*');
     SETT={}; (s.data||[]).forEach(function(x){ if(x.num_value!=null) SETT[x.key]=Number(x.num_value); });
@@ -582,6 +633,7 @@ function startApp(){
   document.getElementById('app').classList.remove('hidden');
   buildTabs();
   document.getElementById('rolepill').style.display='none';   // role fixed by allowlist
+  buildViewAs();
   setRole(USER.role==='mgmt'?'mgmt':'disp');
 }
 function toast(msg){
@@ -640,8 +692,8 @@ function setRole(r){
   ROLE=r;
   $('rDisp').classList.toggle('on',r==='disp'); $('rMgmt').classList.toggle('on',r==='mgmt');
   $('tabsDisp').classList.toggle('hidden',r!=='disp'); $('tabsMgmt').classList.toggle('hidden',r!=='mgmt');
-  const nm=(USER&&USER.name)||''; const av=(nm||'•').trim().charAt(0)||'•';
-  if(r==='disp'){ $('uav').textContent=av; $('unm').textContent=nm; $('url').textContent='დისპეტჩერი'; TAB='board'; render(); }
+  const nm=VIEWAS||((USER&&USER.name)||''); const av=(nm||'•').trim().charAt(0)||'•';
+  if(r==='disp'){ $('uav').textContent=av; $('unm').textContent=nm; $('url').textContent=VIEWAS?'დისპეტჩერი (მენეჯმენტის ხედით)':'დისპეტჩერი'; TAB='board'; render(); }
   else { $('uav').textContent=av; $('unm').textContent=nm; $('url').textContent='მენეჯმენტი'; MTAB='overview'; render(); }
   const box=(r==='disp'?$('tabsDisp'):$('tabsMgmt')); box.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('on',i===0));
 }
@@ -703,7 +755,7 @@ async function loadWaivers(){
     WAIV={}; (r.data||[]).forEach(function(w){ WAIV[wkey_(w.dispatcher_name,w.work_day,w.kind,w.order_number)]=w; });
   }catch(e){ console.error(e); WAIV={}; }
 }
-function waivOf_(kind,subj,day,disp){ return WAIV[wkey_(disp||(USER&&USER.dispatcher)||'',day,kind,subj||'')]||null; }
+function waivOf_(kind,subj,day,disp){ return WAIV[wkey_(disp||(USER&&MYD())||'',day,kind,subj||'')]||null; }
 function marketFactor_(){ return sett_('market_factor',1); }
 function dayTarget_(driverName){
   var reg=DRIVERS_BY_NAME[driverName]||{};
@@ -799,7 +851,7 @@ async function waivSend(kind, encSubj){
   var txt=(document.getElementById('_wtxt')||{}).value||'';
   if(txt.trim().length<10){ toast('მიზეზი უფრო დეტალურად დაწერე'); return; }
   var day=ymd_(nextWorkDay_());
-  var row={order_number:subj||null, dispatcher_name:USER.dispatcher, work_day:day, kind:kind,
+  var row={order_number:subj||null, dispatcher_name:MYD(), work_day:day, kind:kind,
            reason:txt.trim(), status:'pending', requested_at:new Date().toISOString(), requested_by:USER.email,
            decided_at:null, decided_by:null, decision_note:null};
   try{
@@ -850,13 +902,13 @@ function rBoard(){
   DIR.forEach(function(x){ rost[x.name]=1; });
   DASG.forEach(function(p){ rost[p.driver_name]=1; });
   Object.keys(rost).forEach(function(n){
-    if(dispOfDriver_(n,tday)!==USER.dispatcher) return;
+    if(dispOfDriver_(n,tday)!==MYD()) return;
     if(!byName[n]) byName[n]={name:n,loads:[],last:''};
   });
   var list=Object.keys(byName).map(function(k){ return byName[k]; })
     .filter(function(d){ return driverActive_(d.name); })                                  /* SD-ში გამორთული — არ ჩანს */
-    .filter(function(d){ var own=dispOfDriver_(d.name,tday); return !own || own===USER.dispatcher; })  /* სხვისი მძღოლი — არ ჩანს */
-    .filter(function(d){ return d.last>=cutD || dispOfDriver_(d.name,tday)===USER.dispatcher; })
+    .filter(function(d){ var own=dispOfDriver_(d.name,tday); return !own || own===MYD(); })  /* სხვისი მძღოლი — არ ჩანს */
+    .filter(function(d){ return d.last>=cutD || dispOfDriver_(d.name,tday)===MYD(); })
     .sort(function(a,b){ return a.name.localeCompare(b.name); });
 
   var resting=list.filter(function(d){ return !!offOf_(d.name,tday); });
@@ -891,7 +943,7 @@ function rBoard(){
     var restBtn="<button class='fixbtn' onclick=\"offSet('"+encodeURIComponent(d.name)+"')\">მძღოლი ისვენებს</button>";
     var act="<div style='margin-top:6px'>"+((lvl==='g'||tgt==null)?'':(waivChip_('standard',d.name,d.name+' — '+reason,tday)+' '))+restBtn+"</div>";
     var cov=coverOf_(d.name,tday);
-    var covChip=(cov&&cov.dispatcher_name===USER.dispatcher)?" <span class='chip y' style='padding:0 6px;font-size:10px'>დროებით ჩემთან</span>":"";
+    var covChip=(cov&&cov.dispatcher_name===MYD())?" <span class='chip y' style='padding:0 6px;font-size:10px'>დროებით ჩემთან</span>":"";
     return "<div class='driver'><div class='cap'>"+cap+"</div>"+
       "<div><div class='nm'>"+esc(d.name)+covChip+"</div><div class='meta'>"+cap+"-მანქ. · "+(cap>=2?('სრული მარშრუტი '+cap+' მანქანა'):('მოკლე ≤'+shortMi_()+' მილი'))+(tgt?(' · გეგმა '+money(tgt)+'/დღე'):'')+"</div></div>"+
       "<div class='lw'><div class='loadline'>"+(ll||"<span class='load'>ტვირთი არ არის</span>")+"</div>"+
@@ -1005,14 +1057,14 @@ function rBoard(){
 }
 var SCLOSE=null;
 async function loadClose(){
-  try{ var r=await sb.from('shift_close').select('*').eq('work_day', ymd_(nextWorkDay_())).maybeSingle();
+  try{ var r=await sb.from('shift_close').select('*').eq('work_day', ymd_(nextWorkDay_())).eq('dispatcher_name', MYD()).maybeSingle();
     SCLOSE=r.data||null; }catch(e){ console.error(e); SCLOSE=null; }
 }
 async function closeShift(){
   try{
     var day=ymd_(nextWorkDay_());
     var frozen=planLoads_(day).map(function(l){ return l.order_number; });
-    var row={dispatcher_name:USER.dispatcher, work_day:day, closed_at:new Date().toISOString(), closed_by:USER.email,
+    var row={dispatcher_name:MYD(), work_day:day, closed_at:new Date().toISOString(), closed_by:USER.email,
              gates:{ok:true, orders:frozen, count:frozen.length,
                     gross:planLoads_(day).reduce(function(s,l){ return s+grossOf_(l); },0)}};
     var res=await sb.from('shift_close').upsert(row,{onConflict:'dispatcher_name,work_day'});
@@ -1122,14 +1174,16 @@ function fixGate(b){const g=b.closest('.gate');g.classList.remove('no');g.classL
   else{c.innerHTML='<span class="dot"></span>'+rem+' დარჩენილი';}
 }
 /* ---- ჩემი პროფილი — ცოცხლად (SD loads + Quo), snapshot-ის გარეშე ---- */
-var MYCS=null, MYCS_LOADING=false;
+var MYCS=null, MYCS_LOADING=false, MYCS_ERR=false;
 function myLoadCalls_(){
   if(MYCS!==null || MYCS_LOADING) return;
-  MYCS_LOADING=true;
+  MYCS_LOADING=true; MYCS_ERR=false;
   var to=new Date(), from=new Date(Date.now()-30*864e5);
   sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
-    MYCS=r.data||[]; MYCS_LOADING=false; if(ROLE==='disp' && TAB==='profile') rProfile();
-  },function(e){ console.error(e); MYCS=[]; MYCS_LOADING=false; if(ROLE==='disp' && TAB==='profile') rProfile(); });
+    if(r && r.error){ console.error(r.error); MYCS=[]; MYCS_ERR=true; }
+    else { MYCS=r.data||[]; }
+    MYCS_LOADING=false; if(ROLE==='disp' && TAB==='profile') rProfile();
+  },function(e){ console.error(e); MYCS=[]; MYCS_ERR=true; MYCS_LOADING=false; if(ROLE==='disp' && TAB==='profile') rProfile(); });
 }
 function rProfile(){
   var L=myLoads_(), today=ymd_(new Date());
@@ -1153,8 +1207,9 @@ function rProfile(){
   var invOk=invNeed.filter(function(l){ return l.invoice_sent_at; }).length;
   var invPct=invNeed.length?Math.round(invOk/invNeed.length*100):100;
   myLoadCalls_();
-  var cReady=(MYCS!==null), callN=0, callOk=0;
-  if(cReady){ (MYCS||[]).forEach(function(x){ callN+=Number(x.n_loads)||0; callOk+=Number(x.both_ok)||0; }); }
+  var cReady=(MYCS!==null && !MYCS_ERR), callN=0, callOk=0;
+  if(cReady){ (MYCS||[]).filter(function(x){ return !x.dispatcher || x.dispatcher===MYD(); })
+    .forEach(function(x){ callN+=Number(x.n_loads)||0; callOk+=Number(x.both_ok)||0; }); }
   var callPct=callN?Math.round(callOk/callN*100):0;
   var q=cReady? Math.round(callPct*0.5+invPct*0.3+asgPct*0.2) : null;
   var cc=function(p){ return p>=70?'var(--good)':p>=45?'var(--warn)':'var(--crit)'; };
@@ -1377,9 +1432,9 @@ function drvName_(l){ return (l&&l.driver_name)||''; }
    მხოლოდ ისინი უნდა შემოვიდეს, ვისიც მართლა არის: ან პირდაპირ მიწერია,
    ან მძღოლი ჩემია. მიუბმელი ტვირთი არავის Work Log-ში არ ჯდება. */
 function mineWork_(l){
-  if(!USER || USER.role==='mgmt') return true;
-  if(l.dispatcher_name) return l.dispatcher_name===USER.dispatcher;
-  return !!(l.driver_name && dispOfDriver_(l.driver_name)===USER.dispatcher);
+  if(!USER || isMgmtView()) return true;
+  if(l.dispatcher_name) return l.dispatcher_name===MYD();
+  return !!(l.driver_name && dispOfDriver_(l.driver_name)===MYD());
 }
 function myLoads_(){ return (LIVE||[]).filter(mineWork_); }
 
@@ -1403,7 +1458,7 @@ function boardDrivers_(){
       cut=dd.getFullYear()+'-'+p2(dd.getMonth()+1)+'-'+p2(dd.getDate()); } }
   var drivers=Object.keys(byDrv).map(function(k){ return byDrv[k]; }).filter(function(d){
     if(!driverActive_(d.name)) return false;
-    if(USER && USER.role!=='mgmt'){ var own=dispOfDriver_(d.name); if(own && own!==USER.dispatcher) return false; }
+    if(USER && !isMgmtView()){ var own=dispOfDriver_(d.name); if(own && own!==MYD()) return false; }
     d.last='';
     d.loads.forEach(function(l){ if(l.pickup_week && l.pickup_week>d.last) d.last=l.pickup_week; });
     return !cut || d.last>=cut;
@@ -2525,14 +2580,14 @@ async function loadPlan(){
     DPLAN=r.data||[]; }catch(e){ console.error(e); DPLAN=[]; }
 }
 function planRows_(day, disp){
-  var d=disp||(USER&&USER.dispatcher)||'';
+  var d=disp||(USER&&MYD())||'';
   return DPLAN.filter(function(p){ return p.work_day===day && (!d || p.dispatcher_name===d); });
 }
 /* დღის ტვირთები = SD-ის თარიღით ავტომატური, მინუს მოხსნილი, პლუს ხელით დამატებული */
 /* ხვალინდელი სია = მხოლოდ ის, რაც დისპეტჩერმა თვითონ აირჩია.
    SD-ის აღების თარიღი აღარაა წყარო — ის ხშირად მოძველებულია. */
 function planLoads_(day, disp){
-  var d=disp||(USER&&USER.dispatcher)||'';
+  var d=disp||(USER&&MYD())||'';
   var added={};
   planRows_(day,d).forEach(function(p){ if(p.action!=='remove') added[p.order_number]=p; });
   var byOn={}; (LIVE||[]).forEach(function(l){ byOn[l.order_number]=l; });
@@ -2639,7 +2694,7 @@ async function planAdd(enc, action){
   if(why===null) return;
   if(String(why).trim().length<5){ toast('მიზეზი ჩაწერე'); return; }
   try{
-    var row={dispatcher_name:USER.dispatcher, work_day:day, order_number:on, action:action,
+    var row={dispatcher_name:MYD(), work_day:day, order_number:on, action:action,
              reason:String(why).trim(), driver_name:(l?l.driver_name:null),
              sd_pickup_date:(l?puDay_(l):null), created_by:USER.email, created_at:new Date().toISOString()};
     var res=await sb.from('day_plan').upsert(row,{onConflict:'dispatcher_name,work_day,order_number'});
@@ -2690,7 +2745,7 @@ function rPlan(){
   var noDrv=P.filter(function(l){ return !drvName_(l); });
   /* გუშინდელის (ან ბოლო დახურული დღის) შედარება */
   var prev=addDays_(tday,-1); if(new Date(prev+'T12:00:00Z').getUTCDay()===0) prev=addDays_(prev,-1);
-  var R=reconcile_(prev, USER.dispatcher);
+  var R=reconcile_(prev, MYD());
   var stLab={ok:'აიღეს',late:'გადაიწია',nopickup:'არ აიღეს',canceled:'გაუქმდა'};
   var stCol={ok:'var(--good)',late:'var(--warn)',nopickup:'var(--crit)',canceled:'var(--crit)'};
   var recHtml = !R.orders
