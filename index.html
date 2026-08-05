@@ -1022,7 +1022,7 @@ function rBoard(){
     .map(function(t){ return "<span class='chip "+t[0]+"'><span class='dot'></span>"+cnt[t[0]]+" "+t[1]+"</span>"; }).join('');
   var pend=Object.keys(WAIV).filter(function(k){ return WAIV[k].status==='pending' && WAIV[k].work_day===tday; }).length;
 
-  $('view').innerHTML=ph('ჩემი დაფა',esc(USER.name||'')+' · '+list.length+' აქტიური მძღოლი'+(resting.length?(' · '+resting.length+' ისვენებს'):'')+' · '+gdFull(tday)+'-ის სტანდარტი')+
+  $('view').innerHTML=ph('ჩემი დაფა',esc(MYD()||USER.name||'')+' · '+list.length+' აქტიური მძღოლი'+(resting.length?(' · '+resting.length+' ისვენებს'):'')+' · '+gdFull(tday)+'-ის სტანდარტი')+
     "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
       (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
       (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
@@ -1220,7 +1220,7 @@ function rProfile(){
       "<div class='track'><i style='width:"+Math.round(w.g/mx*100)+"%;background:"+(w.mo===thisMon?'var(--warn)':'var(--brand)')+"'></i></div></div>";
   }).join('');
   var openInv=L.filter(function(l){ return l.delivery_completed && invNeeded_(l) && !l.invoice_sent_at && !l.paid_at; });
-  $('view').innerHTML=ph('ჩემი პროფილი — Scorecard',esc(USER.name||'')+' · ბოლო 8 კვირა · ცოცხალი მონაცემი')+
+  $('view').innerHTML=ph('ჩემი პროფილი — Scorecard',esc(MYD()||USER.name||'')+' · ბოლო 8 კვირა · ცოცხალი მონაცემი')+
     "<div class='kpis'>"+
       kpi('ტვირთი — 30 დღე',R30.length,'',Object.keys(drv30).length+' მძღოლი')+
       kpi('გროსი — 30 დღე',money(g30),'',money(g30/4.33)+' / კვირაში')+
@@ -1360,7 +1360,7 @@ function rWorklog(){
         '<span style="margin-left:auto;font-weight:750;font-size:15px">'+money(wkGross)+'</span></div>'+
       '<div id="wb'+wi+'" style="'+(open?'':'display:none')+'">'+driverBlocks+'</div></div>';
   }).join('');
-  $('view').innerHTML=ph('ჩემი Work Log',esc(USER.name||'')+' · '+wk.length+' კვირა · '+money(grand))+
+  $('view').innerHTML=ph('ჩემი Work Log',esc(MYD()||USER.name||'')+' · '+wk.length+' კვირა · '+money(grand))+
     (sections||'<div class="card p"><div class="muted">ტვირთი ჯერ არ არის</div></div>')+
     '<div class="callout" style="margin-top:6px"><span class="b">i</span><div>ტვირთი Work Log-ში ჩნდება <b>მხოლოდ მაშინ, როცა მანქანა SD-ში picked up-ში გადადის</b> — და იმ დღეს ჯდება, როცა რეალურად აიყვანეს. ასე დაქენსელებული ან გადაწეული ტვირთი აქ საერთოდ არ შემოდის და თანმიმდევრობაც ზუსტია.'+
       (waiting?(' <b>'+waiting+'</b> ტვირთი აღებულია, მაგრამ ჯერ არ აუყვანიათ — ისინი „ჩემი დაფაზე“ ჩანს.'):'')+
