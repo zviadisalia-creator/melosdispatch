@@ -366,18 +366,34 @@ function offOf_(name, day){
     && (!p.from_day || p.from_day<=day) && (!p.to_day || p.to_day>=day); });
   return a.length? a[a.length-1] : null;
 }
-async function offSet(encName){
+function offSet(encName){
   var name=decodeURIComponent(encName);
-  var to=prompt('რომელი რიცხვის ჩათვლით ისვენებს '+name+'? (წწწწ-თთ-რრ, ცარიელი = ვადის გარეშე)', addDays_(workToday_(),7));
-  if(to===null) return;
-  to=String(to).trim();
-  if(to && !/^\d{4}-\d{2}-\d{2}$/.test(to)){ toast('თარიღი ასე ჩაწერე: 2026-08-11'); return; }
-  var why=prompt('მიზეზი (მენეჯმენტი დაინახავს):','შვებულება');
-  if(why===null) return;
-  if(String(why).trim().length<3){ toast('მიზეზი ჩაწერე'); return; }
+  var box=document.getElementById('_off');
+  if(!box){ box=document.createElement('div'); box.id='_off';
+    box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px';
+    document.body.appendChild(box); }
+  box.innerHTML="<div class='card p' style='max-width:480px;width:100%'>"+
+    "<h4 style='margin-bottom:6px'>მძღოლი ისვენებს</h4>"+
+    "<div class='muted' style='font-size:12px;margin-bottom:12px'>"+esc(name)+" — დასვენების პერიოდში დღიურ სტანდარტში არ ითვლება.</div>"+
+    "<div style='font-size:12px;font-weight:640;margin-bottom:4px'>რომელი რიცხვის ჩათვლით</div>"+
+    "<input id='_offTo' type='date' value='"+addDays_(workToday_(),7)+"' style='width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--page);color:var(--ink)'>"+
+    "<div style='font-size:12px;font-weight:640;margin:12px 0 4px'>მიზეზი <span class='muted' style='font-weight:500'>— მენეჯმენტი დაინახავს</span></div>"+
+    "<input id='_offWhy' value='შვებულება' style='width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--page);color:var(--ink)'>"+
+    "<div style='display:flex;gap:8px;margin-top:14px;justify-content:flex-end'>"+
+      "<button class='fixbtn' onclick=\"document.getElementById('_off').remove()\">დახურვა</button>"+
+      "<button class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"offSend('"+encodeURIComponent(name)+"')\">შენახვა</button>"+
+    "</div></div>";
+}
+async function offSend(encName){
+  var name=decodeURIComponent(encName);
+  var to=String((document.getElementById('_offTo')||{}).value||'').trim();
+  var why=String((document.getElementById('_offWhy')||{}).value||'').trim();
+  if(to && !/^\d{4}-\d{2}-\d{2}$/.test(to)){ toast('თარიღი აირჩიე'); return; }
+  if(why.length<3){ toast('მიზეზი ჩაწერე'); return; }
   try{
     await assignSave({driver_name:name, dispatcher_name:MYD(), kind:'off',
-      from_day:workToday_(), to_day:(to||null), reason:String(why).trim(), created_by:USER.email});
+      from_day:workToday_(), to_day:(to||null), reason:why, created_by:USER.email});
+    var b=document.getElementById('_off'); if(b) b.remove();
     toast('მონიშნულია — ისვენებს ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
@@ -577,6 +593,7 @@ async function loadData(){
     await loadAssign();
     await loadPlanContacts();
     await loadLedger();
+    await loadWeekRoster();
     await loadDispatchers();
   } else {
     await loadLiveLoads();   // RLS scopes loads to this dispatcher only
@@ -591,6 +608,7 @@ async function loadData(){
     await loadWaivers();
     await loadAssign();
     await loadPlanContacts();
+    await loadWeekRoster();
     await loadClose();
   }
 }
@@ -616,7 +634,8 @@ async function enterViewAs(name){
   if(!isSuper() || !USER || USER.role!=='mgmt') return;
   name=(name||'').trim();
   VIEWAS = name || null;
-  MYCS=null; MYCS_LOADING=false;            /* ზარების სტატისტიკა თავიდან */
+  MYCS=null; MYCS_LOADING=false; WRSEL=null; /* ზარების სტატისტიკა და როსტერი თავიდან */
+  try{ await loadWeekRoster(); }catch(e){ console.error(e); }
   var bar=document.getElementById('vaBar'), tx=document.getElementById('vaTxt');
   if(VIEWAS){
     try{ await loadClose(); }catch(e){ console.error(e); }
@@ -756,6 +775,67 @@ async function loadAttempts(){
   try{ var r=await sb.rpc('contact_attempts',{p_day:ymd_(nextWorkDay_())}); ATT={};
     (r.data||[]).forEach(function(a){ ATT[a.order_number]=a; });
   }catch(e){ console.error(e); ATT={}; }
+}
+var WROS={}, WRSEL=null;
+function weekMon_(){ return mondayOf(workToday_())||workToday_(); }
+async function loadWeekRoster(){
+  try{ var r=await sb.from('week_roster').select('*').eq('week_monday', weekMon_());
+    WROS={}; (r.data||[]).forEach(function(x){ WROS[x.dispatcher_name]=x; });
+  }catch(e){ console.error(e); WROS={}; }
+}
+function wrConfirmed_(){ return !!WROS[MYD()]; }
+function wrSet(encName, v){ var n=decodeURIComponent(encName); WRSEL=WRSEL||{};
+  WRSEL[n]=WRSEL[n]||{st:'work',why:''}; WRSEL[n].st=v; render(); }
+function wrWhy(encName, v){ var n=decodeURIComponent(encName); if(WRSEL&&WRSEL[n]) WRSEL[n].why=v; }
+/* კვირის დადასტურება: „ისვენებს“ → driver_assignment(kind='off') კვირის ბოლომდე,
+   „მუშაობს“ → აქტიური დასვენება უქმდება. */
+async function wrSave(){
+  try{
+    var mon=weekMon_(), sun=addDays_(mon,6), today=workToday_(), work=[], off=[];
+    for(var n in (WRSEL||{})){
+      var st=WRSEL[n].st, cur=offOf_(n,today);
+      if(st==='off'){
+        off.push(n);
+        if(!cur){
+          var res=await sb.from('driver_assignment').insert({driver_name:n, dispatcher_name:MYD(), kind:'off',
+            from_day:today, to_day:sun, reason:(String(WRSEL[n].why||'').trim()||'ამ კვირაში არ მუშაობს'), created_by:USER.email});
+          if(res.error) throw res.error;
+        }
+      } else {
+        work.push(n);
+        if(cur){ var r2=await sb.from('driver_assignment').update({canceled_at:new Date().toISOString(),canceled_by:USER.email}).eq('id',cur.id);
+          if(r2.error) throw r2.error; }
+      }
+    }
+    var up=await sb.from('week_roster').upsert({dispatcher_name:MYD(), week_monday:mon, working:work, resting:off,
+      confirmed_at:new Date().toISOString(), confirmed_by:USER.email},{onConflict:'dispatcher_name,week_monday'});
+    if(up.error) throw up.error;
+    await loadAssign(); await loadWeekRoster(); WRSEL=null;
+    toast('კვირა დადასტურებულია ✓'); render();
+  }catch(e){ console.error(e); toast('ვერ შეინახა — '+((e&&e.message)||'')); }
+}
+function weekBox_(all){
+  if(wrConfirmed_()) return '';
+  if(!WRSEL){ WRSEL={}; all.forEach(function(d){ var o=offOf_(d.name, workToday_());
+    WRSEL[d.name]={st:(o?'off':'work'), why:(o?(o.reason||''):'')}; }); }
+  var mon=weekMon_(), sun=addDays_(mon,6);
+  var rows=all.map(function(d){
+    var cur=WRSEL[d.name]||{st:'work',why:''}, e=encodeURIComponent(d.name);
+    var on="background:var(--good);color:#fff;border-color:var(--good)";
+    var no="background:var(--crit);color:#fff;border-color:var(--crit)";
+    return "<div class='stdrow' style='border-top:1px solid var(--line);padding:8px 0'>"+
+      "<span class='who'>"+esc(d.name)+"</span>"+
+      "<span style='display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end'>"+
+        (cur.st==='off'? ("<input class='mini' style='width:190px;padding:6px' placeholder='მიზეზი' value='"+esc(cur.why)+"' oninput=\"wrWhy('"+e+"',this.value)\">") : "")+
+        "<button class='fixbtn' style='"+(cur.st==='work'?on:'')+"' onclick=\"wrSet('"+e+"','work')\">მუშაობს</button>"+
+        "<button class='fixbtn' style='"+(cur.st==='off'?no:'')+"' onclick=\"wrSet('"+e+"','off')\">ისვენებს</button>"+
+      "</span></div>";
+  }).join('');
+  return "<div class='card p' style='margin-bottom:16px;border:1.5px solid var(--warn)'>"+
+    "<h4 style='margin-bottom:4px'>ვინ მუშაობს ამ კვირაში? — "+gd(mon)+" – "+gd(sun)+"</h4>"+
+    "<div class='muted' style='font-size:12px'>კვირაში ერთხელ ივსება. სანამ არ დაადასტურებ, <b>ცვლა არ დაიხურება</b>. „ისვენებს“ მძღოლი კვირის ბოლომდე დღიურ სტანდარტში არ ითვლება — მერეც შეგიძლია დააბრუნო.</div>"+
+    (rows||"<div class='muted' style='font-size:12px;margin-top:8px'>მძღოლი არ არის</div>")+
+    "<div style='margin-top:14px'><button class='bigbtn' style='padding:9px 18px;font-size:13px' onclick='wrSave()'>დადასტურება</button></div></div>";
 }
 async function loadWaivers(){
   try{ var r=await sb.from('load_waivers').select('*').gte('work_day', addDays_(ymd_(new Date()),-21));
@@ -930,6 +1010,7 @@ function rBoard(){
     .filter(function(d){ return d.last>=cutD || dispOfDriver_(d.name,tday)===MYD(); })
     .sort(function(a,b){ return a.name.localeCompare(b.name); });
 
+  var allDrv=list.slice();
   var resting=list.filter(function(d){ return !!offOf_(d.name,tday); });
   list=list.filter(function(d){ return !offOf_(d.name,tday); });
   var cnt={g:0,y:0,r:0,n:0}, gaps=[];
@@ -1075,7 +1156,8 @@ function rBoard(){
   var gInv=(invP.length===0)||waivOk_('invoice','',tday);
   var gChk=(chkP.length===0)||waivOk_('check','',tday);
   var gCall=callOkAll;
-  var rem=(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1);
+  var wrOk=wrConfirmed_();
+  var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1);
   var closed=SCLOSE&&SCLOSE.work_day===tday;
   var chips=[['g','დაცული'],['y','ნაკლები'],['r','ვერ ავსებს']].filter(function(t){ return cnt[t[0]]; })
     .map(function(t){ return "<span class='chip "+t[0]+"'><span class='dot'></span>"+cnt[t[0]]+" "+t[1]+"</span>"; }).join('');
@@ -1085,10 +1167,13 @@ function rBoard(){
     "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
       (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
       (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
+    weekBox_(allDrv)+
     "<div class='card' style='margin-bottom:16px'>"+(cards||"<div class='muted' style='padding:14px'>ბოლო 30 დღეში აქტიური მძღოლი არ არის</div>")+restHtml+"</div>"+
     addBox_(tday, list)+
     "<div class='sect'>ცვლის დახურვა</div>"+
     "<div class='card' id='closeCard'>"+
+      "<div class='gate "+(wrOk?'ok':'no')+"'><div class='ic'>"+(wrOk?'✓':'!')+"</div><div class='t'><b>კვირის როსტერი</b><span>"+
+        (wrOk?'დადასტურებულია':'ჯერ არ დაგიდასტურებია — ვინ მუშაობს ამ კვირაში')+"</span></div></div>"+
       "<div class='gate "+(stdOk?'ok':'no')+"'><div class='ic'>"+(stdOk?'✓':'!')+"</div><div class='t'><b>"+gdFull(tday)+"ს ტვირთები</b></div></div>"+
       (stdSlots||"<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>მძღოლი არ არის</div>")+
       callGate_+
@@ -2672,18 +2757,28 @@ function planRows_(day, disp){
   var d=disp||(USER&&MYD())||'';
   return DPLAN.filter(function(p){ return p.work_day===day && (!d || p.dispatcher_name===d); });
 }
-/* დღის ტვირთები = SD-ის თარიღით ავტომატური, მინუს მოხსნილი, პლუს ხელით დამატებული */
-/* ხვალინდელი სია = მხოლოდ ის, რაც დისპეტჩერმა თვითონ აირჩია.
-   SD-ის აღების თარიღი აღარაა წყარო — ის ხშირად მოძველებულია. */
+/* დღის სია = SD-ის აღების თარიღით ავტომატური (მძღოლი მიბმული, ჯერ არ აუყვანია)
+   + ხელით დამატებული − ხელით მოხსნილი.
+   ავტომატური იმიტომ, რომ SD-ში მიბმული ტვირთი ობიექტური მონაცემია; ხელით
+   დამატება კი იმ შემთხვევებისთვის, როცა SD-ში თარიღი სხვაა ან ტვირთი ჯერ
+   მძღოლზე არ მიბმულა. */
 function planLoads_(day, disp){
   var d=disp||(USER&&MYD())||'';
-  var added={};
-  planRows_(day,d).forEach(function(p){ if(p.action!=='remove') added[p.order_number]=p; });
-  var byOn={}; (LIVE||[]).forEach(function(l){ byOn[l.order_number]=l; });
-  var out=[];
-  Object.keys(added).forEach(function(on){
-    var l=byOn[on]; if(!l) return;
-    l._manual=added[on]; out.push(l);
+  var added={}, removed={};
+  planRows_(day,d).forEach(function(p){
+    if(p.action==='remove') removed[p.order_number]=p; else added[p.order_number]=p;
+  });
+  var out=[], seen={};
+  (LIVE||[]).forEach(function(l){
+    var on=l.order_number;
+    if(seen[on] || removed[on]) return;
+    var man=added[on];
+    var auto = !man && puDay_(l)===day && !!drvName_(l)
+            && !l.pickup_completed && l.status!=='delivered' && !l.is_canceled
+            && (l.dispatcher_name===d || dispOfDriver_(drvName_(l), day)===d);
+    if(!man && !auto) return;
+    l._manual = man||null;
+    seen[on]=1; out.push(l);
   });
   out.sort(function(a,b){ return String(a.driver_name||'').localeCompare(String(b.driver_name||'')); });
   return out;
