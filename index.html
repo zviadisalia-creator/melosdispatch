@@ -2774,6 +2774,14 @@ function chkCell_(l){
   if(needs) return "<span class='chip r'><span class='dot'></span>არ არის</span>";
   return "<span class='muted'>—</span>";
 }
+/* ატვირთული ჩეკები — ყველა, გადახდილიც და გადაუხდელიც, ბოლოს ატვირთული პირველი */
+function chkUploaded_(){
+  return (LIVE||[]).filter(function(l){ var a=ACT[l.order_number]; return a && a.check_path; })
+    .map(function(l){ var due=dueOf_(l), now=Date.now();
+      return Object.assign({},l,{_due:due,_late:(due?Math.floor((now-due)/864e5):0),
+        _chkAt:(ACT[l.order_number]||{}).check_uploaded_at||''}); })
+    .sort(function(a,b){ return String(b._chkAt).localeCompare(String(a._chkAt)); });
+}
 function rRecv(){
   var A=openAR_();
   var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
@@ -2781,11 +2789,13 @@ function rRecv(){
   var onsite=A.filter(function(l){ return ONSITE_[l.payment_terms]; });
   var late=broker.filter(function(l){ return l._late>0; });
   var noInv=broker.filter(function(l){ return !l.invoice_sent_at && !noPaper_(l); });
+  var chkUp=chkUploaded_();
   var F=broker.slice();
   if(RECVF==='late') F=late.slice();
   if(RECVF==='noinv') F=noInv.slice();
   if(RECVF==='onsite') F=onsite.slice();
-  F.sort(function(a,b){ return b._late-a._late; });
+  if(RECVF==='chk') F=chkUp.slice();
+  if(RECVF!=='chk') F.sort(function(a,b){ return b._late-a._late; });
   var col=function(d){ return d<=0?'var(--ink2)':d<=15?'var(--warn)':d<=30?'var(--serious)':d<=60?'var(--crit)':'#a51f1f'; };
   var SHOW=500;
   var rows=F.slice(0,SHOW).map(function(l){
@@ -2803,8 +2813,9 @@ function rRecv(){
     '<div class="kpis">'+kpi('ბროკერზე მისაღები',money(sum(broker)),'',broker.length+' ტვირთი')+
       kpi('ვადაგადაცილებული',money(sum(late)),'r',late.length+' ტვირთი','overdue')+
       kpi('ინვოისი გასაგზავნია',money(sum(noInv)),'w',noInv.length+' ტვირთი','invoices')+
-      kpi('ადგილზე ასაღები (cash/check)',money(sum(onsite)),'w',onsite.length+' ტვირთი')+'</div>'+
-    '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+chip('broker','ბროკერზე',broker.length)+chip('late','ვადაგადაცილებული',late.length)+chip('noinv','ინვოისის გარეშე',noInv.length)+chip('onsite','ადგილზე (cash/check)',onsite.length)+'</div>'+
+      kpi('ადგილზე ასაღები (cash/check)',money(sum(onsite)),'w',onsite.length+' ტვირთი')+
+      '<div class="card kpi" onclick="setRecvF(\'chk\')" style="cursor:pointer" title="დააჭირე → ატვირთული ჩეკები"><div class="lab">ჩეკი ატვირთულია<span style="float:right;color:var(--muted);font-size:12px">→</span></div><div class="val g">'+chkUp.length+'</div><div class="sub">დისპეტჩერების ატვირთული ფოტოები</div></div>'+'</div>'+
+    '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'+chip('broker','ბროკერზე',broker.length)+chip('late','ვადაგადაცილებული',late.length)+chip('noinv','ინვოისის გარეშე',noInv.length)+chip('onsite','ადგილზე (cash/check)',onsite.length)+chip('chk','📎 ჩეკი ატვირთულია',chkUp.length)+'</div>'+
     '<div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th>ჩაბარება</th><th>ინვოისი</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th>ჩეკი</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი მოდის პირდაპირ Super Dispatch-იდან (paid_at) — ხელით მონიშვნა აღარ სჭირდება. „ადგილზე ასაღები" — cash/check on pickup/delivery: თანხა მძღოლმა ალბათ უკვე აიღო, მაგრამ Super Dispatch-ში გადახდა მონიშნული არ არის; ეს ჩანაწერის დისციპლინაა და არა დავალიანება. ვადა = ინვოისის გაგზავნის დღე (ან ჩაბარება, თუ ინვოისი არ არის) + Terms. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან.</div></div>';
 }
