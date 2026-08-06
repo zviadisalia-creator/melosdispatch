@@ -379,6 +379,10 @@ function callSkip_(l, side){
     text:'shipper = '+(side==='pu'?'ფიქაფი':'დელივერი')+' ('+venue+') — ზარი არ მოეთხოვება'};
   return null;
 }
+/* ზარების ცხრილში მძღოლის სახელი — RPC-ის პასუხი ბაზის ნედლ `loads.driver_name`-ს
+   იღებს, რომელიც SD-ზე ახალი assign-ის შემდეგ ჯერ ცარიელია (ივსება სინქრონზე).
+   ტვირთის ჩანაწერს კი სახელი SD ID-ით უკვე გასწორებული აქვს — ის ვამჯობინოთ. */
+function rDrv_(r){ return drvName_(loadOf_(r.order_number)) || r.driver_name || '—'; }
 function apptNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='copart'); }
 function gatePassNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='manheim'); }
 function apptOf_(l){ return l? (actOf_(l.order_number).appt_at||null) : null; }
@@ -1122,9 +1126,13 @@ function rBoard(){
   var winCut=new Date(Date.now()-14*864e5).toISOString();
   var delivered=L.filter(function(l){ return l.delivery_completed && l.delivery_completed>=winCut; });
   var older=L.filter(function(l){ return l.delivery_completed && l.delivery_completed<winCut; });
-  var oldInv=older.filter(function(l){ return invNeeded_(l) && !l.invoice_sent_at; }).length;
+  /* SD-დან ინვოისის სტატუსი საათში ერთხელ მოდის — დისპეტჩერს იმდენ ხანს
+     ოფისში ჯდომა არ უნდა უწევდეს. „გავაგზავნე“ მონიშვნა gate-ს მაშინვე ხურავს,
+     SD მერე ადასტურებს (მენეჯმენტს დაუდასტურებელი მონიშვნა გამონაკლისებში უჩანს). */
+  var docsDone_=function(l){ return !!(l.invoice_sent_at || actOf_(l.order_number).bol_sent_at); };
+  var oldInv=older.filter(function(l){ return invNeeded_(l) && !docsDone_(l); }).length;
   var byNew=function(a,b){ return String(b.delivery_completed||'').localeCompare(String(a.delivery_completed||'')); };
-  var invP=delivered.filter(function(l){ return invNeeded_(l) && !l.invoice_sent_at; }).sort(byNew);
+  var invP=delivered.filter(function(l){ return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
   var chkP=L.filter(function(l){
     var pu=(l.payment_terms==='check_on_pickup' && l.pickup_completed && l.pickup_completed>=winCut);
     var dl=(l.payment_terms==='check_on_delivery' && l.delivery_completed && l.delivery_completed>=winCut);
@@ -1140,7 +1148,11 @@ function rBoard(){
     if(!items.length) return '';
     return items.slice(0,8).map(function(l){
       var act='';
-      if(kind==='bol') act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a><button class='fixbtn' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>";
+      if(kind==='bol'){ var a1=actOf_(l.order_number);
+        act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a>"+
+          (a1.bol_sent_at
+            ? "<span class='chip g' title='მონიშნულია — SD-ის დადასტურებას ელოდება'><span class='dot'></span>გაგზავნილი</span>"
+            : "<button class='fixbtn' title='ინვოისი და BOL გავაგზავნე — SD-ის დადასტურებას აღარ ველოდები' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>"); }
       if(kind==='chk'){ var a0=actOf_(l.order_number), e0=encodeURIComponent(l.order_number);
         act=(a0.check_path?("<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(a0.check_path)+"');return false\" style='text-decoration:none;margin-right:6px'>ნახვა</a>"):"")+
           "<button class='fixbtn' style='margin-right:6px' onclick=\"chkArm('"+e0+"')\">ჩასმა Ctrl+V</button>"+
@@ -1170,7 +1182,7 @@ function rBoard(){
         ev.push('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):'')); }
       var tried=((a.pu_try||0)+(a.del_try||0))>0;
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
-        "<div class='t'><b>"+esc(r.order_number)+"</b><span>"+esc(r.driver_name||'—')+" · <span style='color:var(--crit)'>"+esc(miss.join(' · '))+"</span> — "+
+        "<div class='t'><b>"+esc(r.order_number)+"</b><span>"+esc(rDrv_(r))+" · <span style='color:var(--crit)'>"+esc(miss.join(' · '))+"</span> — "+
         (tried? ("<span style='color:var(--warn)'>"+esc(ev.join(' · '))+", პასუხი არ არის</span>") : "<span style='color:var(--crit)'>ცდაც არ ფიქსირდება</span>")+"</span></div>"+
         waivChip_('calls',r.order_number,'ზარი — '+r.order_number,tday)+"</div>";
     }).join('') + (items.length>10 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-10)+"</div>" : '');
@@ -1216,7 +1228,7 @@ function rBoard(){
          "<th>Order ID</th><th>მძღოლი</th><th>ფიქაფი</th><th>დელივერი</th></tr></thead><tbody>"+
          callList.map(function(r){
            var L1=loadOf_(r.order_number);
-           return "<tr><td><b>"+esc(r.order_number)+"</b></td><td>"+esc(r.driver_name||'—')+"</td>"+
+           return "<tr><td><b>"+esc(r.order_number)+"</b></td><td>"+esc(rDrv_(r))+"</td>"+
              "<td>"+callCell_(r.pu_missing,(r.pu_call||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'))+"</td>"+
              "<td>"+callCell_(r.del_missing,(r.del_call||r.del_sms),r.delivery_phone,callSkip_(L1,'del'))+"</td></tr>";
          }).join('')+"</tbody></table></div>")
@@ -1286,7 +1298,7 @@ function rBoard(){
       apptBox_+
       gpBox_+
       gate_('ინვოისი და BOL', invP.length, invP.length+' ჩაბარებული ტვირთი დოკუმენტების გარეშე', 'invoice','')+
-      rows_(invP,'inv')+
+      rows_(invP,'bol')+
       gate_('ჩეკის ატვირთვა', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', 'check','')+
       rows_(chkP,'chk')+
       (oldInv?("<div class='muted' style='padding:8px 15px 12px 49px;font-size:12px'>14 დღეზე ძველი: <b>"+oldInv+"</b> ჩაბარებული ტვირთი ინვოისის გარეშე</div>"):'')+
@@ -2434,6 +2446,15 @@ function excList_(){
   var today=ymd_(new Date());
   var nwd=ymd_(nextWorkDay_());
 
+  /* 1a. დისპეტჩერმა „გავაგზავნე“ მონიშნა, მაგრამ SD-ში ინვოისი 24 საათის
+     შემდეგაც არ ჩანს — მონიშვნა ცვლის დახურვის ხვრელად არ უნდა იქცეს. */
+  L.forEach(function(l){
+    if(!invNeeded_(l) || l.invoice_sent_at || l.paid_at) return;
+    var a=actOf_(l.order_number); if(!a.bol_sent_at) return;
+    var d=dAgo(a.bol_sent_at); if(d==null || d<1) return;
+    out.push({k:'markonly', r:d>3?'r':'y', disp:l.dispatcher_name||'—', who:l.driver_name||'—',
+      t:'მონიშნულია გაგზავნილად, SD-ში ინვოისი არ ჩანს', s:l.order_number+' · '+(l.customer||'—')+' · მონიშნა '+d+' დღის წინ ('+(a.bol_by||'—')+') · '+money(grossOf_(l)), n:d, tab:'invoices'});
+  });
   /* 1. ჩაბარებულია, ინვოისი არ არის (7+ დღე), ფული ჯერ არ შემოსულა */
   L.forEach(function(l){
     if(!l.delivery_completed || !invNeeded_(l) || l.invoice_sent_at || l.paid_at) return;
@@ -2519,7 +2540,7 @@ function excList_(){
 }
 function rExc(){
   var A=excList_();
-  var KINDS=[['core','ძირითადი'],['nopickup','არ აღებულა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['offactive','გამორთული მუშაობს'],['onsite','ადგილზე აღებული'],['all','ყველა']];
+  var KINDS=[['core','ძირითადი'],['nopickup','არ აღებულა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['offactive','გამორთული მუშაობს'],['markonly','მონიშნა, SD ცარიელია'],['onsite','ადგილზე აღებული'],['all','ყველა']];
   var cnt={}; A.forEach(function(x){ cnt[x.k]=(cnt[x.k]||0)+1; }); cnt.all=A.length;
   cnt.core=A.length-(cnt.onsite||0);
   var F=(EXCF==='all')?A:((EXCF==='core')?A.filter(function(x){ return x.k!=='onsite'; }):A.filter(function(x){ return x.k===EXCF; }));
