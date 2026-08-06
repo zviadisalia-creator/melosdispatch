@@ -28,6 +28,8 @@
   h1,h2,h3,h4{margin:0;font-weight:680;letter-spacing:-.01em}
   .muted{color:var(--muted)} .ink2{color:var(--ink2)} .tnum{font-variant-numeric:tabular-nums}
   button{font-family:inherit;cursor:pointer} .hidden{display:none!important}
+  .spinner{width:26px;height:26px;margin:18px auto 10px;border:3px solid #e5e7eb;border-top-color:#2563eb;border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
 
   /* login */
   .login{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:20px;
@@ -159,8 +161,17 @@
 </head>
 <body>
 
+<!-- SPLASH: ჩატვირთვისას login-ის ნაცვლად ეს ჩანს, რომ „გამოსვლა" არ ეგონოთ -->
+<div id="splash" class="login">
+  <div class="loginbox" style="text-align:center">
+    <div class="brandrow" style="justify-content:center"><div class="mark">M</div><div><b>Melos Dispatch</b><span>melosdispatch.com</span></div></div>
+    <div class="spinner"></div>
+    <div class="picklab" id="splashMsg" style="text-align:center">იტვირთება…</div>
+  </div>
+</div>
+
 <!-- LOGIN -->
-<div id="login" class="login">
+<div id="login" class="login hidden">
   <div class="loginbox">
     <div class="brandrow"><div class="mark">M</div><div><b>Melos Dispatch</b><span>melosdispatch.com</span></div></div>
     <div class="lh">შესვლა</div>
@@ -587,18 +598,34 @@ async function signIn(){
   await sb.auth.signInWithOAuth({provider:'google', options:{redirectTo: location.origin + location.pathname}});
 }
 async function signOutUser(){ try{await sb.auth.signOut();}catch(e){} location.reload(); }
+function hideSplash(){ var s=document.getElementById('splash'); if(s) s.classList.add('hidden'); }
 function showLogin(msg){
+  hideSplash();
   document.getElementById('login').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
   const b=document.getElementById('gbtn'); if(b) b.disabled=false;
   if(msg){ const el=document.getElementById('loginMsg'); if(el){el.textContent=msg; el.style.color='var(--crit)';} }
 }
+/* ბრაუზერის მეხსიერებაში ტოკენი გვაქვს თუ არა — სინქრონულად, მყისვე.
+   თუ გვაქვს, login-ის ბარათს საერთოდ არ ვაჩვენებთ (თორემ განახლება
+   „გამოსვლას" ჰგავს); ვაჩვენებთ ჩატვირთვის ეკრანს. */
+function hasStoredSession_(){
+  try{
+    for(var i=0;i<localStorage.length;i++){
+      var k=localStorage.key(i);
+      if(k && /^sb-.*-auth-token$/.test(k) && localStorage.getItem(k)) return true;
+    }
+  }catch(e){}
+  return false;
+}
 async function bootstrap(){
   try{
+    var stored=hasStoredSession_();
+    if(!stored){ showLogin(); return; }   /* ტოკენი არ გვაქვს — პირდაპირ შესვლა, ლოდინის გარეშე */
     var r=await sb.auth.getSession();
     var session=r && r.data ? r.data.session : null;
     if(!session){
-      /* ზოგჯერ ტოკენი მეხსიერებაშია, მაგრამ პირველ წამში ჯერ არ წაკითხულა */
+      /* ტოკენი მეხსიერებაშია, მაგრამ ჯერ არ წაკითხულა — ვაცლით */
       await new Promise(function(f){ setTimeout(f,600); });
       var r2=await sb.auth.getSession();
       session = r2 && r2.data ? r2.data.session : null;
@@ -644,36 +671,20 @@ async function loadData(){
     const { data:pr } = await sb.from('payment_received').select('order_id,received');
     RECV={}; (pr||[]).forEach(r=>{ if(r.received){ RECV[r.order_id]=true; } });
     ODRECV=Object.assign({},RECV);
-    await loadLiveLoads();
-    await loadActions();
-    await loadRates();
-    await loadExpenses();
-    await loadContacts();
-    await loadAttempts();
-    await loadWaivers();
-    await loadCloses();
-    await loadBrokerFlags();
-    await loadPlan();
-    await loadAssign();
-    await loadPlanContacts();
-    await loadLedger();
-    await loadWeekRoster();
-    await loadDispatchers();
+    /* ერთმანეთზე არ არიან დამოკიდებული — პარალელურად ჩამოდის, გაცილებით სწრაფად */
+    await Promise.all([
+      loadLiveLoads(), loadActions(), loadRates(), loadExpenses(), loadContacts(),
+      loadAttempts(), loadWaivers(), loadCloses(), loadBrokerFlags(), loadPlan(),
+      loadAssign(), loadPlanContacts(), loadLedger(), loadWeekRoster(), loadDispatchers()
+    ]);
   } else {
-    await loadLiveLoads();   // RLS scopes loads to this dispatcher only
     const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
-    await loadActions();
-    await loadContacts();
-    await loadSettingsOnly();
-    await loadBrokerFlags();
-    await loadPlan();
-    await loadAttempts();
-    await loadWaivers();
-    await loadAssign();
-    await loadPlanContacts();
-    await loadWeekRoster();
-    await loadClose();
+    await Promise.all([
+      loadLiveLoads(),   // RLS scopes loads to this dispatcher only
+      loadActions(), loadContacts(), loadSettingsOnly(), loadBrokerFlags(), loadPlan(),
+      loadAttempts(), loadWaivers(), loadAssign(), loadPlanContacts(), loadWeekRoster(), loadClose()
+    ]);
   }
 }
 async function loadDispatchers(){
@@ -721,6 +732,7 @@ async function loadSettingsOnly(){
   }catch(e){ console.error(e); }
 }
 function startApp(){
+  hideSplash();
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   buildTabs();
