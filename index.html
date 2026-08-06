@@ -747,11 +747,22 @@ function render(){
 
 /* ---------- DISPATCHER ---------- */
 /* ---- ჩემი დაფა — ცოცხალი მონაცემიდან, მანქანების დათვლით ---- */
-/* სამუშაო დღე შუაღამეს არ იცვლება — გუნდი ღამის პირველამდე მუშაობს.
-   საზღვარი დილის 4 საათია (იცვლება app_settings.shift_anchor_hour-ით). */
+/* სამუშაო დღე = ამერიკის (Central) კალენდარული დღე.
+   მიზეზი: ტვირთის აღების თარიღი SD-ში ამერიკულია, გუნდი კი საქართველოშია და
+   ღამის პირველ-ორამდე მუშაობს. თბილისის შუაღამე ჯერ კიდევ ამერიკის საღამოა —
+   თუ თარიღს თბილისით ვთვლით, ღამის 4-ზე დღე ერთით წინ გადახტება და
+   „ხვალინდელი სია“ არასწორ დღეს აჩვენებს.
+   ამერიკული დღე იცვლება შუაღამეს Chicago-ში = დილის 9-ზე თბილისში, ანუ
+   მაშინ, როცა გუნდი არ მუშაობს.
+   `shift_anchor_hour` დარჩა დამატებით საათობრივ ძვრად (ნაგულისხმევი 0). */
 function workNow_(){
-  var h=(typeof sett_==='function')?sett_('shift_anchor_hour',4):4;
-  return new Date(Date.now()-h*36e5);
+  var h=(typeof sett_==='function')?sett_('shift_anchor_hour',0):0;
+  var now=new Date(Date.now()-h*36e5);
+  try{
+    var p=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',
+      year:'numeric',month:'2-digit',day:'2-digit'}).format(now).split('-');
+    return new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+  }catch(e){ console.error(e); return now; }
 }
 function workToday_(){ return ymd_(workNow_()); }
 function nextWorkDay_(){ var d=workNow_(); d.setDate(d.getDate()+1); if(d.getDay()===0) d.setDate(d.getDate()+1); return d; }
