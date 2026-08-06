@@ -383,6 +383,13 @@ function callSkip_(l, side){
    იღებს, რომელიც SD-ზე ახალი assign-ის შემდეგ ჯერ ცარიელია (ივსება სინქრონზე).
    ტვირთის ჩანაწერს კი სახელი SD ID-ით უკვე გასწორებული აქვს — ის ვამჯობინოთ. */
 function rDrv_(r){ return drvName_(loadOf_(r.order_number)) || r.driver_name || '—'; }
+/* SD-ში აღების თარიღი სხვა დღეა, ვიდრე ის დღე, რომელზეც ტვირთი ავირჩიეთ —
+   დისპეტჩერმა SD-ში უნდა გაასწოროს, თორემ სია ავტომატურად აღარ აიკრიფება. */
+function sdDayWarn_(l, day){
+  var d=puDay_(l);
+  if(!d || d===day) return '';
+  return " <span style='color:var(--crit);font-size:10.5px;font-weight:640' title='SD-ში აღების თარიღი "+esc(gd(d))+"-ია. გაასწორე "+esc(gd(day))+"-ზე — თორემ ხვალინდელ სიაში ავტომატურად აღარ ჩაჯდება.'>⚠ SD-ში თარიღი "+esc(gd(d))+" — გაასწორე "+esc(gd(day))+"-ზე</span>";
+}
 function apptNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='copart'); }
 function gatePassNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='manheim'); }
 function apptOf_(l){ return l? (actOf_(l.order_number).appt_at||null) : null; }
@@ -1107,7 +1114,7 @@ function rBoard(){
       var pm=(Number(l.miles)>0)? (' · $'+(grossOf_(l)/Number(l.miles)).toFixed(2)+'/მი') : '';
       var dd=delDay_(l);
       var man=dd?(" · ჩაბარება "+gd(dd)):"";
-      var off=(puDay_(l)!==tday)?" <span style='color:var(--muted);font-size:10.5px'>SD: "+gd(puDay_(l))+"</span>":"";
+      var off=sdDayWarn_(l,tday);
       return "<span class='load'><span class='oid'>"+esc(l.order_number)+"</span>"+sdMissChip_(l)+" <b>"+esc(locShort(l.pickup_location))+"</b> → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'')+pm+man+off+
         " <a href='#' title='ხვალინდელი დღიდან მოხსნა' style='color:var(--muted);text-decoration:none;font-weight:700' onclick=\"planDrop('"+encodeURIComponent(l.order_number)+"');return false\">×</a></span>";
     }).join('');
@@ -1117,7 +1124,7 @@ function rBoard(){
     var covChip=(cov&&cov.dispatcher_name===MYD())?" <span class='chip y' style='padding:0 6px;font-size:10px'>დროებით ჩემთან</span>":"";
     return "<div class='driver'><div class='cap'>"+cap+"</div>"+
       "<div><div class='nm'>"+esc(d.name)+covChip+"</div><div class='meta'>"+cap+"-მანქანიანი"+(tgt?(' · გეგმა '+money(tgt)+'/დღე'):'')+"</div></div>"+
-      "<div class='lw'><div class='loadline'>"+(ll||"<span class='load'>ტვირთი არ აქვს SD-ზე მიმაგრებული მძღოლს</span>")+"</div>"+
+      "<div class='lw'><div class='loadline'>"+(ll||"<span class='load'>ხვალინდელი ტვირთი ჯერ არ არის არჩეული — ქვემოთ მოძებნე Order ID-ით და მიაბი</span>")+"</div>"+
         (reason?("<div class='reason'"+(lvl==='g'?" style='color:var(--good)'":"")+">"+reason+"</div>"):'')+act+"</div>"+
       "<div class='st'><span class='chip "+(ok?'g':lvl)+"'><span class='dot'></span>"+
         (ok?'დასრულებული':({y:'ნაკლები',r:'ვერ ავსებს',n:'სამიზნე არ არის'}[lvl]))+"</span></div></div>";
@@ -1691,7 +1698,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact').is('deleted_at', null).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin').is('deleted_at', null).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -1722,12 +1729,18 @@ function dupScore_(l){
   if(Number(l.gross!=null?l.gross:l.price)>0) s+=1;
   return s;
 }
-/* ერთი და იგივე ტვირთია? — მანქანის შეუსაბამობა კატეგორიული უარია
-   (ბროკერები ხანდახან ორდერის ნომრის ნაცვლად სახელს წერენ, მაგ. „Transwest",
-   და ორი სრულიად სხვადასხვა ტვირთი ერთნაირად ეწოდება). დანარჩენში —
-   ექვსი ნიშნიდან მინიმუმ ოთხი უნდა ემთხვეოდეს. */
+/* ერთი და იგივე ტვირთია? — ბროკერების ნაწილს Order ID-ად სიტყვა, ფრაზა ან
+   ტელეფონის ნომერი აქვს, ამიტომ ერთი და იგივე ID ორ სხვადასხვა ტვირთს
+   შეიძლება ჰქონდეს. გადამწყვეტი VIN-ია: თუ VIN-ები არ ემთხვევა — სხვადასხვაა,
+   თუ ემთხვევა — ერთი და იგივეა. VIN რომ არ ვიცოდეთ, მანქანის მოდელი
+   კატეგორიულ უარს იძლევა, დანარჩენში კი ექვსი ნიშნიდან ოთხი უნდა ემთხვეოდეს. */
 function dupNz_(v){ return String(v==null?'':v).trim().toLowerCase(); }
+function vinSet_(l){
+  return String((l&&l.vin)||'').toUpperCase().split(/[^A-Z0-9]+/).filter(function(x){ return x.length>=11; }).sort().join('|');
+}
 function dupSame_(a,b){
+  var va0=vinSet_(a), vb0=vinSet_(b);
+  if(va0 && vb0) return va0===vb0;                 /* VIN ორივეს აქვს — ის წყვეტს */
   var va=dupNz_(a.vehicle), vb=dupNz_(b.vehicle);
   if(va && vb && va!==vb) return false;
   var G=function(l){ return Number(l.gross!=null?l.gross:l.price)||0; };
@@ -3138,7 +3151,7 @@ function addBox_(day, boardList){
       "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
       "<td class='num'>"+money(grossOf_(l))+"</td>"+
       "<td class='num'>"+(mi>0?('$'+(grossOf_(l)/mi).toFixed(2)):'—')+"</td>"+
-      "<td>"+gd(puDay_(l))+"</td><td>"+gd(delDay_(l))+"</td>"+
+      "<td>"+(puDay_(l)===day? gd(puDay_(l)) : ("<span style='color:var(--crit)' title='SD-ში აღების თარიღი სხვა დღეა — გაასწორე "+esc(gd(day))+"-ზე'>"+gd(puDay_(l))+" ⚠</span>"))+"</td><td>"+gd(delDay_(l))+"</td>"+
       "<td><button class='fixbtn' onclick=\"planDrop('"+encodeURIComponent(l.order_number)+"')\">მოხსნა</button></td></tr>";
   }).join('');
   return "<div class='card p' style='margin-bottom:16px'><h4>ხვალინდელი სია — "+gdFull(day)+"</h4>"+
