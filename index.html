@@ -1230,7 +1230,8 @@ function rBoard(){
   function apptRows_(items){
     return items.slice(0,10).map(function(l){
       var e0=encodeURIComponent(l.order_number), cur=apptOf_(l);
-      var def=apptVal_(cur)||((puDay_(l)||tday)+'T09:00');
+      var pd=puDay_(l); if(!pd || pd<tday) pd=tday;      /* SD-ის თარიღი მოძველებულია — ხვალინდელს ვთავაზობთ */
+      var def=apptVal_(cur)||(pd+'T09:00');
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
         "<div class='t'><b>"+esc(l.order_number)+"</b><span>"+esc(drvName_(l)||'—')+" · "+esc(l.pu_venue||'Copart')+" → "+esc(locShort(l.delivery_location))+
         (cur?(" · <span style='color:var(--good)'>appointment "+esc(apptShow_(cur))+"</span>")
@@ -1795,14 +1796,18 @@ function planOnly_(l){ return !!(l && !l.driver_name && planDrv_(l.order_number)
 function sdMissChip_(l){
   return planOnly_(l) ? " <span class='chip y' style='padding:0 6px;font-size:10px' title='მძღოლი აპში შენ მიაბი — SD-ზე assign ჯერ არ არის გაკეთებული'>SD-ზე მიაბი</span>" : "";
 }
-/* ხვალინდელი დღის ჩემი მძღოლების სია */
+/* ხვალინდელი დღის ჩემი მძღოლების სია — იგივე წრე, რაც დაფაზე ჩანს:
+   ვისაც ჩემი ტვირთი აქვს, ან ვინც ხვალ ჩემზეა მიმაგრებული. */
 function myDrivers_(day){
   var rost={};
-  Object.keys(DRIVERS_BY_NAME).forEach(function(n){ rost[n]=1; });
-  (DIR||[]).forEach(function(x){ rost[x.name]=1; });
-  (DASG||[]).forEach(function(p){ rost[p.driver_name]=1; });
+  (LIVE||[]).forEach(function(l){ var n=drvName_(l); if(n && mineWork_(l)) rost[n]=1; });
+  Object.keys(DRIVERS_BY_NAME).forEach(function(n){ if(dispOfDriver_(n,day)===MYD()) rost[n]=1; });
+  (DIR||[]).forEach(function(x){ if(dispOfDriver_(x.name,day)===MYD()) rost[x.name]=1; });
+  (DASG||[]).forEach(function(p){ if(dispOfDriver_(p.driver_name,day)===MYD()) rost[p.driver_name]=1; });
   return Object.keys(rost).filter(function(n){
-    return n && driverActive_(n) && dispOfDriver_(n,day)===MYD() && !offOf_(n,day);
+    if(!n || !driverActive_(n) || offOf_(n,day)) return false;
+    var own=dispOfDriver_(n,day);
+    return !own || own===MYD();
   }).sort(function(a,b){ return a.localeCompare(b,'ka'); });
 }
 /* ატრიბუციის გარეშე ტვირთი ყველა დისპეტჩერს უჩანს (RLS) — Work Log-ში კი
@@ -2486,12 +2491,31 @@ function excList_(){
     out.push({k:'onsite', r:'y', disp:l.dispatcher_name||'—', who:l.driver_name||'—',
       t:'ადგილზე აღებული — SD-ში მოუნიშნავია', s:l.order_number+' · '+String(l.payment_terms||'').replace(/_/g,' ')+' · '+d+' დღე · '+money(Number(l.price)||0), n:d, tab:'receivables'});
   });
+  /* 8. მძღოლი რეესტრში გამორთულია, მაგრამ რეალურად მუშაობს.
+     ერთ ადამიანს SD-ში ხანდახან ორი ანგარიში აქვს — ძველი გამორთული, ახალი აქტიური.
+     თუ სახელით გამოვრთავთ, აქტიურიც ითიშება და დისპეტჩერს დაფაზე მძღოლი ქრება. */
+  var offReg={};
+  (DIR||[]).forEach(function(x){ if(x.active===false) offReg[x.name]=x; });
+  Object.keys(DRIVERS_BY_NAME).forEach(function(n){ if(DRIVERS_BY_NAME[n].active===false) offReg[n]=DRIVERS_BY_NAME[n]; });
+  var offAgg={};
+  L.forEach(function(l){
+    var n=l.driver_name; if(!n || !offReg[n]) return;
+    var d=String(l.pickup_completed||l.pickup_scheduled||'').slice(0,10);
+    if(!d || d<cut14) return;
+    if(!offAgg[n]) offAgg[n]={c:0,last:''};
+    offAgg[n].c++; if(d>offAgg[n].last) offAgg[n].last=d;
+  });
+  Object.keys(offAgg).forEach(function(n){
+    var a=offAgg[n], days=dAgo(a.last);
+    out.push({k:'offactive', r:'r', disp:(offReg[n].dispatcher_name)||'—', who:n,
+      t:'გამორთული მძღოლი მუშაობს', s:'რეესტრში „არ მუშაობს", მაგრამ ბოლო 14 დღეში '+a.c+' ტვირთი აქვს · ბოლო '+gd(a.last)+' · სავარაუდოდ ორანგარიშიანია — რეესტრში ჩართე', n:(days==null?1:Math.max(1,14-days)), tab:'drivers'});
+  });
   out.sort(function(a,b){ if(a.r!==b.r) return a.r==='r'?-1:1; return b.n-a.n; });
   return out;
 }
 function rExc(){
   var A=excList_();
-  var KINDS=[['core','ძირითადი'],['nopickup','არ აღებულა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['onsite','ადგილზე აღებული'],['all','ყველა']];
+  var KINDS=[['core','ძირითადი'],['nopickup','არ აღებულა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['offactive','გამორთული მუშაობს'],['onsite','ადგილზე აღებული'],['all','ყველა']];
   var cnt={}; A.forEach(function(x){ cnt[x.k]=(cnt[x.k]||0)+1; }); cnt.all=A.length;
   cnt.core=A.length-(cnt.onsite||0);
   var F=(EXCF==='all')?A:((EXCF==='core')?A.filter(function(x){ return x.k!=='onsite'; }):A.filter(function(x){ return x.k===EXCF; }));
