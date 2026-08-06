@@ -1791,10 +1791,11 @@ function planDrv_(on){
   return PDRVC[on]||'';
 }
 function drvName_(l){ return (l&&(l.driver_name||planDrv_(l.order_number)))||''; }
-/* SD-ზე მიბმული არ არის, მხოლოდ აპში — ეს დისპეტჩერს უნდა ეჩვენოს */
+/* მძღოლი აპში მიება, SD-ზე არა — ხვალინდელ ტვირთზე ეს ნორმაა (SD-ზე ადრეული
+   assign განზრახ არ მოგვეთხოვება), მხოლოდ აღსანიშნავია, საიდან მოდის სახელი. */
 function planOnly_(l){ return !!(l && !l.driver_name && planDrv_(l.order_number)); }
 function sdMissChip_(l){
-  return planOnly_(l) ? " <span class='chip y' style='padding:0 6px;font-size:10px' title='მძღოლი აპში შენ მიაბი — SD-ზე assign ჯერ არ არის გაკეთებული'>SD-ზე მიაბი</span>" : "";
+  return planOnly_(l) ? " <span class='chip' style='padding:0 6px;font-size:10px' title='მძღოლი აქ, აპლიკაციაში მიაბი — SD-ზე ხვალინდელ ტვირთს assign არ სჭირდება'>აპში მიბმული</span>" : "";
 }
 /* ხვალინდელი დღის ჩემი მძღოლების სია — იგივე წრე, რაც დაფაზე ჩანს:
    ვისაც ჩემი ტვირთი აქვს, ან ვინც ხვალ ჩემზეა მიმაგრებული. */
@@ -2453,10 +2454,13 @@ function excList_(){
     out.push({k:'stuck', r:d>14?'r':'y', disp:l.dispatcher_name||'—', who:l.driver_name||'—',
       t:'აყვანილია, ჯერ არ ჩაბარებულა', s:l.order_number+' · '+locShort(l.pickup_location)+' → '+locShort(l.delivery_location)+' · '+d+' დღე გზაში', n:d, tab:'liveloads'});
   });
-  /* 4. ბოლო 14 დღის ტვირთი მძღოლზე მიუბმელი */
+  /* 4. ბოლო 14 დღის ტვირთი მძღოლზე მიუბმელი.
+     ხვალინდელ (ჯერ არ დამდგარ) ტვირთს SD-ზე assign განზრახ არ მოეთხოვება —
+     მძღოლები ცდებიან, ამიტომ ადრეულ მიბმას აპში ვაკეთებთ. აქ მხოლოდ ის ჯდება,
+     რასაც აღების დღე უკვე დაუდგა და მაინც უპატრონოა. */
   var cut14=addDays_(today,-14);
   L.forEach(function(l){
-    if(l.driver_id_sd) return; var d=puDay_(l); if(!d || d<cut14) return;
+    if(l.driver_id_sd) return; var d=puDay_(l); if(!d || d<cut14 || d>today) return;
     if(!assignExpected_(l)) return;
     out.push({k:'unassigned', r:'y', disp:l.dispatcher_name||'—', who:'—',
       t:'ტვირთი მძღოლზე მიბმული არ არის', s:l.order_number+' · '+gd(d)+' · '+locShort(l.pickup_location)+' → '+locShort(l.delivery_location), n:1, tab:'liveloads'});
@@ -3165,7 +3169,7 @@ function planAskDrv(enc){
       ? ("<select id='_pdrv' style='width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--page);color:var(--ink)'>"+
          ds.map(function(n){ return "<option value='"+esc(n)+"'>"+esc(n)+"</option>"; }).join('')+"</select>")
       : "<div style='color:var(--crit);font-size:12.5px'>ხვალინდელ დღეს შენზე აქტიური მძღოლი არ ჩანს — ჯერ როსტერი შეავსე.</div>")+
-    "<div class='muted' style='font-size:11.5px;margin-top:10px;line-height:1.5'>⚠ <b>იგივე მიმაგრება SD-ზეც გააკეთე.</b> აქ არჩეული მძღოლი მხოლოდ ჩვენს დაფაზე მოქმედებს — SD-ზე assign-ის გარეშე ტვირთი სისტემას მძღოლთან დაკავშირებული არ ეგონება.</div>"+
+    "<div class='muted' style='font-size:11.5px;margin-top:10px;line-height:1.5'>მიბმა <b>მხოლოდ ჩვენს აპლიკაციაში</b> კეთდება — SD-ზე ხვალინდელ ტვირთს assign არ სჭირდება. ასე დღის სია და დღიური სტანდარტი სწორად ითვლება, SD კი მაშინ განახლდება, როცა მძღოლი მანქანას რეალურად აიყვანს.</div>"+
     "<div style='display:flex;gap:8px;margin-top:14px;justify-content:flex-end'>"+
       "<button class='fixbtn' onclick=\"document.getElementById('_pconf').remove()\">გაუქმება</button>"+
       (ds.length?("<button class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"planAddWithDrv('"+encodeURIComponent(on)+"')\">დამატება</button>"):'')+
