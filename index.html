@@ -338,6 +338,59 @@ function callNeeded_(on){
   if(!l) return true;
   return !noCallBroker_(l.customer);
 }
+/* ---- ვენიუს (ბიზნეს-სახელის) წესები ----
+   1) shipper = ფიქაფის ან დელივერის ბიზნეს-სახელი → იმ მხარეს დარეკვა არ მოეთხოვება:
+      ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას.
+   2) აუქციონი (Copart / Manheim / ADESA) → ზარი არასდროს მოეთხოვება, იქ appointment
+      ინიშნება. სამაგიეროდ: Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაიწეროს,
+      Manheim-ის ფიქაფზე — Gate Pass უნდა აიტვირთოს. */
+var AUCT_KIND=[['copart','Copart'],['manheim','Manheim'],['adesa','ADESA']];
+function venueKind_(name){
+  var n=String(name==null?'':name).toLowerCase();
+  for(var i=0;i<AUCT_KIND.length;i++){ if(n.indexOf(AUCT_KIND[i][0])>=0) return AUCT_KIND[i][0]; }
+  return '';
+}
+function venueLabel_(k){ for(var i=0;i<AUCT_KIND.length;i++){ if(AUCT_KIND[i][0]===k) return AUCT_KIND[i][1]; } return k; }
+/* კომპანიის სახელის ნორმალიზება — იურიდიული ბოლოსართები და პუნქტუაცია იშლება */
+function orgKey_(s){
+  return String(s==null?'':s).toLowerCase()
+    .replace(/[^a-z0-9]+/g,' ')
+    .replace(/\b(inc|llc|ltd|lc|corp|corporation|company|co)\b/g,' ')
+    .replace(/\s+/g,' ').trim();
+}
+function sameOrg_(a,b){
+  var x=orgKey_(a), y=orgKey_(b);
+  if(!x || !y) return false;
+  if(x===y) return true;
+  /* პრეფიქსი სიტყვის საზღვარზე — „Johnson Auto Sales" vs „Johnson Auto Sales Detroit".
+     8 სიმბოლოზე მოკლე გასაღები არ ითვლება, რომ ზოგადი სახელები არ აირიოს. */
+  var pre=function(s,l){ return l.length>=8 && s.indexOf(l+' ')===0; };
+  return pre(x,y) || pre(y,x);
+}
+/* side: 'pu' ან 'del'. აბრუნებს null-ს (ზარი საჭიროა) ან მიზეზს. */
+function callSkip_(l, side){
+  if(!l) return null;
+  var venue=(side==='pu')? l.pu_venue : l.del_venue;
+  if(!venue) return null;
+  var k=venueKind_(venue);
+  if(k) return {why:'auction', kind:k, venue:venue,
+    text:venueLabel_(k)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'};
+  if(sameOrg_(l.customer, venue)) return {why:'shipper', venue:venue,
+    text:'shipper = '+(side==='pu'?'ფიქაფი':'დელივერი')+' ('+venue+') — ზარი არ მოეთხოვება'};
+  return null;
+}
+function apptNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='copart'); }
+function gatePassNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='manheim'); }
+function apptOf_(l){ return l? (actOf_(l.order_number).appt_at||null) : null; }
+function gatePassOf_(l){ return l? (actOf_(l.order_number).gate_pass_path||null) : null; }
+/* appointment ინახება როგორც „კედლის საათი" — აღების ადგილის ადგილობრივი დრო,
+   სასაათო სარტყლის გადათვლის გარეშე (დისპეტჩერი საქართველოშია, აუქციონი ამერიკაში). */
+function apptVal_(iso){ return iso? String(iso).slice(0,16).replace(' ','T') : ''; }
+function apptShow_(iso){
+  var v=apptVal_(iso); if(!v) return '—';
+  var m=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(v); if(!m) return v;
+  return (+m[3])+' '+GM[+m[2]-1]+', '+m[4]+':'+m[5];
+}
 function assignExpected_(l){
   if(!l) return false;
   if(BFLAG[l.customer]) return false;                                   // ინსპექცია ბროკერის აპში
@@ -1002,7 +1055,7 @@ function rBoard(){
   var cutD=addDays_(workToday_(),-30);
   var byName={};
   L.forEach(function(r){
-    var nm=r.driver_name||(r.driver_id_sd?('SD '+r.driver_id_sd):'');
+    var nm=drvName_(r)||(r.driver_id_sd?('SD '+r.driver_id_sd):'');
     if(!nm) return;
     if(!byName[nm]) byName[nm]={name:nm,loads:[],last:''};
     byName[nm].loads.push(r);
@@ -1051,7 +1104,7 @@ function rBoard(){
       var dd=delDay_(l);
       var man=dd?(" · ჩაბარება "+gd(dd)):"";
       var off=(puDay_(l)!==tday)?" <span style='color:var(--muted);font-size:10.5px'>SD: "+gd(puDay_(l))+"</span>":"";
-      return "<span class='load'><span class='oid'>"+esc(l.order_number)+"</span> <b>"+esc(locShort(l.pickup_location))+"</b> → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'')+pm+man+off+
+      return "<span class='load'><span class='oid'>"+esc(l.order_number)+"</span>"+sdMissChip_(l)+" <b>"+esc(locShort(l.pickup_location))+"</b> → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'')+pm+man+off+
         " <a href='#' title='ხვალინდელი დღიდან მოხსნა' style='color:var(--muted);text-decoration:none;font-weight:700' onclick=\"planDrop('"+encodeURIComponent(l.order_number)+"');return false\">×</a></span>";
     }).join('');
     var restBtn="<button class='fixbtn' onclick=\"offSet('"+encodeURIComponent(d.name)+"')\">მძღოლი ისვენებს</button>";
@@ -1099,8 +1152,8 @@ function rBoard(){
     }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
   var CC=(PCONT||[]).filter(function(r){ return !r.not_required && callNeeded_(r.order_number); });
-  var puOk_=function(r){ return !!(r.pu_missing || r.pu_call || r.pu_sms); };
-  var delOk_=function(r){ return !!(r.del_missing || r.del_call || r.del_sms); };
+  var puOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'pu') || r.pu_missing || r.pu_call || r.pu_sms); };
+  var delOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'del') || r.del_missing || r.del_call || r.del_sms); };
   var callP=CC.filter(function(r){ return !(puOk_(r) && delOk_(r)); })
     .filter(function(r){ return !waivOk_('calls',r.order_number,tday); });
   /* SD-ში ნომერი არ წერია — ვერ შევამოწმებთ, მაგრამ დამალვაც არ შეიძლება */
@@ -1109,10 +1162,11 @@ function rBoard(){
     if(!items.length) return '';
     return items.slice(0,10).map(function(r){
       var a=ATT[r.order_number]||{};
+      var L0=loadOf_(r.order_number);
       var miss=[], ev=[];
-      if(!r.pu_missing && !(r.pu_call||r.pu_sms)){ miss.push('ფიქაფი '+fmtPhone_(r.pickup_phone));
+      if(!callSkip_(L0,'pu') && !r.pu_missing && !(r.pu_call||r.pu_sms)){ miss.push('ფიქაფი '+fmtPhone_(r.pickup_phone));
         ev.push('ფიქაფზე '+(a.pu_try||0)+' ცდა'+(a.pu_sms_out?(' + '+a.pu_sms_out+' SMS'):'')); }
-      if(!r.del_missing && !(r.del_call||r.del_sms)){ miss.push('დელივერი '+fmtPhone_(r.delivery_phone));
+      if(!callSkip_(L0,'del') && !r.del_missing && !(r.del_call||r.del_sms)){ miss.push('დელივერი '+fmtPhone_(r.delivery_phone));
         ev.push('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):'')); }
       var tried=((a.pu_try||0)+(a.del_try||0))>0;
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
@@ -1147,7 +1201,8 @@ function rBoard(){
   }).join('');
 
   /* ზარები — გამოცხადებული სიის ყველა ტვირთი, ფიქაფი/დელივერი ცალ-ცალკე */
-  var callCell_=function(missing, ok, phone){
+  var callCell_=function(missing, ok, phone, skip){
+    if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>";
     if(missing) return "<span class='ccell na'>ნომერი არ წერია</span>";
     return "<span class='ccell "+(ok?'ok':'no')+"'>"+(ok?'✓':'✗')+" "+esc(fmtPhone_(phone)||'—')+"</span>";
   };
@@ -1160,17 +1215,55 @@ function rBoard(){
       ? ("<div class='tablewrap' style='padding:0 15px 12px 49px'><table style='min-width:720px'><thead><tr>"+
          "<th>Order ID</th><th>მძღოლი</th><th>ფიქაფი</th><th>დელივერი</th></tr></thead><tbody>"+
          callList.map(function(r){
+           var L1=loadOf_(r.order_number);
            return "<tr><td><b>"+esc(r.order_number)+"</b></td><td>"+esc(r.driver_name||'—')+"</td>"+
-             "<td>"+callCell_(r.pu_missing,(r.pu_call||r.pu_sms),r.pickup_phone)+"</td>"+
-             "<td>"+callCell_(r.del_missing,(r.del_call||r.del_sms),r.delivery_phone)+"</td></tr>";
+             "<td>"+callCell_(r.pu_missing,(r.pu_call||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'))+"</td>"+
+             "<td>"+callCell_(r.del_missing,(r.del_call||r.del_sms),r.delivery_phone,callSkip_(L1,'del'))+"</td></tr>";
          }).join('')+"</tbody></table></div>")
       : "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>ხვალინდელ სიაში ჯერ ტვირთი არ არის — შესამოწმებელი ზარიც არ არის</div>");
+
+  /* ---- აუქციონები: Copart-ს appointment სჭირდება, Manheim-ს Gate Pass ---- */
+  var PL=planLoads_(tday);
+  var apptAll=PL.filter(apptNeeded_), gpAll=PL.filter(gatePassNeeded_);
+  var apptP=apptAll.filter(function(l){ return !apptOf_(l) && !waivOk_('appt',l.order_number,tday); });
+  var gpP=gpAll.filter(function(l){ return !gatePassOf_(l) && !waivOk_('gatepass',l.order_number,tday); });
+  function apptRows_(items){
+    return items.slice(0,10).map(function(l){
+      var e0=encodeURIComponent(l.order_number), cur=apptOf_(l);
+      var def=apptVal_(cur)||((puDay_(l)||tday)+'T09:00');
+      return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
+        "<div class='t'><b>"+esc(l.order_number)+"</b><span>"+esc(drvName_(l)||'—')+" · "+esc(l.pu_venue||'Copart')+" → "+esc(locShort(l.delivery_location))+
+        (cur?(" · <span style='color:var(--good)'>appointment "+esc(apptShow_(cur))+"</span>")
+            :" · <span style='color:var(--crit)'>appointment ჩაწერილი არ არის</span>")+"</span></div>"+
+        "<input id='ap_"+e0+"' type='datetime-local' value='"+esc(def)+"' style='padding:5px 7px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12px;background:var(--page);color:var(--ink);margin-right:6px'>"+
+        "<button class='fixbtn' style='margin-right:6px' onclick=\"apptSave('"+e0+"')\">შენახვა</button>"+
+        (cur?'':waivChip_('appt',l.order_number,'Appointment — '+l.order_number,tday))+"</div>";
+    }).join('');
+  }
+  function gpRows_(items){
+    return items.slice(0,10).map(function(l){
+      var e0=encodeURIComponent(l.order_number), p=gatePassOf_(l);
+      return "<div class='gate' style='padding-left:34px' ondragover=\"event.preventDefault()\" ondrop=\"gpDrop('"+e0+"',event)\" title='Gate Pass-ის ფოტო აქ ჩააგდე ან დააჭირე „ჩასმა Ctrl+V“'>"+
+        "<div class='ic' style='visibility:hidden'>·</div>"+
+        "<div class='t'><b>"+esc(l.order_number)+"</b><span>"+esc(drvName_(l)||'—')+" · "+esc(l.pu_venue||'Manheim')+" → "+esc(locShort(l.delivery_location))+
+        (p?" · <span style='color:var(--good)'>Gate Pass ატვირთულია</span>":" · <span style='color:var(--crit)'>Gate Pass არ არის</span>")+"</span></div>"+
+        (p?("<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(p)+"');return false\" style='text-decoration:none;margin-right:6px'>ნახვა</a>"):"")+
+        "<button class='fixbtn' style='margin-right:6px' onclick=\"gpArm('"+e0+"')\">ჩასმა Ctrl+V</button>"+
+        "<label class='fixbtn' style='cursor:pointer;margin-right:6px'>ფაილი<input type='file' accept='image/*,application/pdf' style='display:none' onchange=\"upGate('"+e0+"',this)\"></label>"+
+        (p?'':waivChip_('gatepass',l.order_number,'Gate Pass — '+l.order_number,tday))+"</div>";
+    }).join('');
+  }
+  var gAppt=(apptP.length===0)||waivOk_('appt_all','',tday);
+  var gGate=(gpP.length===0)||waivOk_('gatepass_all','',tday);
+  var apptBox_=apptAll.length? (gate_('Copart — Appointment', apptP.length, apptP.length+' ტვირთს appointment-ის დრო არ აქვს ჩაწერილი', 'appt_all','')+apptRows_(apptAll)) : '';
+  var gpBox_=gpAll.length? (gate_('Manheim — Gate Pass', gpP.length, gpP.length+' ტვირთს Gate Pass არ აქვს ატვირთული', 'gatepass_all','')+gpRows_(gpAll)) : '';
 
   var gInv=(invP.length===0)||waivOk_('invoice','',tday);
   var gChk=(chkP.length===0)||waivOk_('check','',tday);
   var gCall=callOkAll;
   var wrOk=wrConfirmed_();
-  var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1);
+  var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1)+
+          (apptAll.length&&!gAppt?1:0)+(gpAll.length&&!gGate?1:0);
   var closed=SCLOSE&&SCLOSE.work_day===tday;
   var chips=[['g','დაცული'],['y','ნაკლები'],['r','ვერ ავსებს']].filter(function(t){ return cnt[t[0]]; })
     .map(function(t){ return "<span class='chip "+t[0]+"'><span class='dot'></span>"+cnt[t[0]]+" "+t[1]+"</span>"; }).join('');
@@ -1189,6 +1282,8 @@ function rBoard(){
       "<div class='gate "+(stdOk?'ok':'no')+"'><div class='ic'>"+(stdOk?'✓':'!')+"</div><div class='t'><b>"+gdFull(tday)+"ს ტვირთები</b></div></div>"+
       (stdSlots||"<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>მძღოლი არ არის</div>")+
       callGate_+
+      apptBox_+
+      gpBox_+
       gate_('ინვოისი და BOL', invP.length, invP.length+' ჩაბარებული ტვირთი დოკუმენტების გარეშე', 'invoice','')+
       rows_(invP,'inv')+
       gate_('ჩეკის ატვირთვა', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', 'check','')+
@@ -1204,6 +1299,7 @@ function rBoard(){
       "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და იმ დღეს ჯერ კიდევ გზაშია</b> — ტვირთი არ მოეთხოვება. თავისუფლდება იმ დღეს, როცა აბარებს: SD-ის ჩაბარების თარიღით, ან თუ არ წერია — აღების დღეს + "+transitMi_()+" მილი დღეში (მაგ. 1 400 მილი 4 რიცხვში აღებული → 6 რიცხვში აბარებს, ე.ი. იმ დღეს ტვირთი <b>სჭირდება</b>). "+
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
+      "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონებზე — <b>Copart, Manheim, ADESA</b> — ზარი არასდროს მოეთხოვება, იქ appointment ინიშნება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
       "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
 }
 var SCLOSE=null;
@@ -1223,10 +1319,14 @@ async function closeShift(){
     SCLOSE=row; toast('ცვლა დახურულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ დაიხურა'); }
 }
-var CHKARM=null;
+var CHKARM=null, CHKKIND='check';
 function chkArm(enc){
-  CHKARM=decodeURIComponent(enc);
+  CHKARM=decodeURIComponent(enc); CHKKIND='check';
   toast('WhatsApp-ში დააკოპირე ჩეკის ფოტო და აქ დააჭირე Ctrl+V');
+}
+function gpArm(enc){
+  CHKARM=decodeURIComponent(enc); CHKKIND='gate';
+  toast('დააკოპირე Gate Pass-ის ფოტო და აქ დააჭირე Ctrl+V');
 }
 document.addEventListener('paste', function(ev){
   if(!CHKARM) return;
@@ -1234,10 +1334,37 @@ document.addEventListener('paste', function(ev){
   for(var i=0;i<items.length;i++){
     if(items[i].type && items[i].type.indexOf('image')===0){
       var f=items[i].getAsFile();
-      if(f){ ev.preventDefault(); var on=CHKARM; CHKARM=null; upCheckFile(on,f); return; }
+      if(f){ ev.preventDefault(); var on=CHKARM, k=CHKKIND; CHKARM=null; upFile_(on,f,k); return; }
     }
   }
 });
+function gpDrop(enc, ev){
+  ev.preventDefault(); ev.stopPropagation();
+  var dt=ev.dataTransfer; if(!dt) return;
+  var f=(dt.files&&dt.files[0])||null;
+  if(f){ upFile_(decodeURIComponent(enc), f, 'gate'); return; }
+  var url=dt.getData('text/uri-list')||dt.getData('text/plain')||'';
+  if(/^https?:|^blob:|^data:/.test(url)) upCheckUrl(decodeURIComponent(enc), url, 'gate');
+}
+async function upGate(enc, input){
+  var f=input && input.files && input.files[0];
+  if(!f) return;
+  return upFile_(decodeURIComponent(enc), f, 'gate');
+}
+/* Copart-ის appointment — ინახება როგორც აღების ადგილის „კედლის საათი" */
+async function apptSave(enc){
+  var on=decodeURIComponent(enc);
+  var el=document.getElementById('ap_'+enc);
+  var v=String((el&&el.value)||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v)){ toast('თარიღი და საათი აირჩიე'); return; }
+  var iso=v.slice(0,16)+':00+00:00';
+  try{
+    var now=new Date().toISOString();
+    var res=await sb.from('load_actions').upsert({order_number:on, appt_at:iso, appt_by:USER.email, updated_at:now},{onConflict:'order_number'});
+    if(res.error) throw res.error;
+    await loadActions(); toast('Appointment შენახულია ✓'); render();
+  }catch(e){ console.error(e); toast('ვერ შეინახა — '+(e&&e.message?e.message:'')); }
+}
 function chkDrop(enc, ev){
   ev.preventDefault(); ev.stopPropagation();
   var dt=ev.dataTransfer; if(!dt) return;
@@ -1246,32 +1373,39 @@ function chkDrop(enc, ev){
   var url=dt.getData('text/uri-list')||dt.getData('text/plain')||'';
   if(/^https?:|^blob:|^data:/.test(url)) upCheckUrl(decodeURIComponent(enc), url);
 }
-async function upCheckUrl(on, url){
+async function upCheckUrl(on, url, kind){
   try{
     toast('იტვირთება…');
     var r=await fetch(url); var b=await r.blob();
     if(!/^image\//.test(b.type||'') && !/pdf/.test(b.type||'')) throw new Error('ფაილი სურათი არ არის');
-    await upCheckFile(on, new File([b],'check.'+((b.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/g,'')),{type:b.type}));
+    await upFile_(on, new File([b],'doc.'+((b.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/g,'')),{type:b.type}), kind);
   }catch(e){ console.error(e); toast('ვერ ჩაიტვირთა — სცადე Ctrl+V'); }
 }
 async function upCheck(enc, input){
   var on=decodeURIComponent(enc);
   var f=input && input.files && input.files[0];
   if(!f){ return; }
-  return upCheckFile(on, f);
+  return upFile_(on, f, 'check');
 }
-async function upCheckFile(on, f){
+function upCheckFile(on, f){ return upFile_(on, f, 'check'); }
+/* ჩეკიც და Gate Pass-იც ერთსა და იმავე bucket-ში ინახება, სხვადასხვა ფოლდერში */
+async function upFile_(on, f, kind){
+  kind=kind||'check';
   if(f.size > 15*1024*1024){ toast('ფაილი 15MB-ზე დიდია'); return; }
   toast('იტვირთება…');
   try{
     var ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
-    var path=on.replace(/[^A-Za-z0-9_-]/g,'_')+'/'+Date.now()+'.'+ext;
+    var safe=on.replace(/[^A-Za-z0-9_-]/g,'_');
+    var path=(kind==='gate'?'gatepass/':'')+safe+'/'+Date.now()+'.'+ext;
     var up=await sb.storage.from('checks').upload(path, f, {upsert:true, contentType:f.type||'image/jpeg'});
     if(up.error) throw up.error;
     var now=new Date().toISOString();
-    var res=await sb.from('load_actions').upsert({order_number:on, check_path:path, check_uploaded_at:now, check_by:USER.email},{onConflict:'order_number'});
+    var row=(kind==='gate')
+      ? {order_number:on, gate_pass_path:path, gate_pass_at:now, gate_pass_by:USER.email, updated_at:now}
+      : {order_number:on, check_path:path, check_uploaded_at:now, check_by:USER.email};
+    var res=await sb.from('load_actions').upsert(row,{onConflict:'order_number'});
     if(res.error) throw res.error;
-    await loadActions(); toast('ჩეკი ატვირთულია ✓'); render();
+    await loadActions(); toast(kind==='gate'?'Gate Pass ატვირთულია ✓':'ჩეკი ატვირთულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ აიტვირთა — '+(e&&e.message?e.message:'')); }
 }
 async function openCheck(encPath){
@@ -1544,7 +1678,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable').is('deleted_at', null).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact').is('deleted_at', null).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -1552,7 +1686,70 @@ async function loadLiveLoads(){
   }
   LIVE=all;
   normalizeDriverNames_();
+  dedupeLoads_();
   rebuildLoadIndex_();
+}
+/* ---- დუბლიკატები ----
+   ბროკერმა SD-ში ორდერის ნომერი ოდნავ შეცვალა (მაგ. „25295716" → „25295716.")
+   და სინქრონმა ორი ცალკე ტვირთი შექმნა. გროსი ორმაგდება. ვაერთიანებთ
+   ნორმალიზებული ნომრით (მხოლოდ ასოები და ციფრები), მაგრამ მხოლოდ მაშინ, თუ
+   მარშრუტიც, მანქანაც ან მძღოლიც ემთხვევა — რომ შემთხვევით სხვა ტვირთი არ წაიშალოს. */
+var DUPS=[];
+function onKey_(on){ return String(on==null?'':on).toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function dupScore_(l){
+  var s=0;
+  if(l.delivery_completed) s+=8;
+  if(l.pickup_completed) s+=4;
+  if(l.driver_name) s+=3;
+  if(l.customer) s+=2;
+  if(Number(l.miles)>0) s+=2;
+  if(l.invoice_sent_at) s+=2;
+  if(l.dispatcher_name) s+=1;
+  if(l.bol) s+=1;
+  if(Number(l.gross!=null?l.gross:l.price)>0) s+=1;
+  return s;
+}
+/* ერთი და იგივე ტვირთია? — მანქანის შეუსაბამობა კატეგორიული უარია
+   (ბროკერები ხანდახან ორდერის ნომრის ნაცვლად სახელს წერენ, მაგ. „Transwest",
+   და ორი სრულიად სხვადასხვა ტვირთი ერთნაირად ეწოდება). დანარჩენში —
+   ექვსი ნიშნიდან მინიმუმ ოთხი უნდა ემთხვეოდეს. */
+function dupNz_(v){ return String(v==null?'':v).trim().toLowerCase(); }
+function dupSame_(a,b){
+  var va=dupNz_(a.vehicle), vb=dupNz_(b.vehicle);
+  if(va && vb && va!==vb) return false;
+  var G=function(l){ return Number(l.gross!=null?l.gross:l.price)||0; };
+  var d10=function(v){ return String(v==null?'':v).slice(0,10); };
+  var n=0;
+  if(va && va===vb) n++;
+  if(dupNz_(a.pickup_location) && dupNz_(a.pickup_location)===dupNz_(b.pickup_location)) n++;
+  if(dupNz_(a.delivery_location) && dupNz_(a.delivery_location)===dupNz_(b.delivery_location)) n++;
+  if(d10(a.pickup_scheduled) && d10(a.pickup_scheduled)===d10(b.pickup_scheduled)) n++;
+  if(G(a)>0 && G(a)===G(b)) n++;
+  if((Number(a.vehicle_count)||1)===(Number(b.vehicle_count)||1)) n++;
+  return n>=4;
+}
+function dedupeLoads_(){
+  DUPS=[];
+  var g={};
+  (LIVE||[]).forEach(function(l){ var k=onKey_(l.order_number); if(!k) return; (g[k]=g[k]||[]).push(l); });
+  var drop={};
+  Object.keys(g).forEach(function(k){
+    var arr=g[k]; if(arr.length<2) return;
+    var keep=arr.slice().sort(function(a,b){ return dupScore_(b)-dupScore_(a); })[0];
+    arr.forEach(function(l){
+      if(l===keep || !dupSame_(l,keep)) return;
+      drop[l.order_number]=1;
+      DUPS.push({kept:keep.order_number, dropped:l.order_number,
+        driver:l.driver_name||keep.driver_name||'', customer:l.customer||keep.customer||'',
+        dispatcher:l.dispatcher_name||keep.dispatcher_name||'',
+        route:locShort(keep.pickup_location)+' → '+locShort(keep.delivery_location),
+        gross:Number(l.gross!=null?l.gross:l.price)||0});
+    });
+  });
+  if(DUPS.length){
+    LIVE=(LIVE||[]).filter(function(l){ return !drop[l.order_number]; });
+    console.log('დუბლიკატი ტვირთი გაერთიანდა:', DUPS.length, DUPS);
+  }
 }
 /* SD-ში ტვირთის ხელახლა assign-ისას loads.driver_name ძველი მძღოლისა რჩება
    (ატრიბუციის ფუნქცია მხოლოდ ცარიელ ველს ავსებდა). driver_id_sd კი ახლდება —
@@ -1578,12 +1775,42 @@ function normalizeDriverNames_(){
   });
   if(fixed) console.log('driver_name გასწორდა SD ID-ით:', fixed);
 }
-function drvName_(l){ return (l&&l.driver_name)||''; }
+/* ხელით დამატებულ ტვირთს დისპეტჩერი თვითონ ურჩევს მძღოლს (day_plan.driver_name) —
+   SD-ზე assign ჯერ არ არის გაკეთებული, მაგრამ დაფაზე ტვირთი მაინც სწორ ბარათზე დგება. */
+var PDRVC=null, PDRVK=null;
+function planDrv_(on){
+  var k=MYD()+'|'+ymd_(nextWorkDay_());
+  if(PDRVK!==k || PDRVC===null){
+    PDRVK=k; PDRVC={};
+    var day=ymd_(nextWorkDay_()), me=MYD();
+    (DPLAN||[]).forEach(function(p){
+      if(p.work_day===day && p.action==='add' && p.driver_name && (!me || p.dispatcher_name===me)) PDRVC[p.order_number]=p.driver_name;
+    });
+  }
+  return PDRVC[on]||'';
+}
+function drvName_(l){ return (l&&(l.driver_name||planDrv_(l.order_number)))||''; }
+/* SD-ზე მიბმული არ არის, მხოლოდ აპში — ეს დისპეტჩერს უნდა ეჩვენოს */
+function planOnly_(l){ return !!(l && !l.driver_name && planDrv_(l.order_number)); }
+function sdMissChip_(l){
+  return planOnly_(l) ? " <span class='chip y' style='padding:0 6px;font-size:10px' title='მძღოლი აპში შენ მიაბი — SD-ზე assign ჯერ არ არის გაკეთებული'>SD-ზე მიაბი</span>" : "";
+}
+/* ხვალინდელი დღის ჩემი მძღოლების სია */
+function myDrivers_(day){
+  var rost={};
+  Object.keys(DRIVERS_BY_NAME).forEach(function(n){ rost[n]=1; });
+  (DIR||[]).forEach(function(x){ rost[x.name]=1; });
+  (DASG||[]).forEach(function(p){ rost[p.driver_name]=1; });
+  return Object.keys(rost).filter(function(n){
+    return n && driverActive_(n) && dispOfDriver_(n,day)===MYD() && !offOf_(n,day);
+  }).sort(function(a,b){ return a.localeCompare(b,'ka'); });
+}
 /* ატრიბუციის გარეშე ტვირთი ყველა დისპეტჩერს უჩანს (RLS) — Work Log-ში კი
    მხოლოდ ისინი უნდა შემოვიდეს, ვისიც მართლა არის: ან პირდაპირ მიწერია,
    ან მძღოლი ჩემია. მიუბმელი ტვირთი არავის Work Log-ში არ ჯდება. */
 function mineWork_(l){
   if(!USER || isMgmtView()) return true;
+  if(planDrv_(l.order_number)) return true;      /* ხელით ავირჩიე და მძღოლიც მე მივაბი */
   if(l.dispatcher_name) return l.dispatcher_name===MYD();
   return !!(l.driver_name && dispOfDriver_(l.driver_name)===MYD());
 }
@@ -2296,7 +2523,24 @@ function rExc(){
     "<div class='tablewrap'><table style='min-width:980px'><thead><tr><th>დონე</th><th>დისპეტჩერი</th><th>მძღოლი / კლიენტი</th><th>რა ხდება</th><th>დეტალი</th></tr></thead><tbody>"+
     (rows||"<tr><td colspan='5' class='muted'>ამ კატეგორიაში გამონაკლისი არ არის ✓</td></tr>")+"</tbody></table></div>"+
     "<div class='muted' style='font-size:12px;margin-top:10px'>წესები: ინვოისი ჩაბარებიდან 7+ დღეა გასაგზავნი · გადახდა 30+ დღით ვადაგადაცილებული · ტვირთი 7+ დღეა აყვანილი და არ ჩაბარებულა · ბოლო 14 დღის ტვირთი მძღოლზე მიბმული არ არის · მომდევნო სამუშაო დღის ტვირთზე ფიქაფი ან დელივერი დაურეკავია · აქტიური მძღოლი უტვირთოდ დგას · ადგილზე აღებული თანხა 14+ დღეა SD-ში მოუნიშნავია · <b>აღების თარიღი გავიდა და ტვირთი არ აღებულა</b> — აქ ჩნდება მიტოვებული ან არარსებული ტვირთი. „მიუბმელი“ არ ითვლის იმ ბროკერებს, სადაც ინსპექცია მათ აპშია, და იმ მძღოლებს, რომლებსაც წინასწარ არ ვაბამთ. ნაჩვენებია პირველი "+Math.min(F.length,SHOW)+" "+F.length+"-დან.</div></div>"+
+    dupCard_()+
     brokerRulesHtml_();
+}
+/* ბროკერმა ორდერის ნომერი შეცვალა → ბაზაში ორი ჩანაწერი. აპი აერთიანებს,
+   მაგრამ წყარო SD-შია — ამიტომ სია მენეჯმენტს უნდა დაენახოს. */
+function dupCard_(){
+  if(!DUPS.length) return '';
+  var rows=DUPS.slice(0,50).map(function(d){
+    return "<tr><td><b>"+esc(d.kept)+"</b></td><td style='color:var(--crit)'>"+esc(d.dropped)+"</td>"+
+      "<td>"+esc(d.dispatcher||'—')+"</td><td>"+esc(d.driver||'—')+"</td><td>"+esc(d.customer||'—')+"</td>"+
+      "<td>"+esc(d.route)+"</td><td class='num'>"+money(d.gross)+"</td></tr>";
+  }).join('');
+  return "<div class='card p' style='margin-top:14px'><h4>დუბლიკატი ტვირთები — "+DUPS.length+
+    " <span class='muted' style='font-weight:500;font-size:11px'>· აპში უკვე გაერთიანებულია, გროსი ერთხელ ითვლება</span></h4>"+
+    "<div class='muted' style='font-size:12px;margin-bottom:8px'>ერთი და იგივე ტვირთი ბაზაში ორჯერაა, იმიტომ რომ SD-ში ორდერის ნომერი შეიცვალა (მაგ. ბოლოში წერტილი დაემატა). <b>გასწორება SD-ში სჭირდება</b> — თორემ ყოველ სინქრონზე თავიდან შემოვა.</div>"+
+    "<div class='tablewrap'><table style='min-width:900px'><thead><tr><th>რჩება</th><th>დუბლიკატი</th><th>დისპეტჩერი</th><th>მძღოლი</th><th>ბროკერი</th><th>მარშრუტი</th><th class='num'>გროსი</th></tr></thead><tbody>"+
+    rows+"</tbody></table></div>"+
+    (DUPS.length>50?("<div class='muted' style='font-size:12px;margin-top:8px'>ნაჩვენებია პირველი 50</div>"):'')+"</div>";
 }
 /* ---- ანალიზი — ცოცხალი, პერიოდის ჭრილში (SD) ---- */
 var ANDAYS=30;
@@ -2764,6 +3008,7 @@ var PQ='';         // ძებნის ტექსტი
 async function loadPlan(){
   try{ var r=await sb.from('day_plan').select('*').gte('work_day', addDays_(ymd_(new Date()),-21));
     DPLAN=r.data||[]; }catch(e){ console.error(e); DPLAN=[]; }
+  PDRVC=null;   /* მძღოლის ხელით მიბმის ქეში თავიდან აეწყოს */
 }
 function planRows_(day, disp){
   var d=disp||(USER&&MYD())||'';
@@ -2820,7 +3065,7 @@ function addRes_(day){
   }).slice(0,12);
   var rows=hits.map(function(l){
     return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td><td>"+esc(l.customer||'—')+"</td>"+
-      "<td>"+(drvName_(l)?esc(drvName_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
+      "<td>"+(drvName_(l)?(esc(drvName_(l))+sdMissChip_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
       "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
       "<td class='num'>"+money(grossOf_(l))+"</td>"+
       "<td>"+gd(puDay_(l))+"</td><td>"+gd(delDay_(l))+"</td>"+
@@ -2839,7 +3084,7 @@ function addBox_(day, boardList){
   var selHtml=rest.map(function(l){
     var mi=Number(l.miles)||0;
     return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td>"+
-      "<td>"+(drvName_(l)?esc(drvName_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
+      "<td>"+(drvName_(l)?(esc(drvName_(l))+sdMissChip_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
       "<td>"+esc(l.customer||'—')+"</td>"+
       "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
       "<td class='num'>"+money(grossOf_(l))+"</td>"+
@@ -2873,10 +3118,43 @@ function planAskAdd(enc){
       (l.driver_name?(" · "+esc(l.driver_name)):"")+"<br>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</div>"+
     "<div style='display:flex;gap:8px;justify-content:flex-end'>"+
       "<button class='fixbtn' onclick=\"document.getElementById('_pconf').remove()\">არა</button>"+
-      "<button class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"document.getElementById('_pconf').remove();planAdd('"+encodeURIComponent(on)+"','add','დისპეტჩერმა დაადასტურა')\">კი</button>"+
+      "<button class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"planAskDrv('"+encodeURIComponent(on)+"')\">კი</button>"+
     "</div></div>";
 }
-async function planAdd(enc, action, preset){
+/* დადასტურების შემდეგ — მძღოლზე მიმაგრება. თუ SD-ზე მძღოლი უკვე მიბმულია,
+   კითხვა ზედმეტია და პირდაპირ ემატება. */
+function planAskDrv(enc){
+  var on=decodeURIComponent(enc);
+  var day=ymd_(nextWorkDay_());
+  var l=(LIVE||[]).filter(function(x){ return x.order_number===on; })[0]||{};
+  var box=document.getElementById('_pconf');
+  if(l.driver_name){ if(box) box.remove(); return planAdd(enc,'add','დისპეტჩერმა დაადასტურა'); }
+  var ds=myDrivers_(day);
+  if(!box){ box=document.createElement('div'); box.id='_pconf';
+    box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px';
+    document.body.appendChild(box); }
+  box.innerHTML="<div class='card p' style='max-width:460px;width:100%'>"+
+    "<h4 style='margin-bottom:6px'>რომელ მძღოლს მიება?</h4>"+
+    "<div class='muted' style='font-size:12.5px;margin-bottom:12px'><b>"+esc(on)+"</b> · "+esc(l.customer||'—')+"<br>"+
+      esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</div>"+
+    (ds.length
+      ? ("<select id='_pdrv' style='width:100%;padding:9px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--page);color:var(--ink)'>"+
+         ds.map(function(n){ return "<option value='"+esc(n)+"'>"+esc(n)+"</option>"; }).join('')+"</select>")
+      : "<div style='color:var(--crit);font-size:12.5px'>ხვალინდელ დღეს შენზე აქტიური მძღოლი არ ჩანს — ჯერ როსტერი შეავსე.</div>")+
+    "<div class='muted' style='font-size:11.5px;margin-top:10px;line-height:1.5'>⚠ <b>იგივე მიმაგრება SD-ზეც გააკეთე.</b> აქ არჩეული მძღოლი მხოლოდ ჩვენს დაფაზე მოქმედებს — SD-ზე assign-ის გარეშე ტვირთი სისტემას მძღოლთან დაკავშირებული არ ეგონება.</div>"+
+    "<div style='display:flex;gap:8px;margin-top:14px;justify-content:flex-end'>"+
+      "<button class='fixbtn' onclick=\"document.getElementById('_pconf').remove()\">გაუქმება</button>"+
+      (ds.length?("<button class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"planAddWithDrv('"+encodeURIComponent(on)+"')\">დამატება</button>"):'')+
+    "</div></div>";
+}
+function planAddWithDrv(enc){
+  var s=document.getElementById('_pdrv');
+  var drv=s? String(s.value||'').trim() : '';
+  if(!drv){ toast('მძღოლი აირჩიე'); return; }
+  var b=document.getElementById('_pconf'); if(b) b.remove();
+  planAdd(enc,'add','დისპეტჩერმა დაადასტურა', drv);
+}
+async function planAdd(enc, action, preset, drv){
   var on=decodeURIComponent(enc);
   var l=(LIVE||[]).filter(function(x){ return x.order_number===on; })[0];
   var day=ymd_(nextWorkDay_());
@@ -2888,7 +3166,7 @@ async function planAdd(enc, action, preset){
   }
   try{
     var row={dispatcher_name:MYD(), work_day:day, order_number:on, action:action,
-             reason:String(why).trim(), driver_name:(l?l.driver_name:null),
+             reason:String(why).trim(), driver_name:(drv||(l?l.driver_name:null)||null),
              sd_pickup_date:(l?puDay_(l):null), created_by:USER.email, created_at:new Date().toISOString()};
     var res=await sb.from('day_plan').upsert(row,{onConflict:'dispatcher_name,work_day,order_number'});
     if(res.error) throw res.error;
