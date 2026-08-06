@@ -639,10 +639,12 @@ async function enterViewAs(name){
   var bar=document.getElementById('vaBar'), tx=document.getElementById('vaTxt');
   if(VIEWAS){
     try{ await loadClose(); }catch(e){ console.error(e); }
+    try{ await loadPlanContacts(); }catch(e){ console.error(e); }
     if(bar){ bar.style.display='block'; }
     if(tx){ tx.textContent='⚠ ხედავ და მოქმედებ '+VIEWAS+'-ის სახელით. ყველა ცვლილება მის ანგარიშზე აისახება (ჩანაწერში რჩება, რომ შენ გააკეთე).'; }
   } else {
     SCLOSE=null;
+    try{ await loadPlanContacts(); }catch(e){ console.error(e); }
     if(bar){ bar.style.display='none'; }
   }
   buildViewAs();
@@ -1183,8 +1185,7 @@ function rBoard(){
     addBox_(tday, list)+
     "<div class='sect'>ცვლის დახურვა</div>"+
     "<div class='card' id='closeCard'>"+
-      "<div class='gate "+(wrOk?'ok':'no')+"'><div class='ic'>"+(wrOk?'✓':'!')+"</div><div class='t'><b>კვირის როსტერი</b><span>"+
-        (wrOk?'დადასტურებულია':'ჯერ არ დაგიდასტურებია — ვინ მუშაობს ამ კვირაში')+"</span></div></div>"+
+      (wrOk?'':"<div class='gate no'><div class='ic'>!</div><div class='t'><b>კვირის როსტერი</b><span>ზემოთ მონიშნე, ვინ მუშაობს ამ კვირაში — მანამდე ცვლა არ იხურება</span></div></div>")+
       "<div class='gate "+(stdOk?'ok':'no')+"'><div class='ic'>"+(stdOk?'✓':'!')+"</div><div class='t'><b>"+gdFull(tday)+"ს ტვირთები</b></div></div>"+
       (stdSlots||"<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>მძღოლი არ არის</div>")+
       callGate_+
