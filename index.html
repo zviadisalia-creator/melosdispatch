@@ -1506,6 +1506,34 @@ function fixGate(b){const g=b.closest('.gate');g.classList.remove('no');g.classL
   else{c.innerHTML='<span class="dot"></span>'+rem+' დარჩენილი';}
 }
 /* ---- ჩემი პროფილი — ცოცხლად (SD loads + Quo), snapshot-ის გარეშე ---- */
+/* ---- ზარის ხარისხი (call_analysis → RPC call_quality) ----
+   საზომად ვიღებთ **სუსტი ზარის წილს**, არა საშუალო ქულას: საშუალო 18 დისპეტჩერზე
+   66–71 შუალედშია (პრაქტიკულად ხმაური), სუსტი ზარის წილი კი 4%–14% — 3.5× სხვაობა.
+   ითვლება მხოლოდ ის ზარები, სადაც მოდელმა თვითონ თქვა „ღირს შეფასება"
+   (IVR, ავტომოპასუხე და გაუგებარი ჩანაწერი გამორიცხულია). */
+var QCS=null, QCS_LOADING=false;
+function qLoad_(cb){
+  if(QCS!==null || QCS_LOADING) return;
+  QCS_LOADING=true;
+  var to=new Date(), from=new Date(Date.now()-30*864e5);
+  sb.rpc('call_quality',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
+    QCS={}; if(r && !r.error){ (r.data||[]).forEach(function(x){ QCS[x.dispatcher_name]=x; }); }
+    else if(r && r.error) console.error(r.error);
+    QCS_LOADING=false; if(cb) cb();
+  },function(e){ console.error(e); QCS={}; QCS_LOADING=false; if(cb) cb(); });
+}
+/* სუსტი ზარის წილი → 0–100. 4% სუსტი → 80, 14% სუსტი → 30. */
+function qualScore_(pctWeak){ return Math.max(0, Math.min(100, 100 - (Number(pctWeak)||0)*5)); }
+function qualOf_(name){ return (QCS && QCS[name]) ? QCS[name] : null; }
+/* ერთი ფორმულა ორივე ადგილისთვის — პროფილიც და რეიტინგიც ერთსა და იმავეს უნდა აჩვენებდეს.
+   თუ ხარისხის მონაცემი არ არის (ახალი დისპეტჩერი), ძველ წონებზე ვბრუნდებით —
+   რომ მონაცემის არქონისთვის არავინ დაისაჯოს. */
+function scoreOf_(callPct, invPct, asgPct, qRow){
+  if(qRow && Number(qRow.n_eval) >= 20){
+    return Math.round(callPct*0.40 + qualScore_(qRow.pct_weak)*0.20 + invPct*0.25 + asgPct*0.15);
+  }
+  return Math.round(callPct*0.5 + invPct*0.3 + asgPct*0.2);
+}
 var MYCS=null, MYCS_LOADING=false, MYCS_ERR=false;
 function myLoadCalls_(){
   if(MYCS!==null || MYCS_LOADING) return;
@@ -1543,7 +1571,12 @@ function rProfile(){
   if(cReady){ (MYCS||[]).filter(function(x){ return !x.dispatcher || x.dispatcher===MYD(); })
     .forEach(function(x){ callN+=Number(x.n_loads)||0; callOk+=Number(x.both_ok)||0; }); }
   var callPct=callN?Math.round(callOk/callN*100):0;
-  var q=cReady? Math.round(callPct*0.5+invPct*0.3+asgPct*0.2) : null;
+  qLoad_(function(){ if(ROLE==='disp' && TAB==='profile') rProfile(); });
+  var qRow=qualOf_(MYD());
+  var qHas=!!(qRow && Number(qRow.n_eval)>=20);
+  var q=cReady? scoreOf_(callPct,invPct,asgPct,qRow) : null;
+  var qFormula=qHas?'ზარები 40% + ხარისხი 20% + ინვოისი 25% + მიბმა 15%'
+                   :'ზარები 50% + ინვოისი 30% + მიბმა 20%';
   var cc=function(p){ return p>=70?'var(--good)':p>=45?'var(--warn)':'var(--crit)'; };
   var mx=Math.max.apply(null,W.map(function(w){ return w.g; }).concat([1]));
   var trend=W.slice().reverse().map(function(w){
@@ -1557,10 +1590,14 @@ function rProfile(){
       kpi('ტვირთი — 30 დღე',R30.length,'',Object.keys(drv30).length+' მძღოლი')+
       kpi('გროსი — 30 დღე',money(g30),'',money(g30/4.33)+' / კვირაში')+
       kpi('საშ. ფასი',money(R30.length?g30/R30.length:0),'','ერთ ტვირთზე')+
-      kpi('ჩემი ქულა', cReady?q:'<span class="muted" style="font-size:15px">ითვლება…</span>', cReady?(q>=70?'g':(q>=45?'w':'r')):'', 'ზარები 50% + ინვოისი 30% + მიბმა 20%')+
+      kpi('ჩემი ქულა', cReady?q:'<span class="muted" style="font-size:15px">ითვლება…</span>', cReady?(q>=70?'g':(q>=45?'w':'r')):'', qFormula)+
     "</div>"+
     "<div class='kpis'>"+
       kpi('ზარები ორივე მხარეს', cReady?(callPct+'%'):'…', cReady?(callPct>=70?'g':'r'):'', cReady?(callOk+' / '+callN+' · ბოლო 30 დღე'):'Quo იტვირთება')+
+      kpi('საუბრის ხარისხი',
+          qHas?(qRow.pct_weak+'%'):(QCS===null?'…':'—'),
+          qHas?(qRow.pct_weak<=5?'g':(qRow.pct_weak<=9?'w':'r')):'',
+          qHas?('სუსტი ზარი · '+qRow.n_weak+' / '+qRow.n_eval+' შეფასებული'):(QCS===null?'იტვირთება':'ჯერ საკმარისი ზარი არ არის'))+
       kpi('ინვოისი გაგზავნილი',invPct+'%',invPct>=70?'g':'r',(invNeed.length-invOk)+' დარჩენილი · ბოლო 30 დღე')+
       kpi('მძღოლზე მიბმული',asgPct+'%',asgPct>=90?'g':'r',(R30.length-asgOk)+' მიუბმელი · ბოლო 30 დღე')+
       kpi('ჩემი გასაგზავნი ინვოისი',openInv.length,openInv.length?'r':'g','ჩაბარებული, ინვოისის გარეშე')+
@@ -2392,6 +2429,7 @@ function rLeader(){
     },function(){ CSTAT={}; CSTAT_LOADING=false; if(MTAB==='leaderboard') rLeader(); });
     return;
   }
+  qLoad_(function(){ if(MTAB==='leaderboard') rLeader(); });
   var cut=ymd_(from);
   var W=(LIVE||[]).filter(function(l){ var d=puDay_(l); return d && d>=cut; });
   var by={};
@@ -2409,7 +2447,9 @@ function rLeader(){
     x.callPct=x.callN?Math.round(x.callOk/x.callN*100):0;
     x.invPct=x.delNeed?Math.round(x.delOk/x.delNeed*100):100;
     x.asgPct=x.n?Math.round(x.assigned/x.n*100):0;
-    x.q=Math.round(x.callPct*0.5 + x.invPct*0.3 + x.asgPct*0.2);
+    x.qual=qualOf_(k);
+    x.qHas=!!(x.qual && Number(x.qual.n_eval)>=20);
+    x.q=scoreOf_(x.callPct, x.invPct, x.asgPct, x.qual);
     x.per=x.n?Math.round(x.gross/x.n):0;
     return x;
   }).filter(function(x){ return x.d!=='—' && x.n>=3; });
@@ -2422,6 +2462,9 @@ function rLeader(){
       '<td class="num" style="font-weight:750;color:'+cc(x.q)+'">'+x.q+'</td>'+
       '<td class="num">'+x.n+'</td><td class="num">'+x.cars+'</td><td class="num">'+money(x.gross)+'</td><td class="num">'+money(x.per)+'</td>'+
       '<td class="num" style="color:'+cc(x.callPct)+'">'+x.callPct+'%<span class="muted" style="font-weight:400"> ('+x.callOk+'/'+x.callN+')</span></td>'+
+      '<td class="num"'+(x.qHas?' style="color:'+cc(qualScore_(x.qual.pct_weak))+'"':' class="num muted"')+'>'+
+        (x.qHas? x.qual.pct_weak+'%<span class="muted" style="font-weight:400"> ('+x.qual.n_weak+'/'+x.qual.n_eval+')</span>'
+               : (QCS===null?'…':'—'))+'</td>'+
       '<td class="num" style="color:'+cc(x.invPct)+'">'+x.invPct+'%<span class="muted" style="font-weight:400"> ('+(x.delNeed-x.delOk)+' დარჩა)</span></td>'+
       '<td class="num" style="color:'+cc(x.asgPct)+'">'+x.asgPct+'%</td></tr>';
   }).join('');
@@ -2434,8 +2477,8 @@ function rLeader(){
     '<div class="kpis">'+kpi('დისპეტჩერი',A.length)+kpi('ტვირთი',tot(function(x){return x.n;}))+
       kpi('ზარი ორივე მხარეს',(callN?Math.round(callOk/callN*100):0)+'%',(callN&&callOk/callN>=0.7)?'g':'r',callOk+' / '+callN)+
       kpi('ინვოისი გაგზავნილი',(dn?Math.round(dok/dn*100):0)+'%',(dn&&dok/dn>=0.7)?'g':'r',(dn-dok)+' დარჩენილი')+'</div>'+
-    '<div class="card p"><div class="tablewrap"><table style="min-width:980px"><thead><tr><th class="num">#</th><th>დისპეტჩერი</th><th>ქულა</th><th class="num">ქულა</th><th class="num">ტვირთი</th><th class="num">მანქანა</th><th class="num">გროსი</th><th class="num">$/ტვირთი</th><th class="num">ზარები</th><th class="num">ინვოისი</th><th class="num">მიბმული</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="muted" style="font-size:12px;margin-top:10px">ქულა = ზარები×50% + ინვოისი×30% + მძღოლზე მიბმა×20%. „ზარები" — ფიქაფზეც და დელივერიზეც დაფიქსირდა პასუხგაცემული ზარი ან შემომავალი SMS (Quo). „ინვოისი" — ჩაბარებულ ტვირთებზე გაგზავნილი ინვოისის წილი (on-site გადახდები არ ითვლება). „მიბმული" — ტვირთი Super Dispatch-ში მძღოლზეა მიბმული. ზარების ისტორია Quo-ში 29 ივნისიდან ითვლება, SMS — 21 ივლისიდან.</div></div>';
+    '<div class="card p"><div class="tablewrap"><table style="min-width:1080px"><thead><tr><th class="num">#</th><th>დისპეტჩერი</th><th>ქულა</th><th class="num">ქულა</th><th class="num">ტვირთი</th><th class="num">მანქანა</th><th class="num">გროსი</th><th class="num">$/ტვირთი</th><th class="num">ზარები</th><th class="num">სუსტი ზარი</th><th class="num">ინვოისი</th><th class="num">მიბმული</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="muted" style="font-size:12px;margin-top:10px">ქულა = ზარები×40% + <b>საუბრის ხარისხი×20%</b> + ინვოისი×25% + მძღოლზე მიბმა×15%. „ზარები" — ფიქაფზეც და დელივერიზეც დაფიქსირდა პასუხგაცემული ზარი ან შემომავალი SMS (Quo). <b>„სუსტი ზარი"</b> — 60 ქულაზე დაბლა შეფასებული საუბრების წილი; ითვლება მხოლოდ ის ზარები, სადაც AI-მ თვითონ თქვა „ღირს შეფასება" (ავტომოპასუხე, ხმოვანი ფოსტა და გაუგებარი ჩანაწერი გამორიცხულია). ვისაც 20-ზე ნაკლები შეფასებული ზარი აქვს, ხარისხი ქულაში არ ერევა — მისთვის ძველი წონები რჩება. „ინვოისი" — ჩაბარებულ ტვირთებზე გაგზავნილი ინვოისის წილი (on-site გადახდები არ ითვლება). „მიბმული" — ტვირთი Super Dispatch-ში მძღოლზეა მიბმული. ზარების ისტორია Quo-ში 29 ივნისიდან ითვლება, SMS — 21 ივლისიდან.</div></div>';
 }
 /* ---- გამონაკლისები — ცოცხალი წესების ძრავა (SD + Quo), snapshot-ის გარეშე ---- */
 var EXCF='core';
