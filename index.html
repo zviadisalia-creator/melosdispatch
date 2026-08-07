@@ -130,6 +130,8 @@
   .gate{display:flex;align-items:center;gap:12px;padding:12px 15px;border-top:1px solid var(--border)} .gate:first-child{border-top:0}
   .gate .ic{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;font-size:13px;flex:none;font-weight:800}
   .gate.ok .ic{background:var(--good-soft);color:var(--good)} .gate.no .ic{background:var(--crit-soft);color:var(--crit)}
+  /* „მოწმდება" — არც მწვანე, არც წითელი: დისპეტჩერმა უნდა იცოდეს, რომ ტყუილად არ ზის */
+  .gate.wait .ic{background:var(--warn-soft,rgba(180,120,10,.18));color:var(--warn)}
   .gate .t{flex:1} .gate .t b{font-weight:640;display:block} .gate .t span{font-size:12px;color:var(--muted)}
   .fixbtn{border:1px solid var(--border);background:var(--card);color:var(--brand);font-weight:650;font-size:12px;padding:6px 11px;border-radius:8px}
   .gate.ok .fixbtn{visibility:hidden}
@@ -1305,9 +1307,20 @@ function rBoard(){
     }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
   }
   var CC=(PCONT||[]).filter(function(r){ return !r.not_required && callNeeded_(r.order_number); });
-  var puOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'pu') || r.pu_missing || r.pu_call || r.pu_sms); };
-  var delOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'del') || r.del_missing || r.del_call || r.del_sms); };
+  /* ⚠️ „დარეკა" აღარ კმარა — „ესაუბრა" უნდა.
+     `call_logs.status` ავტომოპასუხეზეც `completed`-ია, ე.ი. ხმოვან ფოსტაზე
+     დარეკვა gate-ს ამწვანებდა (გაზომილი: 3 486 voicemail + 4 349 IVR).
+     ახლა ითვლება მხოლოდ ის ზარი, რომელიც AI-მ **ნამდვილ საუბრად** ცნო
+     (`pu_verified`/`del_verified`), ან შემომავალი SMS — ის ცოცხალი ადამიანია.
+     სანამ შეფასება მოვა, `pu_pending`-ია და gate ღიაა („მოწმდება…"). */
+  var puOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'pu') || r.pu_missing || r.pu_verified || r.pu_sms); };
+  var delOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'del') || r.del_missing || r.del_verified || r.del_sms); };
+  /* ჯერ მოწმდება — არც წარმატება, არც დარღვევა */
+  var puWait_=function(r){ return !puOk_(r) && !!r.pu_pending; };
+  var delWait_=function(r){ return !delOk_(r) && !!r.del_pending; };
+  var waitN=CC.filter(function(r){ return puWait_(r)||delWait_(r); }).length;
   var callP=CC.filter(function(r){ return !(puOk_(r) && delOk_(r)); })
+    .filter(function(r){ return !(puWait_(r)||delWait_(r)); })   /* ჯერ მოწმდება — დარღვევა არაა */
     .filter(function(r){ return !waivOk_('calls',r.order_number,tday); });
   /* SD-ში ნომერი არ წერია — ვერ შევამოწმებთ, მაგრამ დამალვაც არ შეიძლება */
   var noPhoneP=CC.filter(function(r){ return r.pu_missing || r.del_missing; });
@@ -1317,9 +1330,9 @@ function rBoard(){
       var a=ATT[r.order_number]||{};
       var L0=loadOf_(r.order_number);
       var miss=[], ev=[];
-      if(!callSkip_(L0,'pu') && !r.pu_missing && !(r.pu_call||r.pu_sms)){ miss.push('ფიქაფი '+fmtPhone_(r.pickup_phone));
+      if(!callSkip_(L0,'pu') && !r.pu_missing && !(r.pu_verified||r.pu_sms)){ miss.push('ფიქაფი '+fmtPhone_(r.pickup_phone)+(r.pu_call?' (ავტომოპასუხე)':''));
         ev.push('ფიქაფზე '+(a.pu_try||0)+' ცდა'+(a.pu_sms_out?(' + '+a.pu_sms_out+' SMS'):'')); }
-      if(!callSkip_(L0,'del') && !r.del_missing && !(r.del_call||r.del_sms)){ miss.push('დელივერი '+fmtPhone_(r.delivery_phone));
+      if(!callSkip_(L0,'del') && !r.del_missing && !(r.del_verified||r.del_sms)){ miss.push('დელივერი '+fmtPhone_(r.delivery_phone)+(r.del_call?' (ავტომოპასუხე)':''));
         ev.push('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):'')); }
       var tried=((a.pu_try||0)+(a.del_try||0))>0;
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
@@ -1354,10 +1367,13 @@ function rBoard(){
   }).join('');
 
   /* ზარები — გამოცხადებული სიის ყველა ტვირთი, ფიქაფი/დელივერი ცალ-ცალკე */
-  var callCell_=function(missing, ok, phone, skip){
+  var callCell_=function(missing, ok, phone, skip, waiting, rang){
     if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>";
     if(missing) return "<span class='ccell na'>ნომერი არ წერია</span>";
-    return "<span class='ccell "+(ok?'ok':'no')+"'>"+(ok?'✓':'✗')+" "+esc(fmtPhone_(phone)||'—')+"</span>";
+    if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+"</span>";
+    if(waiting) return "<span class='ccell' style='color:var(--warn)' title='ჩანაწერი გადაიწერება ტექსტად და მოწმდება — ჩვეულებრივ რამდენიმე წუთი'>◔ მოწმდება…</span>";
+    if(rang) return "<span class='ccell no' title='ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა'>✗ ავტომოპასუხე</span>";
+    return "<span class='ccell no'>✗ "+esc(fmtPhone_(phone)||'—')+"</span>";
   };
   var callList=CC.slice().sort(function(a,b){ return String(a.order_number).localeCompare(String(b.order_number)); });
   /* გამონაკლისებით დაცლილი სია ≠ ცარიელი სია.
@@ -1367,9 +1383,11 @@ function rBoard(){
      და „ხვალინდელ სიაში ჯერ ტვირთი არ არის", რაც სიმართლე არ იყო. */
   var contactN=(PCONT||[]).length;              /* გამოცხადებული სიის ტვირთები */
   var exemptAll=(contactN>0 && callList.length===0);
-  var callOkAll=(callP.length===0) && (callList.length>0 || exemptAll);
-  var callGate_="<div class='gate "+(callOkAll?'ok':'no')+"'><div class='ic'>"+(callOkAll?'✓':'!')+
-    "</div><div class='t'><b>ზარები · Pickup / Delivery</b></div>"+
+  /* სანამ თუნდაც ერთი ზარი მოწმდება, gate მწვანე არ ხდება — მაგრამ წითელიც არაა */
+  var callOkAll=(callP.length===0) && (waitN===0) && (callList.length>0 || exemptAll);
+  var callGate_="<div class='gate "+(callOkAll?'ok':(waitN&&!callP.length?'wait':'no'))+"'><div class='ic'>"+(callOkAll?'✓':(waitN&&!callP.length?'◔':'!'))+
+    "</div><div class='t'><b>ზარები · Pickup / Delivery</b>"+
+    (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+"</div>"+
     (callP.length?waivChip_('calls_all','','ზარები — '+callP.length+' ტვირთი',tday):'')+"</div>"+
     (callList.length
       ? ("<div class='tablewrap' style='padding:0 15px 12px 49px'><table style='min-width:720px'><thead><tr>"+
@@ -1377,8 +1395,8 @@ function rBoard(){
          callList.map(function(r){
            var L1=loadOf_(r.order_number);
            return "<tr><td><b>"+esc(r.order_number)+"</b></td><td>"+esc(rDrv_(r))+"</td>"+
-             "<td>"+callCell_(r.pu_missing,(r.pu_call||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'))+"</td>"+
-             "<td>"+callCell_(r.del_missing,(r.del_call||r.del_sms),r.delivery_phone,callSkip_(L1,'del'))+"</td></tr>";
+             "<td>"+callCell_(r.pu_missing,(r.pu_verified||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'),r.pu_pending,r.pu_call)+"</td>"+
+             "<td>"+callCell_(r.del_missing,(r.del_verified||r.del_sms),r.delivery_phone,callSkip_(L1,'del'),r.del_pending,r.del_call)+"</td></tr>";
          }).join('')+"</tbody></table></div>")
       : (exemptAll
           ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px;color:var(--good)'>ხვალინდელ სიაშია <b>"+contactN+"</b> ტვირთი და ყველა მათგანზე ზარი <b>არ მოეთხოვება</b> — ბროკერის წესი, აუქციონი ან shipper = ვენიუ. შესამოწმებელი არაფერია ✓</div>"
@@ -1617,7 +1635,7 @@ async function markAct(enc, kind){
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
 function fixGate(b){const g=b.closest('.gate');g.classList.remove('no');g.classList.add('ok');g.querySelector('.ic').textContent='✓';
-  const rem=document.querySelectorAll('#closeCard .gate.no').length; const c=$('gateCount'),lb=$('logoutBtn');
+  const rem=document.querySelectorAll('#closeCard .gate.no, #closeCard .gate.wait').length; const c=$('gateCount'),lb=$('logoutBtn');
   if(rem===0){c.className='chip g';c.innerHTML='<span class="dot"></span>ყველა gate გავლილია';lb.disabled=false;lb.classList.add('ready');lb.textContent='ცვლის დახურვა — მწვანე ✓';}
   else{c.innerHTML='<span class="dot"></span>'+rem+' დარჩენილი';}
 }
