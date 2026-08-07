@@ -196,6 +196,7 @@
       <button id="rMgmt" onclick="setRole('mgmt')">მენეჯმენტი</button>
     </div>
     <select id="viewas" onchange="enterViewAs(this.value)" style="display:none;border:1px solid var(--border);background:var(--page);color:var(--ink);border-radius:999px;padding:6px 10px;font-weight:620;font-size:12.5px;max-width:230px"></select>
+    <button class="iconbtn" id="notifbtn" title="შეტყობინებები" onclick="notifOpen()" style="display:none;position:relative">🔔</button>
     <button class="iconbtn" id="syncbtn" title="მონაცემის განახლება" onclick="refreshLive_(true)">⟳</button>
     <span id="syncage" class="muted" style="font-size:11.5px;font-weight:600"></span>
     <button class="iconbtn" onclick="toggleTheme()">◐</button>
@@ -777,8 +778,9 @@ function syncAgeTxt_(){
   return m<1?'ახლახან':(m+' წთ წინ');
 }
 function paintSyncAge_(){
-  var el=document.getElementById('syncage'); if(!el) return;
-  el.textContent=REFRESHING?'ახლდება…':syncAgeTxt_();
+  var el=document.getElementById('syncage');
+  if(el) el.textContent=REFRESHING?'ახლდება…':syncAgeTxt_();
+  try{ paintNotif_(); }catch(e){}
 }
 async function refreshLive_(manual){
   if(REFRESHING) return;
@@ -1076,7 +1078,14 @@ function driverStd_(name, day){
     reason:'გრძელი რეისი '+Math.round(mi)+' მილი (>'+SM+') და გეგმას არ ავსებს — '+money2(gross)+(tgt!=null?(' / '+money2(tgt)):'')};
 }
 /* ---- მოთხოვნის ფანჯარა ---- */
-function waivAsk(kind, subj, label){
+/* ⚠️ `waivChip_` ღილაკს `encodeURIComponent(subj)`-ით აწყობს, ე.ი. აქ სუბიექტი
+   **უკვე კოდირებული** მოდის. მანამდე აქ მეორედ კოდირდებოდა და ბაზაში
+   `%E1%83%A0…` იწერებოდა. შედეგი ორმაგი იყო: მენეჯმენტის ცხრილში სახელის
+   ნაცვლად სიმბოლოები ჩანდა, და — რაც უარესია — ძებნა `waivOf_(kind, სახელი)`
+   ვერასდროს პოულობდა ჩანაწერს, ამიტომ **დადასტურებული ახსნაც კი ვერ
+   ამწვანებდა მძღოლის სტრიქონს**. აქვე ვშიფრავთ, ერთხელ და სამუდამოდ. */
+function waivAsk(kind, encSubj, label){
+  var subj=decodeURIComponent(encSubj||'');
   var day=ymd_(nextWorkDay_());
   var ex=waivOf_(kind,subj,day);
   var cur=ex?ex.reason:'';
@@ -1129,6 +1138,60 @@ function waivChip_(kind, subj, label, day, disp){
   return "<span class='chip y'><span class='dot'></span>გაგზავნილია — პასუხს ელოდება</span>";
 }
 function waivOk_(kind,subj,day,disp){ var w=waivOf_(kind,subj,day,disp); return !!(w && w.status==='approved'); }
+
+/* ---- შეტყობინებები — ახსნაზე პასუხი ----
+   მანამდე დისპეტჩერი უარყოფას ვერ იგებდა: ელოდებოდა, მენეჯმენტმა უარი თქვა,
+   და ეკრანზე იგივე „პასუხს ელოდება" ეწერა გვერდის განახლებამდე.
+   „ნანახის" აღრიცხვა localStorage-შია — ცალკე ცხრილი და RLS ამისთვის ზედმეტია. */
+function notifMine_(){
+  var me=MYD(); if(!me || !WAIV) return [];
+  var cut=addDays_(ymd_(new Date()),-7);
+  return Object.keys(WAIV).map(function(k){ return WAIV[k]; })
+    .filter(function(w){ return w && w.decided_at && w.dispatcher_name===me && String(w.work_day)>=cut; })
+    .sort(function(a,b){ return String(b.decided_at).localeCompare(String(a.decided_at)); });
+}
+function notifKey_(w){ return w.id+'|'+w.decided_at; }
+function notifSeen_(){ try{ return JSON.parse(localStorage.getItem('md_notif_seen')||'[]'); }catch(e){ return []; } }
+function notifUnseen_(){ var s=notifSeen_(); return notifMine_().filter(function(w){ return s.indexOf(notifKey_(w))<0; }); }
+function paintNotif_(){
+  var b=document.getElementById('notifbtn'); if(!b) return;
+  var show=!!MYD();
+  b.style.display=show?'':'none';
+  if(!show) return;
+  var n=notifUnseen_().length;
+  b.innerHTML='🔔'+(n?("<span style='position:absolute;top:-3px;right:-3px;background:var(--crit);color:#fff;border-radius:999px;"+
+    "min-width:16px;height:16px;line-height:16px;font-size:10.5px;font-weight:800;padding:0 3px'>"+n+"</span>"):'');
+}
+function notifOpen(){
+  var list=notifMine_();
+  var box=document.getElementById('_notif');
+  if(!box){ box=document.createElement('div'); box.id='_notif';
+    box.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px';
+    document.body.appendChild(box); }
+  var rows=list.map(function(w){
+    var ok=(w.status==='approved');
+    return "<div style='border-top:1px solid var(--line);padding:10px 0'>"+
+      "<div style='display:flex;gap:8px;align-items:center;justify-content:space-between'>"+
+        "<span class='chip "+(ok?'g':'r')+"'><span class='dot'></span>"+(ok?'დადასტურდა':'დაბრუნდა')+"</span>"+
+        "<span class='muted' style='font-size:11.5px'>"+gd(String(w.work_day))+"</span></div>"+
+      "<div style='font-size:13px;font-weight:650;margin-top:5px'>"+esc(w.order_number||'—')+"</div>"+
+      "<div class='muted' style='font-size:12px;margin-top:2px'>შენი ახსნა: "+esc(w.reason||'—')+"</div>"+
+      (w.decision_note?("<div style='font-size:12.5px;margin-top:5px;color:var(--crit)'><b>მენეჯმენტი:</b> "+esc(w.decision_note)+"</div>"):'')+
+    "</div>";
+  }).join('');
+  box.innerHTML="<div class='card p' style='max-width:520px;width:100%;max-height:80vh;overflow:auto'>"+
+    "<h4 style='margin-bottom:2px'>შეტყობინებები</h4>"+
+    "<div class='muted' style='font-size:12px;margin-bottom:6px'>ახსნა-განმარტებებზე პასუხი — ბოლო 7 დღე</div>"+
+    (rows||"<div class='muted' style='font-size:12.5px;padding:10px 0'>ახალი პასუხი არ არის</div>")+
+    "<div style='display:flex;gap:8px;margin-top:14px;justify-content:flex-end'>"+
+      "<button class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"notifClose()\">წავიკითხე</button>"+
+    "</div></div>";
+}
+function notifClose(){
+  try{ localStorage.setItem('md_notif_seen', JSON.stringify(notifMine_().map(notifKey_))); }catch(e){}
+  var b=document.getElementById('_notif'); if(b) b.remove();
+  paintNotif_();
+}
 
 /* ---- ჩემი დაფა ---- */
 function rBoard(){
