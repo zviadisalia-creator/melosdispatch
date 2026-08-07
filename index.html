@@ -196,6 +196,8 @@
       <button id="rMgmt" onclick="setRole('mgmt')">მენეჯმენტი</button>
     </div>
     <select id="viewas" onchange="enterViewAs(this.value)" style="display:none;border:1px solid var(--border);background:var(--page);color:var(--ink);border-radius:999px;padding:6px 10px;font-weight:620;font-size:12.5px;max-width:230px"></select>
+    <button class="iconbtn" id="syncbtn" title="მონაცემის განახლება" onclick="refreshLive_(true)">⟳</button>
+    <span id="syncage" class="muted" style="font-size:11.5px;font-weight:600"></span>
     <button class="iconbtn" onclick="toggleTheme()">◐</button>
     <div class="who"><div class="ava" id="uav">ა</div><div class="txwrap"><div class="nm" id="unm">ანი ქომეთიანი</div><div class="rl" id="url">დისპეტჩერი</div></div></div>
   </div>
@@ -760,6 +762,48 @@ function startApp(){
   document.getElementById('rolepill').style.display='none';   // role fixed by allowlist
   buildViewAs();
   setRole(USER.role==='mgmt'?'mgmt':'disp');
+  LAST_SYNC=new Date();
+  startAutoRefresh_();
+}
+/* ---- ავტომატური განახლება ----
+   აქამდე აპი მონაცემს მხოლოდ შესვლისას კითხულობდა: საღამოს გახსნილი გვერდი
+   მთელი ცვლის განმავლობაში ერთსა და იმავე სურათს აჩვენებდა. ტვირთი SD-ში
+   ჩნდება წუთებში, ატრიბუცია (მძღოლი/დისპეტჩერი) კი pg_cron-ით ყოველ 15 წუთში —
+   ე.ი. გვერდის განახლების გარეშე ახალი ტვირთი დაფაზე ვერასდროს გამოჩნდებოდა. */
+var LAST_SYNC=null, REFRESHING=false, AUTOREF=null;
+function syncAgeTxt_(){
+  if(!LAST_SYNC) return '';
+  var m=Math.floor((Date.now()-LAST_SYNC.getTime())/60000);
+  return m<1?'ახლახან':(m+' წთ წინ');
+}
+function paintSyncAge_(){
+  var el=document.getElementById('syncage'); if(!el) return;
+  el.textContent=REFRESHING?'ახლდება…':syncAgeTxt_();
+}
+async function refreshLive_(manual){
+  if(REFRESHING) return;
+  /* ხელით შევსების შუაში გვერდი არ უნდა გადაიხატოს */
+  var ae=document.activeElement;
+  if(!manual && ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+  REFRESHING=true; paintSyncAge_();
+  try{
+    await Promise.all([loadLiveLoads(), loadAssign(), loadActions(), loadPlan(), loadWaivers()]);
+    await loadPlanContacts();          /* გეგმაზეა დამოკიდებული — მის შემდეგ */
+    LAST_SYNC=new Date();
+    render();
+    if(manual) toast('განახლდა ✓');
+  }catch(e){ console.error(e); if(manual) toast('ვერ განახლდა'); }
+  finally{ REFRESHING=false; paintSyncAge_(); }
+}
+function startAutoRefresh_(){
+  if(AUTOREF) return;
+  AUTOREF=setInterval(function(){
+    paintSyncAge_();
+    if(document.hidden) return;                       /* ფონურ ტაბს არ ვწვავთ */
+    if(Date.now()-LAST_SYNC.getTime() < 170000) return;
+    refreshLive_(false);
+  }, 30000);
+  paintSyncAge_();
 }
 function toast(msg){
   let t=document.getElementById('_toast');
@@ -1253,7 +1297,14 @@ function rBoard(){
     return "<span class='ccell "+(ok?'ok':'no')+"'>"+(ok?'✓':'✗')+" "+esc(fmtPhone_(phone)||'—')+"</span>";
   };
   var callList=CC.slice().sort(function(a,b){ return String(a.order_number).localeCompare(String(b.order_number)); });
-  var callOkAll=(callList.length>0) && callP.length===0;
+  /* გამონაკლისებით დაცლილი სია ≠ ცარიელი სია.
+     თუ ხვალინდელ სიაში ტვირთები არიან, მაგრამ ყველა მათგანი ზარისგან
+     გათავისუფლებულია (ბროკერის წესი, აუქციონი, shipper = ვენიუ) — gate
+     მწვანეა და ასეც უნდა ეწეროს. აქამდე ასეთ დისპეტჩერს წითელი ხვდებოდა
+     და „ხვალინდელ სიაში ჯერ ტვირთი არ არის", რაც სიმართლე არ იყო. */
+  var contactN=(PCONT||[]).length;              /* გამოცხადებული სიის ტვირთები */
+  var exemptAll=(contactN>0 && callList.length===0);
+  var callOkAll=(callP.length===0) && (callList.length>0 || exemptAll);
   var callGate_="<div class='gate "+(callOkAll?'ok':'no')+"'><div class='ic'>"+(callOkAll?'✓':'!')+
     "</div><div class='t'><b>ზარები · Pickup / Delivery</b></div>"+
     (callP.length?waivChip_('calls_all','','ზარები — '+callP.length+' ტვირთი',tday):'')+"</div>"+
@@ -1266,7 +1317,9 @@ function rBoard(){
              "<td>"+callCell_(r.pu_missing,(r.pu_call||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'))+"</td>"+
              "<td>"+callCell_(r.del_missing,(r.del_call||r.del_sms),r.delivery_phone,callSkip_(L1,'del'))+"</td></tr>";
          }).join('')+"</tbody></table></div>")
-      : "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>ხვალინდელ სიაში ჯერ ტვირთი არ არის — შესამოწმებელი ზარიც არ არის</div>");
+      : (exemptAll
+          ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px;color:var(--good)'>ხვალინდელ სიაშია <b>"+contactN+"</b> ტვირთი და ყველა მათგანზე ზარი <b>არ მოეთხოვება</b> — ბროკერის წესი, აუქციონი ან shipper = ვენიუ. შესამოწმებელი არაფერია ✓</div>"
+          : "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>ხვალინდელ სიაში ჯერ ტვირთი არ არის — შესამოწმებელი ზარიც არ არის</div>"));
 
   /* ---- აუქციონები: Copart-ს appointment სჭირდება, Manheim-ს Gate Pass ---- */
   var PL=planLoads_(tday);
