@@ -424,8 +424,8 @@ function assignExpected_(l){
 /* ---- მძღოლების როსტერი: მუდმივი მიმაგრება + დროებითი გადაბარება ---- */
 var DASG=[], DIR=[], DIRBY={};
 async function loadAssign(){
-  try{ var r=await sb.from('driver_assignment').select('*').is('canceled_at',null).order('created_at',{ascending:true});
-    DASG=r.data||[]; }catch(e){ console.error(e); DASG=[]; }
+  try{ DASG=await selAll_(function(){ return sb.from('driver_assignment').select('*').is('canceled_at',null); },'id');
+  }catch(e){ console.error(e); DASG=[]; }
   try{ var d=await sb.rpc('driver_directory'); DIR=d.data||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
   catch(e){ console.error(e); DIR=[]; DIRBY={}; }
 }
@@ -589,8 +589,29 @@ function dispNames_(){
   DASG.forEach(function(p){ if(p.dispatcher_name) m[p.dispatcher_name]=1; });
   return Object.keys(m).sort();
 }
+/* ---- Supabase-ის ჩუმი 1000-მწკრივიანი ჭერი ----
+   ჩვეულებრივი select() მაქსიმუმ 1000 მწკრივს აბრუნებს და შეცდომას **არ** იძლევა —
+   უბრალოდ წყვეტს. ყველა ცხრილი, რომელიც დროთა განმავლობაში იზრდება, ამ ფუნქციით
+   უნდა იკითხებოდეს. დუბლიკატების ასაცილებლად დალაგება აუცილებელია და უნიკალურ სვეტ(ებ)ზე
+   უნდა იყოს — არაუნიკალურ დალაგებაზე გვერდებს შორის მწკრივი ორჯერ მოდის ან იკარგება
+   (ზუსტად ეს იყო `loads`-ის ხარვეზი, დოკ. 69).
+   qb — ფუნქცია, რომელიც ყოველ ჯერზე *ახალ* query builder-ს აბრუნებს. */
+async function selAll_(qb, orderCols){
+  var all=[], from=0, PAGE=1000, cols=[].concat(orderCols||[]);
+  while(true){
+    var q=qb();
+    cols.forEach(function(c){ q=q.order(c,{ascending:true}); });
+    var r=await q.range(from, from+PAGE-1);
+    if(r.error){ console.error(r.error); break; }
+    var d=r.data||[]; all=all.concat(d);
+    if(d.length<PAGE) break;
+    from+=PAGE;
+    if(from>200000) break;   /* უსაფრთხოების ზღვარი */
+  }
+  return all;
+}
 async function loadRates(){ try{ const { data } = await sb.from('dispatcher_rates').select('*'); DRATES={}; (data||[]).forEach(function(r){ DRATES[r.dispatcher_name]=r; }); }catch(e){ console.error(e); DRATES={}; } }
-async function loadActions(){ try{ const { data } = await sb.from('load_actions').select('*'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
+async function loadActions(){ try{ const data = await selAll_(function(){ return sb.from('load_actions').select('*'); },'order_number'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
 
 /* ---------- auth + data bootstrap ---------- */
 async function signIn(){
@@ -668,9 +689,9 @@ async function loadData(){
   if(USER.role==='mgmt'){
     const { data:drv } = await sb.from('drivers').select('*');
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
-    const { data:pr } = await sb.from('payment_received').select('order_id,received');
-    RECV={}; (pr||[]).forEach(r=>{ if(r.received){ RECV[r.order_id]=true; } });
-    ODRECV=Object.assign({},RECV);
+    /* `payment_received` აღარ იკითხება: ეს ხელით მონიშვნა snapshot-ის ეპოქიდან დარჩა,
+       ცხრილი ცარიელია და ინტერფეისში არსად გამოიყენებოდა. ფულის შემოსვლის ერთადერთი
+       წყარო Super Dispatch-ის `paid_at`-ია. */
     /* ერთმანეთზე არ არიან დამოკიდებული — პარალელურად ჩამოდის, გაცილებით სწრაფად */
     await Promise.all([
       loadLiveLoads(), loadActions(), loadRates(), loadExpenses(), loadContacts(),
@@ -762,12 +783,6 @@ async function saveDriver(encName, field, value){
     if(error) throw error;
     if(!DRIVERS_BY_NAME[name]) DRIVERS_BY_NAME[name]={name}; DRIVERS_BY_NAME[name][field]=v;
     toast('შენახულია ✓');
-  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
-}
-async function persistRecv(order, received){
-  try{
-    if(received){ await sb.from('payment_received').upsert({order_id:order, received:true, marked_by:USER.email}); }
-    else { await sb.from('payment_received').delete().eq('order_id', order); }
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
 let ROLE='disp', TAB='board', MTAB='overview';
@@ -927,8 +942,8 @@ function weekBox_(all){
     "<div style='margin-top:14px'><button class='bigbtn' style='padding:9px 18px;font-size:13px' onclick='wrSave()'>დადასტურება</button></div></div>";
 }
 async function loadWaivers(){
-  try{ var r=await sb.from('load_waivers').select('*').gte('work_day', addDays_(ymd_(new Date()),-21));
-    WAIV={}; (r.data||[]).forEach(function(w){ WAIV[wkey_(w.dispatcher_name,w.work_day,w.kind,w.order_number)]=w; });
+  try{ var r=await selAll_(function(){ return sb.from('load_waivers').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
+    WAIV={}; (r||[]).forEach(function(w){ WAIV[wkey_(w.dispatcher_name,w.work_day,w.kind,w.order_number)]=w; });
   }catch(e){ console.error(e); WAIV={}; }
 }
 function waivOf_(kind,subj,day,disp){ return WAIV[wkey_(disp||(USER&&MYD())||'',day,kind,subj||'')]||null; }
@@ -2708,22 +2723,27 @@ function rAnalysis(){
 /* ---- ინვოისები — გასაგზავნი (ცოცხალი, SD-იდან) ---- */
 var INVD='';
 var INVN=[];
+var INVM='open';   /* 'open' — ფული ჯერ არ შემოსულა · 'paid' — ფული შემოსულია, ინვოისი მაინც არ ჩანს */
 function selInv(i){ INVD=(i<0)?'':(INVN[i]||''); rInv(); }
+function setInvM(m){ INVM=m; INVD=''; rInv(); }
 function rInv(){
-  var ONS={cash_on_delivery:1,cash_on_pickup:1,check_on_delivery:1,check_on_pickup:1,on_delivery:1};
+  /* ორი სრულიად სხვადასხვა სია, რომლებიც ერთმანეთში არ უნდა აირიოს:
+       'open' — ჩაბარებულია, ინვოისი არ არის და **ფული ჯერ არ შემოსულა** → ეს ფულია.
+       'paid' — ჩაბარებულია, ფული **უკვე შემოსულია**, მაგრამ ინვოისი SD-ში მაინც არ ჩანს
+                → ეს მხოლოდ ჩანაწერის დისციპლინაა, ფული აღარაფერს გვმართებს. */
   var CAND=(LIVE||[]).filter(function(l){ return l.delivery_completed && invNeeded_(l) && !l.invoice_sent_at; });
-  var PAIDNOINV=CAND.filter(function(l){ return l.paid_at; });
-  var L=CAND.filter(function(l){ return !l.paid_at; });
   var now=Date.now();
-  L=L.map(function(l){ var t=Date.parse(l.delivery_completed); var d=isNaN(t)?0:Math.floor((now-t)/864e5); return Object.assign({},l,{_d:d}); });
-  L.sort(function(a,b){ return b._d-a._d; });
+  var age=function(a){ return a.map(function(l){ var t=Date.parse(l.delivery_completed); var d=isNaN(t)?0:Math.floor((now-t)/864e5); return Object.assign({},l,{_d:d}); })
+    .sort(function(a,b){ return b._d-a._d; }); };
+  var OPEN=age(CAND.filter(function(l){ return !l.paid_at; }));
+  var PAIDNOINV=age(CAND.filter(function(l){ return l.paid_at; }));
+  var paidMode=(INVM==='paid');
+  var L=paidMode?PAIDNOINV:OPEN;
   var disps={}; L.forEach(function(l){ var k=l.dispatcher_name||'—'; if(!disps[k]) disps[k]={n:0,s:0,mx:0}; disps[k].n++; disps[k].s+=Number(l.price)||0; if(l._d>disps[k].mx) disps[k].mx=l._d; });
   var dnames=Object.keys(disps).sort(function(a,b){ return disps[b].s-disps[a].s; });
   INVN=dnames;
   var F=INVD?L.filter(function(l){ return (l.dispatcher_name||'—')===INVD; }):L;
   var sum=function(a){ return a.reduce(function(s,l){ return s+(Number(l.price)||0); },0); };
-  var tot=sum(L), old30=L.filter(function(l){ return l._d>30; });
-  var fresh=L.filter(function(l){ return l._d<=7; });
   var bk=[['0–7 დღე',0,7],['8–15 დღე',8,15],['16–30 დღე',16,30],['31–60 დღე',31,60],['60+ დღე',61,1e9]];
   var bs=bk.map(function(b){ var rs=L.filter(function(l){ return l._d>=b[1]&&l._d<=b[2]; }); return {l:b[0],n:rs.length,s:sum(rs),mn:b[1]}; });
   var mxs=Math.max.apply(null,bs.map(function(b){ return b.s; }).concat([1]));
@@ -2732,16 +2752,34 @@ function rInv(){
   var drows=dnames.map(function(k,i){ var x=disps[k]; return '<tr'+(INVD===k?' style="background:var(--brand-soft)"':'')+'><td><span style="cursor:pointer;text-decoration:underline" onclick="selInv('+i+')">'+esc(k)+'</span></td><td class="num">'+x.n+'</td><td class="num">'+money(x.s)+'</td><td class="num" style="color:'+col(x.mx)+';font-weight:700">'+x.mx+' დღე</td></tr>'; }).join('');
   var SHOW=400;
   var rows=F.slice(0,SHOW).map(function(l){
-    return '<tr><td>'+esc(l.order_number||'')+'</td><td>'+esc(l.dispatcher_name||'—')+'</td><td>'+esc(l.driver_name||'—')+'</td><td>'+esc(l.customer||'—')+'</td><td>'+gd(String(l.delivery_completed).slice(0,10))+'</td><td class="num" style="color:'+col(l._d)+';font-weight:750">'+l._d+' დღე</td><td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td><td class="num">'+money(Number(l.price)||0)+'</td></tr>';
+    var last = paidMode
+      ? '<td>'+(l.paid_at?gd(String(l.paid_at).slice(0,10)):'—')+'</td><td class="num">'+money(Number(l.price)||0)+'</td>'
+      : '<td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td><td class="num">'+money(Number(l.price)||0)+'</td>';
+    return '<tr><td>'+esc(l.order_number||'')+'</td><td>'+esc(l.dispatcher_name||'—')+'</td><td>'+esc(l.driver_name||'—')+'</td><td>'+esc(l.customer||'—')+'</td><td>'+gd(String(l.delivery_completed).slice(0,10))+'</td><td class="num" style="color:'+(paidMode?'var(--good)':col(l._d))+';font-weight:750">'+l._d+' დღე</td>'+last+'</tr>';
   }).join('');
+  var mchips='<span class="chip'+(paidMode?'':' r')+'" style="cursor:pointer" onclick="setInvM(\'open\')">💵 ფული ჯერ არ შემოსულა ('+OPEN.length+')</span>'+
+             '<span class="chip'+(paidMode?' g':'')+'" style="cursor:pointer" onclick="setInvM(\'paid\')">✅ ფული შემოსულია, ინვოისი არ ჩანს ('+PAIDNOINV.length+')</span>';
   var chips='<span class="chip'+(INVD?'':' g')+'" style="cursor:pointer" onclick="selInv(-1)">ყველა ('+L.length+')</span>';
-  $('view').innerHTML=ph('ინვოისები — გასაგზავნი','ჩაბარებული ტვირთები, რომლებზეც Super Dispatch-ში ინვოისი გაგზავნილი არ არის')+
-    '<div class="kpis">'+kpi('ინვოისი გასაგზავნია',money(tot),'r',L.length+' ჩაბარებული ტვირთი')+kpi('30 დღეზე ძველი',money(sum(old30)),'r',old30.length+' ტვირთი')+kpi('ბოლო 7 დღე',money(sum(fresh)),'w',fresh.length+' ტვირთი')+kpi('გადახდილია ინვოისის გარეშე',PAIDNOINV.length,'w','ჩანაწერის დისციპლინა SD-ში')+'</div>'+
-    '<div class="card p" style="margin-bottom:14px"><h4>რამდენი ხანია ჩაბარებიდან</h4>'+aging+'</div>'+
+  var sub = paidMode
+    ? 'ფული უკვე შემოსულია — ეს <b>ჩანაწერის</b> და არა ფულის საკითხია'
+    : 'ჩაბარებული ტვირთები, რომლებზეც ინვოისი არ გაგზავნილა <b>და ფულიც არ შემოსულა</b>';
+  var kOpen=sum(OPEN);
+  $('view').innerHTML=ph('ინვოისები — გასაგზავნი',sub)+
+    '<div class="kpis">'+
+      kpi('რეალურად გასაგზავნია',money(kOpen),'r',OPEN.length+' ტვირთი · ფული არ შემოსულა')+
+      kpi('30 დღეზე ძველი',money(sum(OPEN.filter(function(l){return l._d>30;}))),'r',OPEN.filter(function(l){return l._d>30;}).length+' ტვირთი')+
+      kpi('ბოლო 7 დღე',money(sum(OPEN.filter(function(l){return l._d<=7;}))),'w',OPEN.filter(function(l){return l._d<=7;}).length+' ტვირთი')+
+      kpi('გადახდილია ინვოისის გარეშე',PAIDNOINV.length,'',money(sum(PAIDNOINV))+' · ფული უკვე შემოსულია')+
+    '</div>'+
+    '<div class="card p" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'+mchips+'</div>'+
+    '<div class="card p" style="margin-bottom:14px"><h4>რამდენი ხანია ჩაბარებიდან'+(paidMode?' — გადახდილები':'')+'</h4>'+aging+'</div>'+
     '<div class="card p" style="margin-bottom:14px"><h4>დისპეტჩერების ჭრილი</h4><div class="tablewrap"><table style="min-width:520px"><thead><tr><th>დისპეტჩერი</th><th class="num">ტვირთი</th><th class="num">თანხა</th><th class="num">ყველაზე ძველი</th></tr></thead><tbody>'+drows+'</tbody></table></div></div>'+
     '<div class="card p"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">'+chips+(INVD?'<span class="chip y">'+esc(INVD)+' — '+F.length+'</span>':'')+'</div>'+
-    '<div class="tablewrap"><table style="min-width:860px"><thead><tr><th>Order ID</th><th>დისპეტჩერი</th><th>მძღოლი</th><th>კლიენტი</th><th>ჩაბარება</th><th class="num">დაგვიანება</th><th>Terms</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<div class="muted" style="font-size:12px;margin-top:10px">მონაცემი პირდაპირ Super Dispatch-იდან — ტვირთი ჩაბარებულია, ინვოისი არ არის გაგზავნილი <b>და თანხაც ჯერ არ შემოსულა</b>. ასეთივე კიდევ '+PAIDNOINV.length+' ტვირთია, სადაც თანხა უკვე შემოსულია, მაგრამ ინვოისი SD-ში მაინც არ ჩანს — ეს ფულის და არა ჩანაწერის პრობლემაა. On-site გადახდები (cash/check on pickup/delivery) სიაში არ შედის. ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან. ინვოისი Super Dispatch-ში უნდა გაიგზავნოს — შემდეგ სია თავად განახლდება.</div></div>';
+    '<div class="tablewrap"><table style="min-width:860px"><thead><tr><th>Order ID</th><th>დისპეტჩერი</th><th>მძღოლი</th><th>კლიენტი</th><th>ჩაბარება</th><th class="num">ჩაბარებიდან</th><th>'+(paidMode?'გადახდის თარიღი':'Terms')+'</th><th class="num">თანხა</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="muted" style="font-size:12px;margin-top:10px">'+(paidMode
+      ? 'ამ '+PAIDNOINV.length+' ტვირთზე თანხა Super Dispatch-ის მიხედვით <b>უკვე შემოსულია</b> — ინვოისი გასაგზავნი აღარ არის. სიაში მხოლოდ იმიტომ არიან, რომ SD-ში ინვოისის ჩანაწერი არ გაკეთებულა. ეს ჩანაწერის დისციპლინაა, არა ვალი.'
+      : 'მონაცემი პირდაპირ Super Dispatch-იდან — ტვირთი ჩაბარებულია, ინვოისი არ გაგზავნილა <b>და თანხაც არ შემოსულა</b>. გადახდილი ტვირთები ამ სიაში <b>არ შედის</b> (ისინი მეორე ჩიპშია — '+PAIDNOINV.length+' ცალი). On-site გადახდები (cash/check on pickup/delivery) და „თავისი აპის" ბროკერები საერთოდ არ ითვლება. ინვოისი Super Dispatch-ში უნდა გაიგზავნოს — შემდეგ სია თავად განახლდება.')+
+    ' ნაჩვენებია პირველი '+Math.min(F.length,SHOW)+' '+F.length+'-დან.</div></div>';
 }
 /* ---- მისაღები / ვადაგადაცილება — ცოცხალი, Super Dispatch-ის paid_at-ით ---- */
 var TERMDAYS={'1_3_days':3,'2_days':2,'3_days':3,'5_days':5,'7_days':7,'10_days':10,'15_days':15,'20_days':20,'30_days':30,'45_days':45,'ach':7,'other':30,
@@ -2869,8 +2907,8 @@ function driverRate_(reg){
 /* ---- მძღოლის ხელფასის კორექტირებები და გადარიცხვა ---- */
 var DLED=[], DPAY={};
 async function loadLedger(){
-  try{ var r=await sb.from('driver_ledger').select('*'); DLED=r.data||[]; }catch(e){ console.error(e); DLED=[]; }
-  try{ var p=await sb.from('driver_payout').select('*'); DPAY={}; (p.data||[]).forEach(function(x){ DPAY[x.driver_name+'|'+x.week]=x; }); }catch(e){ console.error(e); DPAY={}; }
+  try{ DLED=await selAll_(function(){ return sb.from('driver_ledger').select('*'); },'id'); }catch(e){ console.error(e); DLED=[]; }
+  try{ var p=await selAll_(function(){ return sb.from('driver_payout').select('*'); },['driver_name','week']); DPAY={}; (p||[]).forEach(function(x){ DPAY[x.driver_name+'|'+x.week]=x; }); }catch(e){ console.error(e); DPAY={}; }
 }
 var LKIND={advance:{l:'ავანსი / სესხი',s:-1},deduction:{l:'დაქვითვა',s:-1},
   carry:{l:'წინა კვირის ნაშთი',s:-1},tip_dispatcher:{l:'დისპეტჩერს აჩუქა',s:-1}};
@@ -3091,8 +3129,8 @@ function rPayMix(){
 var DPLAN=[];      // day_plan rows
 var PQ='';         // ძებნის ტექსტი
 async function loadPlan(){
-  try{ var r=await sb.from('day_plan').select('*').gte('work_day', addDays_(ymd_(new Date()),-21));
-    DPLAN=r.data||[]; }catch(e){ console.error(e); DPLAN=[]; }
+  try{ DPLAN=await selAll_(function(){ return sb.from('day_plan').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
+  }catch(e){ console.error(e); DPLAN=[]; }
   PDRVC=null;   /* მძღოლის ხელით მიბმის ქეში თავიდან აეწყოს */
 }
 function planRows_(day, disp){
@@ -3330,8 +3368,9 @@ function rPlan(){
 /* ---- დახურვები და მოთხოვნები (მენეჯმენტი) ---- */
 var SCLOSES=[];
 async function loadCloses(){
-  try{ var r=await sb.from('shift_close').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)).order('closed_at',{ascending:false});
-    SCLOSES=r.data||[]; }catch(e){ console.error(e); SCLOSES=[]; }
+  try{ SCLOSES=await selAll_(function(){ return sb.from('shift_close').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)); },['work_day','dispatcher_name']);
+    SCLOSES.sort(function(a,b){ return String(b.closed_at||'').localeCompare(String(a.closed_at||'')); });
+  }catch(e){ console.error(e); SCLOSES=[]; }
 }
 var CLF='pending';
 function setClF(v){ CLF=v; rCloses(); }
