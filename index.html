@@ -859,7 +859,9 @@ function money(n){return '$'+Math.round(n||0).toLocaleString('en-US');}
 function pm(n){return (n==null||!isFinite(n))?'—':'$'+Number(n).toFixed(2);}
 function pymd(s){var m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 
-const DTABS=[['board','ჩემი დაფა'],['plan','გეგმა და რეალობა'],['liveboard','ჩემი მძღოლები'],['liveloads','ჩემი ტვირთები'],['profile','ჩემი პროფილი'],['worklog','ჩემი Work Log']];
+/* „გეგმა და რეალობა" დროებით დამალულია — კოდი ადგილზეა (`rPlan`), მხოლოდ
+   ტაბი მოხსნილია სიიდან. დასაბრუნებლად უბრალოდ დააბრუნე ['plan','გეგმა და რეალობა']. */
+const DTABS=[['board','ჩემი დაფა'],['liveboard','ჩემი მძღოლები'],['liveloads','ჩემი ტვირთები'],['profile','ჩემი პროფილი'],['worklog','ჩემი ნამუშევარი']];
 const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['debt','ძველი ვალი'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['expenses','ხარჯები'],['paymix','გადახდის მეთოდები'],['closes','დახურვები']];
 
 function enterAs(kind){
@@ -1889,9 +1891,9 @@ function rWorklog(){
         '<span style="margin-left:auto;font-weight:750;font-size:15px">'+money(wkGross)+'</span></div>'+
       '<div id="wb'+wi+'" style="'+(open?'':'display:none')+'">'+driverBlocks+'</div></div>';
   }).join('');
-  $('view').innerHTML=ph('ჩემი Work Log',esc(MYD()||USER.name||'')+' · '+wk.length+' კვირა · '+money(grand))+
+  $('view').innerHTML=ph('ჩემი ნამუშევარი',esc(MYD()||USER.name||'')+' · '+wk.length+' კვირა · '+money(grand))+
     (sections||'<div class="card p"><div class="muted">ტვირთი ჯერ არ არის</div></div>')+
-    '<div class="callout" style="margin-top:6px"><span class="b">i</span><div>ტვირთი Work Log-ში ჩნდება <b>მხოლოდ მაშინ, როცა მანქანა SD-ში picked up-ში გადადის</b> — და იმ დღეს ჯდება, როცა რეალურად აიყვანეს. ასე დაქენსელებული ან გადაწეული ტვირთი აქ საერთოდ არ შემოდის და თანმიმდევრობაც ზუსტია.'+
+    '<div class="callout" style="margin-top:6px"><span class="b">i</span><div>ტვირთი ამ სიაში ჩნდება <b>მხოლოდ მაშინ, როცა მანქანა SD-ში picked up-ში გადადის</b> — და იმ დღეს ჯდება, როცა რეალურად აიყვანეს. ასე დაქენსელებული ან გადაწეული ტვირთი აქ საერთოდ არ შემოდის და თანმიმდევრობაც ზუსტია.'+
       (waiting?(' <b>'+waiting+'</b> ტვირთი აღებულია, მაგრამ ჯერ არ აუყვანიათ — ისინი „ჩემი დაფაზე“ ჩანს.'):'')+
       ' <b>Dead head</b> ერთადერთი ხელით შესავსები ველია: ჩაწერე მილები და მაშინვე ინახება. <span class="muted">$/mi = გროსი ÷ (loaded miles + dead head). გროსი უკვე საბროკეროს გამოკლებით არის.</span></div></div>';
 }
