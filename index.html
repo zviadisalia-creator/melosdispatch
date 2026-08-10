@@ -2260,8 +2260,8 @@ function pipeCard_(){
   if(!PIPE) return box("<div class='meta'>მილსადენი — ჩატვირთვა…</div>");
   if(PIPE.err) return box("<div class='meta'>მილსადენის მონაცემი ვერ წამოვიდა</div>");
   var P=PIPE;
-  var bad  = (P.queue!=null&&P.queue>=50) || (P.loads!=null&&P.loads>=30) || (P.event!=null&&P.event>=60);
-  var warn = (P.queue!=null&&P.queue>=10) || (P.loads!=null&&P.loads>=12) || (P.event!=null&&P.event>=15);
+  var bad  = (P.queue!=null&&P.queue>=50) || (P.loads!=null&&P.loads>=180) || (P.event!=null&&P.event>=60);
+  var warn = (P.queue!=null&&P.queue>=10) || (P.loads!=null&&P.loads>=60) || (P.event!=null&&P.event>=15);
   var head = bad ? "<span class='chip r'><span class='dot'></span>ყურადღება</span>"
            : warn? "<span class='chip y'><span class='dot'></span>შესამოწმებელი</span>"
                  : "<span class='chip g'><span class='dot'></span>ჯანსაღი</span>";
@@ -2271,14 +2271,14 @@ function pipeCard_(){
       "<div>"+head+" <button onclick='pipeLoad_(1)' style='margin-left:8px;border:1px solid var(--border);background:var(--page);color:var(--ink2);border-radius:7px;padding:3px 9px;font-weight:650;cursor:pointer;font-size:11.5px'>განახლება</button></div>"+
     "</div>"+
     "<div style='display:flex;flex-wrap:wrap;gap:14px'>"+
-      pipeItem_('ტვირთები (SD)',pipeAgo_(P.loads),pipeCls_(P.loads,12,30),'სინქრონი 5 წთ')+
+      pipeItem_('ტვირთები (SD)',pipeAgo_(P.loads),pipeCls_(P.loads,60,180),'ბოლო ცვლილება')+
       pipeItem_('რიგი',(P.queue==null?'—':P.queue+' მოვლენა'),pipeCls_(P.queue,10,50),'დაუმუშავებელი')+
       pipeItem_('ბოლო მოვლენა',pipeAgo_(P.event),pipeCls_(P.event,15,60),'Quo → ბაზა')+
       pipeItem_('ზარი',pipeAgo_(P.calls),pipeCls_(P.calls,15,60),'')+
       pipeItem_('SMS',pipeAgo_(P.sms),pipeCls_(P.sms,15,60),'')+
       pipeItem_('ტრანსკრიფცია',pipeAgo_(P.anal),pipeCls_(P.anal,60,180),'')+
     "</div>"+
-    "<div class='meta' style='font-size:11px;margin-top:9px'>ღამით ტრაფიკი ბუნებრივად ეცემა — ზარი/SMS ყვითელი ამის გამოც შეიძლება იყოს. ტრაფიკისგან დამოუკიდებელი მაჩვენებელი რიგია.</div>"
+    "<div class='meta' style='font-size:11px;margin-top:9px'>ღამით ტრაფიკი ბუნებრივად ეცემა — ზარი/SMS ყვითელი ამის გამოც შეიძლება იყოს. ტვირთების მაჩვენებელი აჩვენებს ბოლო ცვლილებას, არა სინქრონს: SD-ში საათობით შეიძლება არაფერი შეიცვალოს. ტრაფიკისგან დამოუკიდებელი მაჩვენებელი რიგია.</div>"
   );
 }
 
