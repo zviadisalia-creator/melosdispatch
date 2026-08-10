@@ -1306,6 +1306,11 @@ function rBoard(){
   var byNew=function(a,b){ return String(b.delivery_completed||'').localeCompare(String(a.delivery_completed||'')); };
   var invP=delivered.filter(function(l){
     if(l.is_canceled || l.deleted_at) return false;
+    /* ცალკეულ ტვირთზე დადასტურებული ახსნა მას სიიდან იღებს — ისევე, როგორც
+       Appointment-სა და Gate Pass-ზე. მიზეზი: SD-ში Terms ხშირად ცარიელია
+       (მხოლოდ Payment Method = Check, Terms = Other), ე.ი. სისტემა სამართლიანად
+       ეჭვობს დოკუმენტს, მაგრამ დისპეტჩერს ახსნის საშუალება უნდა ჰქონდეს. */
+    if(waivOk_('invoice',l.order_number,tday)) return false;
     return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
   var chkP=L.filter(function(l){ return chkOpen_(l) && chkDueDay_(l)>=CHK_FROM; })
             .sort(function(a,b){ return chkDueDay_(b).localeCompare(chkDueDay_(a)); });
@@ -1323,7 +1328,8 @@ function rBoard(){
         act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a>"+
           (a1.bol_sent_at
             ? "<span class='chip g' title='მონიშნულია — SD-ის დადასტურებას ელოდება'><span class='dot'></span>გაგზავნილი</span>"
-            : "<button class='fixbtn' title='ინვოისი და BOL გავაგზავნე — SD-ის დადასტურებას აღარ ველოდები' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>"); }
+            : ("<button class='fixbtn' style='margin-right:6px' title='ინვოისი და BOL გავაგზავნე — SD-ის დადასტურებას აღარ ველოდები' onclick=\"markAct('"+encodeURIComponent(l.order_number)+"','bol')\">გავაგზავნე</button>"+
+               waivChip_('invoice',l.order_number,'ინვოისი და BOL — '+l.order_number,tday))); }
       if(kind==='chk'){ var a0=actOf_(l.order_number), e0=encodeURIComponent(l.order_number);
         act=(a0.check_path?("<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(a0.check_path)+"');return false\" style='text-decoration:none;margin-right:6px'>ნახვა</a>"):"")+
           "<button class='fixbtn' style='margin-right:6px' onclick=\"chkArm('"+e0+"')\">ჩასმა Ctrl+V</button>"+
@@ -1412,7 +1418,8 @@ function rBoard(){
   var contactN=(PCONT||[]).length;              /* გამოცხადებული სიის ტვირთები */
   var exemptAll=(contactN>0 && callList.length===0);
   /* სანამ თუნდაც ერთი ზარი მოწმდება, gate მწვანე არ ხდება — მაგრამ წითელიც არაა */
-  var callOkAll=(callP.length===0) && (waitN===0) && (callList.length>0 || exemptAll);
+  var callWaived=waivOk_('calls_all','',tday);
+  var callOkAll=callWaived || ((callP.length===0) && (waitN===0) && (callList.length>0 || exemptAll));
   var callGate_="<div class='gate "+(callOkAll?'ok':(waitN&&!callP.length?'wait':'no'))+"'><div class='ic'>"+(callOkAll?'✓':(waitN&&!callP.length?'◔':'!'))+
     "</div><div class='t'><b>ზარები · Pickup / Delivery</b>"+
     (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+"</div>"+
@@ -1469,7 +1476,11 @@ function rBoard(){
 
   var gInv=(invP.length===0)||waivOk_('invoice','',tday);
   var gChk=(chkP.length===0)||waivOk_('check','',tday);
-  var gCall=callOkAll;
+  /* ⚠️ დადასტურებული ახსნა ზარებზეც უნდა ითვლებოდეს.
+     აქამდე მარტო `callOkAll` იყო: მენეჯმენტი ახსნას ადასტურებდა, სექციაზე
+     „დადასტურებული" ეწერა, მაგრამ `rem` მაინც 1-ს ითვლიდა და ცვლა არ იხურებოდა.
+     ყველა სხვა gate-ს ეს უკვე ჰქონდა (`gInv`, `gChk`, `gAppt`, `gGate`). */
+  var gCall=callOkAll||waivOk_('calls_all','',tday);
   var wrOk=wrConfirmed_();
   var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1)+
           (apptAll.length&&!gAppt?1:0)+(gpAll.length&&!gGate?1:0);
