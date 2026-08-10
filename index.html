@@ -2208,6 +2208,80 @@ function inopChip_(l){
   return inop_(l) ? " <span class='chip r' style='padding:1px 6px;font-weight:700' title='არამოძრავი — უნდა დაზუსტდეს ტრიალებს/ტრიალდება/მუხრუჭებს'><span class='dot'></span>INOP</span>" : "";
 }
 
+/* ---------- მილსადენის ჯანმრთელობა ----------
+   2026-08-10-ის ავარია 15 საათი უხილავი იყო: Quo-ს მოვლენები აღარ შემოდიოდა,
+   აპში კი ეს არსად ჩანდა. ეს ბარათი სწორედ იმ ხვრელს ხურავს.
+   ღამით ტრაფიკი ბუნებრივად ეცემა, ამიტომ ზარი/SMS ყვითელი შეიძლება იყოს ისე,
+   რომ არაფერი გაფუჭებულა — ტრაფიკისგან დამოუკიდებელი მაჩვენებელი რიგია. */
+var PIPE=null, PIPE_LOADING=false, PIPE_AT=0;
+function pipeLoad_(force){
+  if(PIPE_LOADING) return;
+  if(!force && PIPE && (Date.now()-PIPE_AT)<60000) return;
+  PIPE_LOADING=true;
+  var one=function(t,c){ return sb.from(t).select(c).order(c,{ascending:false}).limit(1); };
+  Promise.all([
+    one('loads','updated_at'),
+    one('call_logs','created_at'),
+    one('sms_logs','created_at'),
+    one('call_analysis','created_at'),
+    one('webhook_events','received_at'),
+    sb.from('webhook_events').select('*',{count:'exact',head:true}).is('processed_at',null)
+  ]).then(function(r){
+    var mins=function(res,col){
+      var d=res&&res.data&&res.data[0]; if(!d) return null;
+      var t=Date.parse(d[col]); return isNaN(t)?null:Math.round((Date.now()-t)/60000);
+    };
+    PIPE={ loads:mins(r[0],'updated_at'), calls:mins(r[1],'created_at'), sms:mins(r[2],'created_at'),
+           anal:mins(r[3],'created_at'), event:mins(r[4],'received_at'),
+           queue:(r[5]&&r[5].count!=null)?r[5].count:null };
+    PIPE_AT=Date.now(); PIPE_LOADING=false;
+    if(ROLE==='mgmt' && MTAB==='overview') rOverview();
+  },function(e){ console.error(e); PIPE={err:1}; PIPE_AT=Date.now(); PIPE_LOADING=false;
+    if(ROLE==='mgmt' && MTAB==='overview') rOverview(); });
+}
+function pipeAgo_(m){
+  if(m==null) return '—';
+  if(m<1) return 'ახლახან';
+  if(m<60) return m+' წთ წინ';
+  var h=Math.floor(m/60);
+  if(h<24) return h+' სთ '+(m%60)+' წთ წინ';
+  return Math.floor(h/24)+' დღე წინ';
+}
+function pipeCls_(v,g,y){ if(v==null) return 'h'; return v<g?'g':(v<y?'y':'r'); }
+function pipeItem_(lab,val,cls,sub){
+  return "<div style='flex:1 1 150px;min-width:140px'>"+
+    "<div class='meta' style='font-size:11px;text-transform:uppercase;letter-spacing:.03em'>"+lab+"</div>"+
+    "<div style='margin-top:4px'><span class='chip "+cls+"'><span class='dot'></span>"+val+"</span></div>"+
+    (sub?"<div class='meta' style='font-size:11px;margin-top:3px'>"+sub+"</div>":"")+"</div>";
+}
+function pipeCard_(){
+  pipeLoad_();
+  var box=function(inner){ return "<div class='card' style='padding:13px 15px;margin-bottom:14px'>"+inner+"</div>"; };
+  if(!PIPE) return box("<div class='meta'>მილსადენი — ჩატვირთვა…</div>");
+  if(PIPE.err) return box("<div class='meta'>მილსადენის მონაცემი ვერ წამოვიდა</div>");
+  var P=PIPE;
+  var bad  = (P.queue!=null&&P.queue>=50) || (P.loads!=null&&P.loads>=30) || (P.event!=null&&P.event>=60);
+  var warn = (P.queue!=null&&P.queue>=10) || (P.loads!=null&&P.loads>=12) || (P.event!=null&&P.event>=15);
+  var head = bad ? "<span class='chip r'><span class='dot'></span>ყურადღება</span>"
+           : warn? "<span class='chip y'><span class='dot'></span>შესამოწმებელი</span>"
+                 : "<span class='chip g'><span class='dot'></span>ჯანსაღი</span>";
+  return box(
+    "<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px'>"+
+      "<div style='font-weight:700'>მილსადენი</div>"+
+      "<div>"+head+" <button onclick='pipeLoad_(1)' style='margin-left:8px;border:1px solid var(--border);background:var(--page);color:var(--ink2);border-radius:7px;padding:3px 9px;font-weight:650;cursor:pointer;font-size:11.5px'>განახლება</button></div>"+
+    "</div>"+
+    "<div style='display:flex;flex-wrap:wrap;gap:14px'>"+
+      pipeItem_('ტვირთები (SD)',pipeAgo_(P.loads),pipeCls_(P.loads,12,30),'სინქრონი 5 წთ')+
+      pipeItem_('რიგი',(P.queue==null?'—':P.queue+' მოვლენა'),pipeCls_(P.queue,10,50),'დაუმუშავებელი')+
+      pipeItem_('ბოლო მოვლენა',pipeAgo_(P.event),pipeCls_(P.event,15,60),'Quo → ბაზა')+
+      pipeItem_('ზარი',pipeAgo_(P.calls),pipeCls_(P.calls,15,60),'')+
+      pipeItem_('SMS',pipeAgo_(P.sms),pipeCls_(P.sms,15,60),'')+
+      pipeItem_('ტრანსკრიფცია',pipeAgo_(P.anal),pipeCls_(P.anal,60,180),'')+
+    "</div>"+
+    "<div class='meta' style='font-size:11px;margin-top:9px'>ღამით ტრაფიკი ბუნებრივად ეცემა — ზარი/SMS ყვითელი ამის გამოც შეიძლება იყოს. ტრაფიკისგან დამოუკიდებელი მაჩვენებელი რიგია.</div>"
+  );
+}
+
 function rOverview(){
   var L=LIVE||[];
   var today=ymd_(new Date());
@@ -2312,6 +2386,7 @@ function rOverview(){
   }).join('') : "<div class='muted' style='margin-top:8px'>ყველაფერი წესრიგშია</div>";
 
   $('view').innerHTML=ph('მიმოხილვა','მთელი კომპანია · ცოცხალი მონაცემი Super Dispatch-იდან და Quo-დან · '+gdFull(today))+
+    pipeCard_()+
     "<div class='kpis'>"+
       kpi('ტვირთი — ეს კვირა',W.n+dl(W.n,P.n),'',weekLabel(thisMon)+' · გასულ კვირას ამ დღისთვის '+P.n)+
       kpi('მანქანა — ეს კვირა',W.cars+dl(W.cars,P.cars),'','გასულ კვირას ამ დღისთვის '+P.cars)+
