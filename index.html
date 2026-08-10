@@ -313,6 +313,23 @@ function noPaperChip_(l){
 /* ინვოისი საჭიროა? არა — თუ ადგილზე იხდიან ან ბროკერს თავისი აპი აქვს */
 function invNeeded_(l){ return !!l && !TERM_ONSITE[l.payment_terms] && !noPaper_(l); }
 function actOf_(o){ return ACT[o]||{}; }
+/* რომელ დღეს გახდა ჩეკი ასატვირთი — ფიქაფის ან ჩაბარების ფაქტით.
+   ცარიელი = ჩეკი არ ეკუთვნის ან ჯერ არ მომხდარა. */
+function chkDueDay_(l){
+  if(!l) return '';
+  if(l.payment_terms==='check_on_pickup')   return String(l.pickup_completed||'').slice(0,10);
+  if(l.payment_terms==='check_on_delivery') return String(l.delivery_completed||'').slice(0,10);
+  return '';
+}
+/* ჩეკი ღიაა — არც ფაილია, არც მონიშვნა, არც ახსნა */
+function chkOpen_(l){
+  if(!l || l.is_canceled || l.deleted_at) return false;
+  if(!chkDueDay_(l)) return false;
+  var a=actOf_(l.order_number);
+  return !a.check_uploaded_at && !a.check_resolution;
+}
+/* დოკუმენტი გაგზავნილია — SD-ის ინვოისი ან ჩვენი „გავაგზავნე" მონიშვნა */
+function docsSent_(l){ return !!(l && (l.invoice_sent_at || actOf_(l.order_number).bol_sent_at)); }
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
 async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()) }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
@@ -843,7 +860,7 @@ function pm(n){return (n==null||!isFinite(n))?'—':'$'+Number(n).toFixed(2);}
 function pymd(s){var m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 
 const DTABS=[['board','ჩემი დაფა'],['plan','გეგმა და რეალობა'],['liveboard','ჩემი მძღოლები'],['liveloads','ჩემი ტვირთები'],['profile','ჩემი პროფილი'],['worklog','ჩემი Work Log']];
-const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['expenses','ხარჯები'],['paymix','გადახდის მეთოდები'],['closes','დახურვები']];
+const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['debt','ძველი ვალი'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['expenses','ხარჯები'],['paymix','გადახდის მეთოდები'],['closes','დახურვები']];
 
 function enterAs(kind){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -883,7 +900,7 @@ function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if
 
 function render(){
   if(ROLE==='disp'){ if(TAB==='board')return rBoard(); if(TAB==='plan')return rPlan(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
-  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,paymix:rPayMix,closes:rCloses}[MTAB])();
+  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,debt:rDebt,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,paymix:rPayMix,closes:rCloses}[MTAB])();
 }
 
 /* ---------- DISPATCHER ---------- */
@@ -1012,6 +1029,14 @@ function stdLevel_(ratio){
      თუ გრძელია, მაშინ თანხა დღიურ გეგმას მაინც უნდა ავსებდეს.
    2+ მანქანიანი: მარშრუტი სრულად უნდა იყოს დაგეგმილი (cap მანქანა).
      გამონაკლისი — თუ ერთი მანქანაც ავსებს დღიურ გეგმას, ჩაითვლება. */
+/* ---- „სუფთა ფურცლის" თარიღები (ცვლის დახურვის gate-ები) ----
+   პლატფორმა ძველ ვალს დისპეტჩერს აღარ ჰკიდებს: ცვლის დახურვისას ითვლება
+   მხოლოდ ის, რაც ამ თარიღებიდან გაჩნდა. ეს ორი სტრიქონი ერთადერთი ადგილია,
+   სადაც ეს თარიღები წერია — თუ ოდესმე „სუფთა ფურცლის" გადატანა დაგჭირდება,
+   მხოლოდ აქ შეცვალე (ფორმატი: YYYY-MM-DD, ორშაბათი სასურველია).
+   CHK_FROM — ჩეკის ატვირთვა · DOC_FROM — BOL და ინვოისის გაგზავნა */
+var CHK_FROM='2026-08-10';
+var DOC_FROM='2026-08-03';
 function shortMi_(){ return sett_('short_miles',350); }
 function loadMiles_(l){ var m=Number(l&&l.miles); return (m>0)?m:0; }
 /* მძღოლი, რომელსაც მანქანა უკვე აყვანილი აქვს და ხვალ ჯერ კიდევ გზაშია */
@@ -1266,30 +1291,31 @@ function rBoard(){
         (ok?'დასრულებული':({y:'ნაკლები',r:'ვერ ავსებს',n:'სამიზნე არ არის'}[lvl]))+"</span></div></div>";
   }).join('');
 
-  var winCut=new Date(Date.now()-14*864e5).toISOString();
-  var delivered=L.filter(function(l){ return l.delivery_completed && l.delivery_completed>=winCut; });
-  var older=L.filter(function(l){ return l.delivery_completed && l.delivery_completed<winCut; });
+  /* ---- „სუფთა ფურცელი" ----
+     ორივე gate ფიქსირებული თარიღიდან ითვლის (იხ. CHK_FROM / DOC_FROM ზემოთ).
+     ამ თარიღებამდე დარჩენილი ვალი დისპეტჩერს აღარ უჩანს და ცვლას არ კეტავს —
+     ძველი ვალი მენეჯმენტის მხარეს იმართება, არა ცვლის დახურვისას. */
+  var delDayOf_=function(l){ return String(l.delivery_completed||'').slice(0,10); };
+  var delivered=L.filter(function(l){ return delDayOf_(l) && delDayOf_(l)>=DOC_FROM; });
   /* SD-დან ინვოისის სტატუსი საათში ერთხელ მოდის — დისპეტჩერს იმდენ ხანს
      ოფისში ჯდომა არ უნდა უწევდეს. „გავაგზავნე“ მონიშვნა gate-ს მაშინვე ხურავს,
      SD მერე ადასტურებს (მენეჯმენტს დაუდასტურებელი მონიშვნა გამონაკლისებში უჩანს). */
-  var docsDone_=function(l){ return !!(l.invoice_sent_at || actOf_(l.order_number).bol_sent_at); };
-  var oldInv=older.filter(function(l){ return invNeeded_(l) && !docsDone_(l); }).length;
+  var docsDone_=docsSent_;
   var byNew=function(a,b){ return String(b.delivery_completed||'').localeCompare(String(a.delivery_completed||'')); };
-  var invP=delivered.filter(function(l){ return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
-  var chkP=L.filter(function(l){
-    var pu=(l.payment_terms==='check_on_pickup' && l.pickup_completed && l.pickup_completed>=winCut);
-    var dl=(l.payment_terms==='check_on_delivery' && l.delivery_completed && l.delivery_completed>=winCut);
-    var a=actOf_(l.order_number);
-    return (pu||dl) && !a.check_uploaded_at && !a.check_resolution; }).sort(byNew);
+  var invP=delivered.filter(function(l){
+    if(l.is_canceled || l.deleted_at) return false;
+    return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
+  var chkP=L.filter(function(l){ return chkOpen_(l) && chkDueDay_(l)>=CHK_FROM; })
+            .sort(function(a,b){ return chkDueDay_(b).localeCompare(chkDueDay_(a)); });
 
   function gate_(title, n, sub, kind, subj){
     var ok=(n===0)||waivOk_(kind,subj||'',tday);
     var btn=(n===0)?'':waivChip_(kind,subj||'',title+' — '+sub,tday);
     return "<div class='gate "+(ok?'ok':'no')+"'><div class='ic'>"+(ok?'✓':'!')+"</div><div class='t'><b>"+title+"</b><span>"+(n===0?'ყველაფერი დახურულია':esc(sub))+"</span></div>"+btn+"</div>";
   }
-  function rows_(items, kind){
+  function rows_(items, kind, lim){
     if(!items.length) return '';
-    return items.slice(0,8).map(function(l){
+    return items.slice(0,lim||8).map(function(l){
       var act='';
       if(kind==='bol'){ var a1=actOf_(l.order_number);
         act="<a class='fixbtn' href='"+esc(l.bol||'#')+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a>"+
@@ -1304,7 +1330,7 @@ function rBoard(){
           "<button class='fixbtn' title='ჩეკის ნაცვლად ადგილზე ქეში დაგვახვედრეს' onclick=\"chkResolve('"+e0+"','cash_on_site')\">ქეში იყო</button>"; }
       var dz=(kind==='chk')?(" ondragover=\"event.preventDefault()\" ondrop=\"chkDrop('"+encodeURIComponent(l.order_number)+"',event)\" title='ჩეკის ფოტო აქ ჩააგდე ან დააჭირე „ჩასმა Ctrl+V“'"):"";
       return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
-    }).join('') + (items.length>8 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-8)+"</div>" : '');
+    }).join('') + (items.length>(lim||8) ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-(lim||8))+"</div>" : '');
   }
   var CC=(PCONT||[]).filter(function(r){ return !r.not_required && callNeeded_(r.order_number); });
   /* ⚠️ „დარეკა" აღარ კმარა — „ესაუბრა" უნდა.
@@ -1469,13 +1495,13 @@ function rBoard(){
       rows_(invP,'bol')+
       gate_('ჩეკის ატვირთვა', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', 'check','')+
       rows_(chkP,'chk')+
-      (oldInv?("<div class='muted' style='padding:8px 15px 12px 49px;font-size:12px'>14 დღეზე ძველი: <b>"+oldInv+"</b> ჩაბარებული ტვირთი ინვოისის გარეშე</div>"):'')+
       "<div class='closebar'>"+
         "<button class='bigbtn"+((rem===0&&!closed)?' ready':'')+"' id='logoutBtn'"+((rem>0||closed)?' disabled':'')+" onclick='closeShift()'>"+(closed?'ცვლა დახურულია ✓':'ცვლის დახურვა')+"</button>"+
         "<span id='gateCount' class='chip "+(rem?'r':'g')+"'><span class='dot'></span>"+(rem?rem+' დარჩენილი':'ყველა gate გავლილია')+"</span>"+
         (closed?("<span class='muted' style='font-size:12px'>"+new Date(SCLOSE.closed_at).toLocaleString('ka-GE')+"</span>"):"<span class='muted' style='font-size:12px'>ყველა ✓-ის შემდეგ — „მწვანე“</span>")+
       "</div></div>"+
     "<div class='callout' style='margin-top:14px'><span class='b'>i</span><div><b>სამუშაო დასრულებულია, თუ ოთხივე პირობა სრულდება:</b> ტვირთები სტანდარტზეა · ფიქაფზეც და დელივერზეც დარეკილია · სადაც საჭირო იყო, ინვოისი და BOL გაგზავნილია · ჩეკი ატვირთულია. "+
+      "<b>ათვლა სუფთა ფურცლიდან:</b> ჩეკი ითვლება <b>"+gdFull(CHK_FROM)+"დან</b>, BOL და ინვოისი — <b>"+gdFull(DOC_FROM)+"დან</b>. ამ თარიღებამდე დარჩენილი ძველი ვალი აქ აღარ ჩანს და ცვლას არ კეტავს. "+
       "<b>ხვალინდელ სიას თვითონ ავსებ</b> — მოძებნე Order ID-ით და დაამატე; ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
       "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და იმ დღეს ჯერ კიდევ გზაშია</b> — ტვირთი არ მოეთხოვება. თავისუფლდება იმ დღეს, როცა აბარებს: SD-ის ჩაბარების თარიღით, ან თუ არ წერია — აღების დღეს + "+transitMi_()+" მილი დღეში (მაგ. 1 400 მილი 4 რიცხვში აღებული → 6 რიცხვში აბარებს, ე.ი. იმ დღეს ტვირთი <b>სჭირდება</b>). "+
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
@@ -3062,6 +3088,81 @@ function rOverdue(){
     '<div class="card p"><div class="tablewrap"><table style="min-width:900px"><thead><tr><th>Order ID</th><th>გადამხდელი</th><th>დისპეტჩერი</th><th class="num">თანხა</th><th>ვადა</th><th class="num">დაგვიანება</th><th>Terms</th><th>სტატუსი</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     '<div class="muted" style="font-size:12px;margin-top:10px">გადახდის ფაქტი — Super Dispatch-ის paid_at. თუ თანხა შემოსულია, მაგრამ აქ ჩანს, ესე იგი Super Dispatch-ში გადახდა არ არის მონიშნული.</div></div>';
 }
+/* ---- ძველი ვალი — რაც „სუფთა ფურცლამდე" დარჩა ----
+   დისპეტჩერს ეს აღარ უჩანს და ცვლას არ კეტავს (CHK_FROM / DOC_FROM), მაგრამ
+   ფული და დოკუმენტები არსად გამქრალა. ეს ტაბი ერთადერთი ადგილია, სადაც ეს
+   ნაშთი სრულად ჩანს და იქვე იხურება. როცა სია დაცარიელდება, ტაბიც აღარ
+   დაგჭირდება. */
+var DEBTM='inv', DEBTD='';
+function setDebtM(v){ DEBTM=v; DEBTD=''; rDebt(); }
+function setDebtD(v){ var n=decodeURIComponent(v); DEBTD=(DEBTD===n?'':n); rDebt(); }
+function debtInv_(){
+  return (LIVE||[]).filter(function(l){
+    if(l.is_canceled || l.deleted_at) return false;
+    var d=String(l.delivery_completed||'').slice(0,10);
+    if(!d || d>=DOC_FROM) return false;
+    return invNeeded_(l) && !docsSent_(l);
+  }).sort(function(a,b){ return String(a.delivery_completed||'').localeCompare(String(b.delivery_completed||'')); });
+}
+function debtChk_(){
+  return (LIVE||[]).filter(function(l){ return chkOpen_(l) && chkDueDay_(l)<CHK_FROM; })
+    .sort(function(a,b){ return chkDueDay_(a).localeCompare(chkDueDay_(b)); });
+}
+function rDebt(){
+  var INV=debtInv_(), CHK=debtChk_();
+  var amt=function(l){ return Number(l.price)||0; };
+  var sum=function(a){ return a.reduce(function(s,l){ return s+amt(l); },0); };
+  var invPaid=INV.filter(function(l){ return l.paid_at; });      /* ფული უკვე შემოსულია — მხოლოდ ჩანაწერი აკლია */
+  var invMoney=INV.filter(function(l){ return !l.paid_at; });    /* ეს ნამდვილი ფულია */
+  var chkMode=(DEBTM==='chk');
+  var L=chkMode?CHK:INV;
+  var dayOf=function(l){ return chkMode?chkDueDay_(l):String(l.delivery_completed||'').slice(0,10); };
+  var ageOf=function(l){ var t=Date.parse(dayOf(l)); return isNaN(t)?0:Math.floor((Date.now()-t)/864e5); };
+  /* დისპეტჩერების ჭრილი — ვისთან რამდენი დარჩა */
+  var by={}; L.forEach(function(l){ var k=l.dispatcher_name||'—';
+    if(!by[k]) by[k]={n:0,s:0,mx:0}; by[k].n++; by[k].s+=amt(l); var a=ageOf(l); if(a>by[k].mx) by[k].mx=a; });
+  var names=Object.keys(by).sort(function(a,b){ return by[b].s-by[a].s; });
+  var drows=names.map(function(k){
+    return "<tr"+(DEBTD===k?" style='background:var(--brand-soft)'":"")+"><td><span style='cursor:pointer;text-decoration:underline' onclick=\"setDebtD('"+encodeURIComponent(k).replace(/'/g,'%27')+"')\">"+esc(k)+"</span></td>"+
+      "<td class='num'>"+by[k].n+"</td><td class='num'>"+money(by[k].s)+"</td><td class='num'>"+by[k].mx+" დღე</td></tr>";
+  }).join('');
+  var F=DEBTD?L.filter(function(l){ return (l.dispatcher_name||'—')===DEBTD; }):L;
+  var SHOW=200;
+  var rows=F.slice(0,SHOW).map(function(l){
+    var e0=encodeURIComponent(l.order_number), a=actOf_(l.order_number);
+    var act = chkMode
+      ? ((a.check_path?("<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(a.check_path)+"');return false\" style='text-decoration:none;margin-right:6px'>ნახვა</a>"):"")+
+         "<label class='fixbtn' style='cursor:pointer;margin-right:6px'>ფაილი<input type='file' accept='image/*,application/pdf' style='display:none' onchange=\"upCheck('"+e0+"',this)\"></label>"+
+         "<button class='fixbtn' style='margin-right:6px' title='ჩეკი მძღოლმა თვითონ გაანაღდა — ფული მასთანაა' onclick=\"chkResolve('"+e0+"','driver_cashed')\">მძღოლმა გაანაღდა</button>"+
+         "<button class='fixbtn' style='margin-right:6px' title='ჩეკის ნაცვლად ადგილზე ქეში დაგვახვედრეს' onclick=\"chkResolve('"+e0+"','cash_on_site')\">ქეში იყო</button>"+
+         "<button class='fixbtn' title='საკითხი მოგვარებულია — სიიდან მოხსნა' onclick=\"markAct('"+e0+"','check')\">დახურვა</button>")
+      : ((l.bol?("<a class='fixbtn' href='"+esc(l.bol)+"' target='_blank' rel='noopener' style='text-decoration:none;margin-right:6px'>BOL</a>"):"")+
+         "<button class='fixbtn' title='ინვოისი და BOL გაგზავნილია — სიიდან მოხსნა' onclick=\"markAct('"+e0+"','bol')\">გაგზავნილია</button>");
+    return "<tr><td><b>"+esc(l.order_number||'')+"</b>"+(!chkMode&&l.paid_at?" <span class='chip g' style='padding:1px 6px' title='ფული შემოსულია'><span class='dot'></span>გადახდილი</span>":"")+"</td>"+
+      "<td>"+esc(l.dispatcher_name||'—')+"</td><td>"+esc(l.driver_name||'—')+"</td>"+
+      "<td>"+esc(l.customer||'—')+"</td><td>"+gd(dayOf(l))+"</td>"+
+      "<td class='num' style='font-weight:700'>"+ageOf(l)+" დღე</td>"+
+      "<td class='num'>"+money(amt(l))+"</td><td>"+act+"</td></tr>";
+  }).join('');
+  var chips="<span class='chip"+(chkMode?"":" r")+"' style='cursor:pointer' onclick=\"setDebtM('inv')\">📄 ინვოისი და BOL ("+INV.length+")</span>"+
+            "<span class='chip"+(chkMode?" r":"")+"' style='cursor:pointer' onclick=\"setDebtM('chk')\">🧾 ასატვირთი ჩეკი ("+CHK.length+")</span>"+
+            (DEBTD?("<span class='chip y' style='cursor:pointer' onclick=\"setDebtD('"+encodeURIComponent(DEBTD).replace(/'/g,'%27')+"')\">"+esc(DEBTD)+" — "+F.length+" ✕</span>"):"");
+  $('view').innerHTML=ph('ძველი ვალი','რაც „სუფთა ფურცლამდე" დარჩა — დისპეტჩერს აღარ უჩანს, აქ იხურება')+
+    "<div class='kpis'>"+
+      kpi('ინვოისი — ნამდვილი ფული',money(sum(invMoney)),'r',invMoney.length+' ტვირთი · ფული არ შემოსულა')+
+      kpi('ინვოისი — მხოლოდ ჩანაწერი',invPaid.length,'w',money(sum(invPaid))+' · ფული უკვე შემოსულია')+
+      kpi('ასატვირთი ჩეკი',CHK.length,(CHK.length?'r':'g'),money(sum(CHK))+' · ფოტო ან ახსნა აკლია')+
+      kpi('სულ ღია ჩანაწერი',INV.length+CHK.length,'',(INV.length+CHK.length)?'დახურვას ელოდება':'ყველაფერი დახურულია ✓')+
+    "</div>"+
+    "<div class='callout' style='margin-bottom:14px'><span class='b'>i</span><div>ცვლის დახურვა ითვლის მხოლოდ <b>"+gdFull(CHK_FROM)+"დან</b> გაჩენილ ჩეკებს და <b>"+gdFull(DOC_FROM)+"დან</b> ჩაბარებულ ტვირთებს. ამ თარიღებამდე დარჩენილი ნაშთი აქ არის და დისპეტჩერს აღარ ეკიდება. "+
+      "<b>„გაგზავნილია“</b> და <b>„დახურვა“</b> ჩანაწერს სიიდან იღებს — ე.ი. ეს სია დროთა განმავლობაში უნდა დაცარიელდეს. თუ ტვირთზე <b>„გადახდილი“</b> წერია, ფული უკვე შემოსულია და ეს მხოლოდ ჩანაწერის დისციპლინაა.</div></div>"+
+    "<div class='card p' style='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px'>"+chips+"</div>"+
+    (names.length?("<div class='card p' style='margin-bottom:14px'><h4>დისპეტჩერების ჭრილი</h4><div class='tablewrap'><table style='min-width:520px'><thead><tr><th>დისპეტჩერი</th><th class='num'>ჩანაწერი</th><th class='num'>თანხა</th><th class='num'>ყველაზე ძველი</th></tr></thead><tbody>"+drows+"</tbody></table></div></div>"):"")+
+    "<div class='card p'><div class='tablewrap'><table style='min-width:1100px'><thead><tr><th>Order ID</th><th>დისპეტჩერი</th><th>მძღოლი</th><th>კლიენტი</th><th>"+(chkMode?'ჩეკის დღე':'ჩაბარება')+"</th><th class='num'>დღე</th><th class='num'>თანხა</th><th>მოქმედება</th></tr></thead><tbody>"+
+      (rows||"<tr><td colspan='8' class='muted'>ამ სიაში ჩანაწერი აღარ არის ✓</td></tr>")+"</tbody></table></div>"+
+      (F.length>SHOW?("<div class='muted' style='font-size:12px;margin-top:10px'>ნაჩვენებია პირველი "+SHOW+" "+F.length+"-დან — ყველაზე ძველი პირველი.</div>"):"")+
+    "</div>";
+}
 /* ---- მძღოლების ხელფასები — ცოცხლად (SD loads + drivers რეესტრი) ---- */
 var PAYW='';           // არჩეული კვირის ორშაბათი; '' = ბოლო დასრულებული
 var PAYBASE='pickup';  // pickup | delivery
@@ -3769,12 +3870,27 @@ function rExpenses(){
 }
 /* ---- დისპეტჩერების ხელფასები — 4-კვირიანი საანგარიშო პერიოდი ---- */
 var DPSTART='';   // პერიოდის პირველი ორშაბათი
+/* ---- ციკლი ფიქსირებულ ათვლაზეა მიბმული ----
+   PAY_ANCHOR არის ჩვენი რეალური პერიოდის პირველი ორშაბათი:
+   13 ივლისი 2026 → პერიოდი 13 ივლ – 9 აგვ, გადახდა 11 აგვისტოს, სამშაბათს.
+   ყველა პერიოდი ამ თარიღიდან ზუსტად 28-დღიანი ბიჯით ითვლება, ამიტომ
+   ციკლი ვერასდროს აცდება (ადრე „ბოლო 4 კვირა" ყოველ ორშაბათს იწევდა).
+   თუ ოდესმე ციკლის ათვლა შეიცვლება — მხოლოდ ეს ერთი თარიღი შეცვალე. */
+var PAY_ANCHOR='2026-07-13';
+function dayN_(s){ var m=/(\d{4})-(\d{2})-(\d{2})/.exec(String(s||'')); return m? Math.round(Date.UTC(+m[1],+m[2]-1,+m[3])/864e5) : null; }
+function dpPeriodStart_(day){      // რომელი პერიოდის შიგნით ხვდება ეს დღე
+  var a=dayN_(PAY_ANCHOR), d=dayN_(day);
+  if(a==null||d==null) return PAY_ANCHOR;
+  return addDays_(PAY_ANCHOR, Math.floor((d-a)/28)*28);
+}
 function setDpStart(w){ DPSTART=w; rDispPay(); }
-function dpShift(n){ DPSTART=addDays_(dpStart_(), n*7); rDispPay(); }
+function dpShift(n){ DPSTART=addDays_(dpStart_(), n*28); rDispPay(); }   // ბიჯი — მთელი პერიოდი
 function dpStart_(){
   if(DPSTART) return DPSTART;
-  var thisMon=mondayOf(ymd_(new Date()));
-  return addDays_(thisMon,-28);          // ბოლო 4 დასრულებული კვირა
+  /* ნაგულისხმევად — ბოლო დასრულებული პერიოდი, ე.ი. ზუსტად ის, რომელსაც ვიხდით.
+     სანამ მიმდინარე პერიოდი არ დამთავრდება, ერთით უკან ვდგავართ. */
+  var today=ymd_(new Date()), cur=dpPeriodStart_(today);
+  return (addDays_(cur,27)<today) ? cur : addDays_(cur,-28);
 }
 async function saveDRate(enc, field, value){
   var name=decodeURIComponent(enc);
@@ -3844,6 +3960,63 @@ async function fixAllRates(){
     toast('განაკვეთები გასწორდა ✓'); rDispPay();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
+/* ---- კვირების ისტორია (ხელფასების ტაბი) ----
+   4-კვირიანი ციკლი გადახდის რიტმია; ეს სექცია იმავე რიცხვებს კვირებად შლის,
+   რომ ჩანდეს რა მოხდა ცალკეულ კვირაში — Work Log-ის მსგავსი ჩამოსაშლელით,
+   სულ იმდენი კვირა, რამდენ ისტორიასაც ვხედავთ. */
+function dpWeeks_(){
+  var mons={};
+  (LIVE||[]).forEach(function(l){
+    if(!l.dispatcher_name) return;
+    var m=mondayOf(puDay_(l)); if(m) mons[m]=1;
+  });
+  return Object.keys(mons).sort().reverse();
+}
+function tdw(i){
+  var b=$('dpwb'+i), c=$('dpwc'+i); if(!b) return;
+  var h=(b.style.display!=='none');
+  b.style.display=h?'none':''; if(c) c.textContent=h?'▸':'▾';
+}
+function dpHist_(){
+  var weeks=dpWeeks_(), thisMon=mondayOf(ymd_(new Date()));
+  if(!weeks.length) return "<div class='card p'><div class='muted'>ისტორია ჯერ არ არის</div></div>";
+  return weeks.map(function(mo, wi){
+    var W=dpRows_(mo, addDays_(mo,6));
+    var T=W.reduce(function(s,x){ s.n+=x.n; s.gross+=x.gross; s.comm+=x.comm;
+      s.net+=(x.net||0); s.reqSend+=(x.reqSend||0); s.pens+=(x.pens||0); s.cost+=(x.cost||0); return s; },
+      {n:0,gross:0,comm:0,net:0,reqSend:0,pens:0,cost:0});
+    var open=(wi===0);
+    var rows=W.map(function(x){
+      return "<tr><td><b>"+esc(x.d)+"</b></td><td class='num'>"+x.nDrv+"</td><td class='num'>"+x.n+"</td>"+
+        "<td class='num'><b>"+money(x.gross)+"</b></td>"+
+        "<td class='num'>"+money(x.comm)+"</td>"+
+        "<td class='num' style='font-weight:750;color:var(--good)'>"+(x.net!=null?money(x.net):'—')+
+          (x.tips?("<div class='muted' style='font-size:11px;font-weight:400;color:var(--good)'>+ჩუქება "+money(x.tips)+"</div>"):"")+"</td>"+
+        "<td class='num' style='font-weight:750'>"+(x.reqSend!=null?money(x.reqSend):'—')+"</td>"+
+        "<td class='num muted'>"+(x.pens!=null?money(x.pens):'—')+"</td>"+
+        "<td class='num' style='font-weight:750'>"+(x.cost!=null?money(x.cost):'—')+"</td>"+
+        "<td class='num' style='color:"+(x.margin==null?'var(--muted)':(x.margin>=0?'var(--good)':'var(--crit)'))+";font-weight:700'>"+(x.margin!=null?money(x.margin):'—')+"</td></tr>";
+    }).join('');
+    var foot=W.length?("<tr style='background:var(--brand-soft);font-weight:750'><td>ჯამი</td><td></td><td class='num'>"+T.n+"</td><td class='num'>"+money(T.gross)+"</td><td class='num'>"+money(T.comm)+"</td><td class='num'>"+money(T.net)+"</td><td class='num'>"+money(T.reqSend)+"</td><td class='num'>"+money(T.pens)+"</td><td class='num'>"+money(T.cost)+"</td><td class='num'>"+money(T.comm-T.cost)+"</td></tr>"):"";
+    return "<div class='card p' style='margin-bottom:12px'>"+
+      "<div onclick='tdw("+wi+")' style='cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap'>"+
+        "<span id='dpwc"+wi+"' style='color:var(--muted);width:12px'>"+(open?'▾':'▸')+"</span>"+
+        "<b>კვირა · "+weekLabel(mo)+"</b>"+
+        (mo===thisMon?" <span class='chip g' style='padding:1px 6px'>მიმდინარე</span>":"")+
+        "<span class='meta'>"+W.length+" დისპეტჩერი · "+T.n+" ტვირთი · გროსი "+money(T.gross)+"</span>"+
+        "<span style='margin-left:auto;text-align:right'>"+
+          "<div style='font-weight:750;font-size:15px;color:var(--good)'>"+money(T.net)+"</div>"+
+          "<div class='muted' style='font-size:11px'>ბრუტო "+money(T.reqSend)+" · ხარჯი "+money(T.cost)+"</div></span>"+
+      "</div>"+
+      "<div id='dpwb"+wi+"' style='"+(open?'':'display:none')+"'>"+
+        "<div class='tablewrap' style='margin-top:10px'><table style='min-width:980px'><thead><tr>"+
+        "<th>დისპეტჩერი</th><th class='num'>მძღ.</th><th class='num'>ტვირთი</th><th class='num'>მძღ. გროსი</th>"+
+        "<th class='num'>კომპ. საკომისიო</th><th class='num'>NET ჩასარიცხი</th><th class='num'>ბრუტო</th>"+
+        "<th class='num'>დამსაქმ. საპენსიო</th><th class='num'>სრული ხარჯი</th><th class='num'>მარჟა</th>"+
+        "</tr></thead><tbody>"+(rows||"<tr><td colspan='10' class='muted'>ამ კვირაში ტვირთი არ არის</td></tr>")+foot+"</tbody></table></div>"+
+      "</div></div>";
+  }).join('');
+}
 function rDispPay(){
   var TX=taxes_();
   var start=dpStart_(), end=addDays_(start,27);
@@ -3905,11 +4078,9 @@ function rDispPay(){
         "<div class='muted' style='font-size:12px;margin-top:2px'>გადახდის დღე: <b style='color:var(--brand)'>"+gdFull(payday)+", სამშაბათი</b>"+(done?" · პერიოდი დასრულებულია ✓":" · <span style='color:var(--warn)'>პერიოდი ჯერ მიმდინარეობს</span>")+"</div>"+
         "<div class='muted' style='font-size:11.5px;margin-top:4px'>მე-5 კვირის ორშაბათ-სამშაბათის გროსი ამ ხელფასში <b>არ შედის</b> — ის მომდევნო პერიოდში ჩაჯდება.</div></div>"+
       "<div style='display:flex;gap:6px;flex-wrap:wrap'>"+
-        "<span class='chip' style='cursor:pointer' onclick='dpShift(-4)'>‹‹ წინა პერიოდი</span>"+
-        "<span class='chip' style='cursor:pointer' onclick='dpShift(-1)'>‹ 1 კვირით უკან</span>"+
-        "<span class='chip' style='cursor:pointer' onclick='dpShift(1)'>1 კვირით წინ ›</span>"+
-        "<span class='chip' style='cursor:pointer' onclick='dpShift(4)'>შემდეგი პერიოდი ››</span>"+
-        "<span class='chip g' style='cursor:pointer' onclick=\"setDpStart('')\">ბოლო 4 კვირა</span>"+
+        "<span class='chip' style='cursor:pointer' onclick='dpShift(-1)'>‹‹ წინა პერიოდი</span>"+
+        "<span class='chip' style='cursor:pointer' onclick='dpShift(1)'>შემდეგი პერიოდი ››</span>"+
+        "<span class='chip g' style='cursor:pointer' onclick=\"setDpStart('')\">ბოლო დასრულებული</span>"+
       "</div></div>"+
     "<div class='kpis'>"+
       kpi('ბანკზე ჩასარიცხი (NET)',money(T.net),'g',R.length+' დისპეტჩერი · '+T.n+' ტვირთი')+
@@ -3936,8 +4107,11 @@ function rDispPay(){
     "<div class='grid2'>"+
       "<div class='card p'><h4>პერიოდის კვირები</h4><div class='tablewrap'><table style='min-width:520px'><thead><tr><th>კვირა</th><th class='num'>ტვირთი</th><th class='num'>გროსი</th><th class='num'>ბრუტო</th><th class='num'>NET</th><th></th></tr></thead><tbody>"+wkRows+"</tbody></table></div></div>"+
       "<div class='card p'><h4>წინა პერიოდები</h4><div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:8px'>"+pchips+"</div>"+
-        "<div class='muted' style='font-size:12px;margin-top:12px'>თუ ციკლის ათვლა ერთი კვირით აცდენილია, დააჭირე <b>„‹ 1 კვირით უკან“</b> ან <b>„1 კვირით წინ ›“</b> — პერიოდი და გადახდის თარიღი ავტომატურად გადაიწევს.</div></div>"+
-    "</div>";
+        "<div class='muted' style='font-size:12px;margin-top:12px'>ციკლი ფიქსირებულია: ათვლა <b>"+gdFull(PAY_ANCHOR)+"</b>-იდან, შემდეგ ყოველი 28 დღე. პერიოდები ერთმანეთს არც ფარავს და არც აცდება, ამიტომ ხელით სწორება აღარ სჭირდება — ისრებით მხოლოდ მთელ პერიოდს გადადიხარ.</div></div>"+
+    "</div>"+
+    "<div class='sect'>კვირების ისტორია</div>"+
+    "<div class='callout' style='margin-bottom:12px'><span class='b'>i</span><div>იგივე რიცხვები, კვირებად დაშლილი — ბოლო კვირა პირველია და გახსნილი, დანარჩენები ჩამოსაშლელია. სულ ის ისტორია, რაც სისტემას აქვს. <b>გადახდა მაინც 4-კვირიანი ციკლით ხდება</b> (ზემოთ); ეს სექცია საკონტროლოდაა — ვინ რა კვირაში რამდენი გამოიმუშავა. კვირა ორშაბათიდან კვირადღემდე, ტვირთი კვირაში ჯდება <b>ფიქაფის თარიღით</b>.</div></div>"+
+    dpHist_();
 }
 bootstrap();
 </script>
