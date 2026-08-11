@@ -404,10 +404,13 @@ function sameOrg_(a,b){
 function callSkip_(l, side){
   if(!l) return null;
   var venue=(side==='pu')? l.pu_venue : l.del_venue;
-  if(!venue) return null;
-  var k=venueKind_(venue);
-  if(k) return {why:'auction', kind:k, venue:venue,
+  /* ვენიუ ყოველთვის არ არის დასინქრებული (ახალი/მიუბმელი ტვირთი) — მაშინ
+     აუქციონს მისამართის ტექსტშიც ვეძებთ, თორემ Copart-ზე ზარს მოვთხოვდით. */
+  var loc=(side==='pu')? l.pickup_location : l.delivery_location;
+  var k=venueKind_(venue) || venueKind_(loc);
+  if(k) return {why:'auction', kind:k, venue:venue||loc,
     text:venueLabel_(k)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'};
+  if(!venue) return null;
   if(sameOrg_(l.customer, venue)) return {why:'shipper', venue:venue,
     text:'shipper = '+(side==='pu'?'ფიქაფი':'დელივერი')+' ('+venue+') — ზარი არ მოეთხოვება'};
   return null;
@@ -1375,16 +1378,21 @@ function rBoard(){
     }).join('') + (items.length>10 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-10)+"</div>" : '');
   }
 
+  /* ⚠️ 2026-08-11: სლოტები გამოცხადებულ სიას უნდა ითვლიდნენ, არა `myLoads_()`-ს.
+     `planLoads_` ტვირთს ითვლის ჩემად მაშინაც, როცა მძღოლი ჩემია, ტვირთი კი სხვა
+     დისპეტჩერს აქვს დაბუქებული (`dispOfDriver_`). `d.loads` კი მხოლოდ ჩემს
+     ატრიბუციას იცნობს — ამიტომ ზარების ცხრილში ტვირთი ჩანდა, სლოტები კი ცარიელი
+     იყო და დახურვა იბლოკებოდა. ახლა ორივე ერთსა და იმავე წყაროს კითხულობს. */
+  var PLAN2=planLoads_(tday);
+  var plDrv_=function(nm){ return PLAN2.filter(function(l){ return drvName_(l)===nm; }); };
   var stdOk = list.length>0 && list.every(function(d){
-    var PO2=planOrders_(tday);
-    var dl=d.loads.filter(function(l){ return PO2[l.order_number]; });
+    var dl=plDrv_(d.name);
     return driverStd_(d.name, dl).ok || waivOk_('standard',d.name,tday);
   });
   /* თითო მძღოლზე — რამდენი ტვირთი სჭირდება (ტევადობა) და რამდენი აქვს */
   var stdSlots=list.map(function(d){
     var reg=DRIVERS_BY_NAME[d.name]||{}, cap=Number(reg.cap)||1;
-    var PO2=planOrders_(tday);
-    var dl=d.loads.filter(function(l){ return PO2[l.order_number]; });
+    var dl=plDrv_(d.name);
     var st=driverStd_(d.name, dl);
     var okd=st.ok||waivOk_('standard',d.name,tday);
     var cars=dl.reduce(function(a,l){ return a+cars_(l); },0);
