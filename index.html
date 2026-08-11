@@ -1402,7 +1402,8 @@ function rBoard(){
   /* ზარები — გამოცხადებული სიის ყველა ტვირთი, ფიქაფი/დელივერი ცალ-ცალკე */
   var callCell_=function(missing, ok, phone, skip, waiting, rang){
     if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>";
-    if(missing) return "<span class='ccell na'>ნომერი არ წერია</span>";
+    /* 2026-08-11: წითლად — დისპეტჩერმა უნდა მიხვდეს, რატომ ვერ ხურავს gate-ს. */
+    if(missing) return "<span class='ccell no' title='SD-ში კონტაქტის ნომერი არ არის შეყვანილი — მის გარეშე ზარი ვერ მოწმდება და gate ვერ დაიხურება'>✗ ნომერი არ წერია</span>";
     if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+"</span>";
     if(waiting) return "<span class='ccell' style='color:var(--warn)' title='ჩანაწერი გადაიწერება ტექსტად და მოწმდება — ჩვეულებრივ რამდენიმე წუთი'>◔ მოწმდება…</span>";
     if(rang) return "<span class='ccell no' title='ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა'>✗ ავტომოპასუხე</span>";
