@@ -1347,8 +1347,9 @@ function rBoard(){
      ახლა ითვლება მხოლოდ ის ზარი, რომელიც AI-მ **ნამდვილ საუბრად** ცნო
      (`pu_verified`/`del_verified`), ან შემომავალი SMS — ის ცოცხალი ადამიანია.
      სანამ შეფასება მოვა, `pu_pending`-ია და gate ღიაა („მოწმდება…"). */
-  var puOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'pu') || r.pu_missing || r.pu_verified || r.pu_sms); };
-  var delOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'del') || r.del_missing || r.del_verified || r.del_sms); };
+  /* 2026-08-11: ნომრის არქონა აღარ ამწვანებს — ხვრელი იყო. გამონაკლისები რჩება. */
+  var puOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'pu') || r.pu_verified || r.pu_sms); };
+  var delOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'del') || r.del_verified || r.del_sms); };
   /* ჯერ მოწმდება — არც წარმატება, არც დარღვევა */
   var puWait_=function(r){ return !puOk_(r) && !!r.pu_pending; };
   var delWait_=function(r){ return !delOk_(r) && !!r.del_pending; };
@@ -1356,22 +1357,20 @@ function rBoard(){
   var callP=CC.filter(function(r){ return !(puOk_(r) && delOk_(r)); })
     .filter(function(r){ return !(puWait_(r)||delWait_(r)); })   /* ჯერ მოწმდება — დარღვევა არაა */
     .filter(function(r){ return !waivOk_('calls',r.order_number,tday); });
-  /* SD-ში ნომერი არ წერია — ვერ შევამოწმებთ, მაგრამ დამალვაც არ შეიძლება */
-  var noPhoneP=CC.filter(function(r){ return r.pu_missing || r.del_missing; });
   function callRows_(items){
     if(!items.length) return '';
     return items.slice(0,10).map(function(r){
       var a=ATT[r.order_number]||{};
       var L0=loadOf_(r.order_number);
       var miss=[], ev=[];
-      if(!callSkip_(L0,'pu') && !r.pu_missing && !(r.pu_verified||r.pu_sms)){ miss.push('ფიქაფი '+fmtPhone_(r.pickup_phone)+(r.pu_call?' (ავტომოპასუხე)':''));
-        ev.push('ფიქაფზე '+(a.pu_try||0)+' ცდა'+(a.pu_sms_out?(' + '+a.pu_sms_out+' SMS'):'')); }
-      if(!callSkip_(L0,'del') && !r.del_missing && !(r.del_verified||r.del_sms)){ miss.push('დელივერი '+fmtPhone_(r.delivery_phone)+(r.del_call?' (ავტომოპასუხე)':''));
-        ev.push('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):'')); }
+      if(!callSkip_(L0,'pu') && !(r.pu_verified||r.pu_sms)){ miss.push(r.pu_missing?'ფიქაფი — SD-ში ნომერი არ წერია':('ფიქაფი '+fmtPhone_(r.pickup_phone)+(r.pu_call?' (ავტომოპასუხე)':'')));
+        ev.push(r.pu_missing?'შეიყვანე ნომერი SD-ში':('ფიქაფზე '+(a.pu_try||0)+' ცდა'+(a.pu_sms_out?(' + '+a.pu_sms_out+' SMS'):''))); }
+      if(!callSkip_(L0,'del') && !(r.del_verified||r.del_sms)){ miss.push(r.del_missing?'დელივერი — SD-ში ნომერი არ წერია':('დელივერი '+fmtPhone_(r.delivery_phone)+(r.del_call?' (ავტომოპასუხე)':'')));
+        ev.push(r.del_missing?'შეიყვანე ნომერი SD-ში':('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):''))); }
       var tried=((a.pu_try||0)+(a.del_try||0))>0;
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
         "<div class='t'><b>"+esc(r.order_number)+"</b><span>"+esc(rDrv_(r))+" · <span style='color:var(--crit)'>"+esc(miss.join(' · '))+"</span> — "+
-        (tried? ("<span style='color:var(--warn)'>"+esc(ev.join(' · '))+", პასუხი არ არის</span>") : "<span style='color:var(--crit)'>ცდაც არ ფიქსირდება</span>")+"</span></div>"+
+        (tried? ("<span style='color:var(--warn)'>"+esc(ev.join(' · '))+", პასუხი არ არის</span>") : (r.pu_missing||r.del_missing) ? ("<span style='color:var(--crit)'>"+esc(ev.join(' · '))+"</span>") : "<span style='color:var(--crit)'>ცდაც არ ფიქსირდება</span>")+"</span></div>"+
         waivChip_('calls',r.order_number,'ზარი — '+r.order_number,tday)+"</div>";
     }).join('') + (items.length>10 ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-10)+"</div>" : '');
   }
