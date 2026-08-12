@@ -7,7 +7,7 @@
 <style>
   :root{ color-scheme:light;
     --page:#f7f7f5;--surface:#fdfdfc;--card:#fff;
-    --ink:#0b0b0b;--ink2:#54524e;--muted:#8a8880;
+    --ink:#0b0b0b;--ink2:#54524e;--muted:#8ah8880;
     --grid:#e6e5df;--line:#cfcec5;--border:rgba(11,11,11,.09);
     --brand:#2a78d6;--brand-soft:#eaf2fc;
     --good:#0ca30c;--warn:#e79a12;--serious:#ec835a;--crit:#d63b3b;
@@ -114,6 +114,8 @@
   .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px}
   table{border-collapse:collapse;width:100%;font-size:12.5px}
   th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--border);white-space:nowrap}
+  /* long free-text cells must wrap - the nowrap above made the waiver reason overflow */
+  td.wrapcell,td[style*="max-width:380px"]{white-space:normal;word-break:break-word;overflow-wrap:anywhere;line-height:1.45;vertical-align:top}
   th{color:var(--muted);font-weight:650;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;position:sticky;top:0;background:var(--card)}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   tr:hover td{background:var(--page)} tr.wk td{background:var(--page);font-weight:700;font-size:11px;color:var(--ink2);text-transform:uppercase;letter-spacing:.03em}
