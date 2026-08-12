@@ -1429,7 +1429,7 @@ function rBoard(){
   var exemptAll=(contactN>0 && callList.length===0);
   /* სანამ თუნდაც ერთი ზარი მოწმდება, gate მწვანე არ ხდება — მაგრამ წითელიც არაა */
   var callWaived=waivOk_('calls_all','',tday);
-  var callOkAll=callWaived || ((callP.length===0) && (waitN===0) && (callList.length>0 || exemptAll));
+  var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && (callList.length>0 || exemptAll)));
   var callGate_="<div class='gate "+(callOkAll?'ok':(waitN&&!callP.length?'wait':'no'))+"'><div class='ic'>"+(callOkAll?'✓':(waitN&&!callP.length?'◔':'!'))+
     "</div><div class='t'><b>ზარები · Pickup / Delivery</b>"+
     (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+"</div>"+
@@ -1490,7 +1490,7 @@ function rBoard(){
      აქამდე მარტო `callOkAll` იყო: მენეჯმენტი ახსნას ადასტურებდა, სექციაზე
      „დადასტურებული" ეწერა, მაგრამ `rem` მაინც 1-ს ითვლიდა და ცვლა არ იხურებოდა.
      ყველა სხვა gate-ს ეს უკვე ჰქონდა (`gInv`, `gChk`, `gAppt`, `gGate`). */
-    var gCall=callOkAll; /* waiver is already inside callOkAll; a call still being checked must block the close */
+  var gCall=callOkAll; /* waiver already inside callOkAll; a call still being checked blocks the close */
   var wrOk=wrConfirmed_();
   var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1)+
           (apptAll.length&&!gAppt?1:0)+(gpAll.length&&!gGate?1:0);
@@ -1500,7 +1500,7 @@ function rBoard(){
   var pend=Object.keys(WAIV).filter(function(k){ return WAIV[k].status==='pending' && WAIV[k].work_day===tday; }).length;
 
   $('view').innerHTML=ph('ჩემი დაფა',esc(MYD()||USER.name||'')+' · '+list.length+' აქტიური მძღოლი'+(resting.length?(' · '+resting.length+' ისვენებს'):'')+' · '+gdFull(tday))+
-      var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && (callList.length>0 || exemptAll)));
+    "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
       (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
       (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
     weekBox_(allDrv)+
