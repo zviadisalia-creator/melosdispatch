@@ -1368,9 +1368,9 @@ function rBoard(){
       var a=ATT[r.order_number]||{};
       var L0=loadOf_(r.order_number);
       var miss=[], ev=[];
-      if(!callSkip_(L0,'pu') && !(r.pu_verified||r.pu_sms)){ miss.push(r.pu_missing?'ფიქაფი — SD-ში ნომერი არ წერია':('ფიქაფი '+fmtPhone_(r.pickup_phone)+(r.pu_call?' (ავტომოპასუხე)':'')));
+      if(!callSkip_(L0,'pu') && !(r.pu_verified||r.pu_sms)){ miss.push(r.pu_missing?'ფიქაფი — SD-ში ნომერი არ წერია':('ფიქაფი '+fmtPhone_(r.pickup_phone)+(r.pu_reason?' — არ დაზუსტდა: '+r.pu_reason:(r.pu_call?' (ავტომოპასუხე)':''))));
         ev.push(r.pu_missing?'შეიყვანე ნომერი SD-ში':('ფიქაფზე '+(a.pu_try||0)+' ცდა'+(a.pu_sms_out?(' + '+a.pu_sms_out+' SMS'):''))); }
-      if(!callSkip_(L0,'del') && !(r.del_verified||r.del_sms)){ miss.push(r.del_missing?'დელივერი — SD-ში ნომერი არ წერია':('დელივერი '+fmtPhone_(r.delivery_phone)+(r.del_call?' (ავტომოპასუხე)':'')));
+      if(!callSkip_(L0,'del') && !(r.del_verified||r.del_sms)){ miss.push(r.del_missing?'დელივერი — SD-ში ნომერი არ წერია':('დელივერი '+fmtPhone_(r.delivery_phone)+(r.del_reason?' — არ დაზუსტდა: '+r.del_reason:(r.del_call?' (ავტომოპასუხე)':''))));
         ev.push(r.del_missing?'შეიყვანე ნომერი SD-ში':('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):''))); }
       var tried=((a.pu_try||0)+(a.del_try||0))>0;
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
@@ -4218,6 +4218,28 @@ bootstrap();
   var DTABS_HIDDEN = DTABS.slice(1);
   DTABS.length = 1;
   try{ if(typeof buildTabs==='function' && document.getElementById('tabsDisp')) buildTabs(); }catch(e){}
+
+/* content gate: შინაარსობრივი შემოწმება (contact_content_orders) */
+try{
+  var __origLPC = loadPlanContacts;
+  loadPlanContacts = async function(){
+    await __origLPC.apply(this, arguments);
+    try{
+      if(!Array.isArray(PCONT) || !PCONT.length) return;
+      var ons = PCONT.map(function(r){ return r.order_number; });
+      var res = await sb.rpc('contact_content_orders', { p_orders: ons });
+      if(res.error) return;
+      var m = {}; (res.data||[]).forEach(function(x){ m[x.order_number] = x; });
+      PCONT.forEach(function(r){
+        var c = m[r.order_number]; if(!c) return;
+        r.pu_reason = ''; r.del_reason = '';
+        if(c.pu_content_ok === false){ r.pu_verified = false; r.pu_reason = c.pu_reason || ''; }
+        if(c.del_content_ok === false){ r.del_verified = false; r.del_reason = c.del_reason || ''; }
+      });
+    }catch(e){ console.error('content gate', e); }
+  };
+}catch(e){ console.error('content gate init', e); }
+
 </script>
 </body>
 </html>
