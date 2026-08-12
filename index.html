@@ -4212,6 +4212,12 @@ function rDispPay(){
     dpHist_();
 }
 bootstrap();
+  /* Rollout step 1: dispatchers see only the first tab for now. The other four
+     are built and stay in DTABS_HIDDEN - restore one at a time with
+        DTABS.push(DTABS_HIDDEN[0]) once its data is trusted. */
+  var DTABS_HIDDEN = DTABS.slice(1);
+  DTABS.length = 1;
+  try{ if(typeof buildTabs==='function' && document.getElementById('tabsDisp')) buildTabs(); }catch(e){}
 </script>
 </body>
 </html>
