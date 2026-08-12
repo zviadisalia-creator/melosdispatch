@@ -1490,7 +1490,7 @@ function rBoard(){
      აქამდე მარტო `callOkAll` იყო: მენეჯმენტი ახსნას ადასტურებდა, სექციაზე
      „დადასტურებული" ეწერა, მაგრამ `rem` მაინც 1-ს ითვლიდა და ცვლა არ იხურებოდა.
      ყველა სხვა gate-ს ეს უკვე ჰქონდა (`gInv`, `gChk`, `gAppt`, `gGate`). */
-  var gCall=callOkAll||waivOk_('calls_all','',tday);
+    var gCall=callOkAll; /* waiver is already inside callOkAll; a call still being checked must block the close */
   var wrOk=wrConfirmed_();
   var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1)+
           (apptAll.length&&!gAppt?1:0)+(gpAll.length&&!gGate?1:0);
@@ -1500,7 +1500,7 @@ function rBoard(){
   var pend=Object.keys(WAIV).filter(function(k){ return WAIV[k].status==='pending' && WAIV[k].work_day===tday; }).length;
 
   $('view').innerHTML=ph('ჩემი დაფა',esc(MYD()||USER.name||'')+' · '+list.length+' აქტიური მძღოლი'+(resting.length?(' · '+resting.length+' ისვენებს'):'')+' · '+gdFull(tday))+
-    "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
+      var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && (callList.length>0 || exemptAll)));
       (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
       (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
     weekBox_(allDrv)+
