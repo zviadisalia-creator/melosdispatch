@@ -1429,7 +1429,7 @@ function rBoard(){
   var exemptAll=(contactN>0 && callList.length===0);
   /* სანამ თუნდაც ერთი ზარი მოწმდება, gate მწვანე არ ხდება — მაგრამ წითელიც არაა */
   var callWaived=waivOk_('calls_all','',tday);
-  var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && (callList.length>0 || exemptAll)));
+  var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && (callList.length>0 || exemptAll || contactN===0)));
   var callGate_="<div class='gate "+(callOkAll?'ok':(waitN&&!callP.length?'wait':'no'))+"'><div class='ic'>"+(callOkAll?'✓':(waitN&&!callP.length?'◔':'!'))+
     "</div><div class='t'><b>ზარები · Pickup / Delivery</b>"+
     (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+"</div>"+
