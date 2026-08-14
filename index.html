@@ -4387,7 +4387,68 @@ try{
     }
   } catch (e) {}
 
-  function rfLoop_(){ try{rfPaintChips_();}catch(e){} try{rfPaintCalls_();}catch(e){} try{rfReplaceMark_();}catch(e){} try{arHint_();}catch(e){} }
+  /* 6. შინაარსის მიზეზი ზარების ცხრილში + ✗ თანმიმდევრულობა (დოკ. 129).
+        ვერდიქტი მიბმულია სიაზე: სია შეიცვალა → თვითონ გადაითვლება. */
+  var CC_KEY=null, CC_MAP={}, CC_BUSY=false;
+  function ccTable_(){
+    var ts=document.querySelectorAll('#view table');
+    for (var i=0;i<ts.length;i++){
+      var ths=ts[i].querySelectorAll('th'), o=false,p=false,d=false;
+      for (var h=0;h<ths.length;h++){ var x=ths[h].textContent||'';
+        if(/Order ID/i.test(x)) o=true;
+        if(x.indexOf('ფიქაფი')>=0) p=true;
+        if(x.indexOf('დელივერი')>=0) d=true; }
+      if(o&&p&&d) return ts[i];
+    }
+    return null;
+  }
+  function ccOrd_(tr){ return (((tr.children[0]||{}).textContent)||'').replace(/⟳[\s\S]*$/,'').trim(); }
+  function ccSwapTick_(el){
+    try{
+      var w=document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null), n;
+      while((n=w.nextNode())){ if(n.nodeValue.indexOf('✓')>=0){ n.nodeValue=n.nodeValue.replace('✓','✗'); } }
+    }catch(e){}
+  }
+  function ccPaint_(){
+    var t=ccTable_(); if(!t) return;
+    var rows=t.querySelectorAll('tbody tr');
+    for (var r=0;r<rows.length;r++){
+      var tds=rows[r].children; if(tds.length<4) continue;
+      var c=CC_MAP[ccOrd_(rows[r])]; if(!c) continue;
+      var sides=[[2,'pu'],[3,'del']];
+      for (var i=0;i<sides.length;i++){
+        var td=tds[sides[i][0]], pre=sides[i][1];
+        if(td.getAttribute('data-cc')) continue;
+        if(c[pre+'_content_ok']!==false) continue;
+        td.setAttribute('data-cc','1');
+        var cell=td.querySelector('.ccell');
+        if(cell) cell.className=(cell.className||'').replace(/\bok\b/,'no');
+        ccSwapTick_(td);
+        td.style.color='var(--crit)';
+        var reason=c[pre+'_reason']||'';
+        if(reason && !td.querySelector('.ccnote')){
+          var n=document.createElement('div'); n.className='ccnote';
+          n.style.cssText='font-size:11px;opacity:.9;margin-top:3px;font-weight:600;line-height:1.35';
+          n.textContent=reason; td.appendChild(n);
+        }
+      }
+    }
+  }
+  function ccEnsure_(){
+    var t=ccTable_(); if(!t) return;
+    var ords=[], rows=t.querySelectorAll('tbody tr');
+    for (var r=0;r<rows.length;r++){ var o=ccOrd_(rows[r]); if(o) ords.push(o); }
+    if(!ords.length||CC_BUSY) return;
+    var key=ords.slice().sort().join('|');
+    if(key===CC_KEY){ ccPaint_(); return; }
+    CC_BUSY=true;
+    sb.rpc('contact_content_orders',{p_orders:ords}).then(function(r){
+      var m={}; (r.data||[]).forEach(function(x){ m[x.order_number]=x; });
+      CC_MAP=m; CC_KEY=key; CC_BUSY=false; ccPaint_();
+    }).catch(function(){ CC_BUSY=false; });
+  }
+
+  function rfLoop_(){ try{rfPaintCalls_();}catch(e){} try{ccEnsure_();}catch(e){} try{rfReplaceMark_();}catch(e){} try{arHint_();}catch(e){} }
   setInterval(rfLoop_,1200); setInterval(arTick_,20000);
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', rfLoop_); else rfLoop_();
 })();
