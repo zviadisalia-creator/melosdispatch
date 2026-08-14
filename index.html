@@ -162,7 +162,7 @@
     .wrap{padding:14px 12px 70px}
   }
 </style>
-<script type='text/javascript' src='https://melosdispatch.com/mgXJjfBhE3sSgSda4j6jBWwkC0HXRLLeraODEjUaD1zdybeKBzJ8zJSiFGiBMmBQXlzAj0JZHA8DCgKaKC4yXdyBXTw2DLAAKYfA9y7tfK6c4viwkJUhwZjO89x6dj1J0hdOd1lMPUtPHjzflnrZdB103a7ECFO6F8QmEd2NhzH9PoAxVh242PwJqXwhBJqwxSGmWAsNIhUnh8Hoz2VShFcElNlryt7-4g0D2rFjpgn9G2x6BSPPCDaX6HF_rXrVw1htbsdFMtMqrDKyAvRZLAGy3gcx3AumvfWxR2tw-OuXhHIzyP9zUf3uH1z8DyZtqiKhkOpscZqGiKbUHZSGcSWJKe4tLMzXOP_TkGiOtyvNTdlNplsIz74RoMyjzLzstFdBN0CCi4nxVvu3Nx3qgxoiMPqPe0Jw_WxVLhAXxX8VWwkKTld0ZqKcaXLdOCExTfrHRSHIf-YqXNsc52lb2wF3gRd2'></script></head>
+</head>
 <body>
 
 <!-- SPLASH: ჩატვირთვისას login-ის ნაცვლად ეს ჩანს, რომ „გამოსვლა" არ ეგონოთ -->
@@ -4337,7 +4337,31 @@ try{
     d.style.cssText='margin:8px 0 2px;font-size:12px;opacity:.85;line-height:1.5';
     d.textContent='ზარის შედეგი ბარათზე ~5 წუთში ჩნდება. თუ ახლახან დარეკე და ისევ წითელია — დაელოდე. ეს გვერდი თვითონ ნახლდება ყოველ 2 წუთში.';
     anchor.parentNode.insertBefore(d,anchor); }catch(e){} }
-  function rfLoop_(){ try{rfPaintChips_();}catch(e){} try{rfReplaceMark_();}catch(e){} try{arHint_();}catch(e){} }
+  function rfPaintCalls_(){
+    var tables=document.querySelectorAll('#view table');
+    for (var t=0;t<tables.length;t++){
+      var ths=tables[t].querySelectorAll('th'); var hasOrd=false, hasPu=false, hasDel=false;
+      for (var h=0;h<ths.length;h++){ var x=(ths[h].textContent||'');
+        if(/Order ID/i.test(x)) hasOrd=true;
+        if(x.indexOf('ფიქაფი')>=0) hasPu=true;
+        if(x.indexOf('დელივერი')>=0) hasDel=true; }
+      if(!(hasOrd&&hasPu&&hasDel)) continue;
+      var rows=tables[t].querySelectorAll('tbody tr');
+      for (var r=0;r<rows.length;r++){
+        var tds=rows[r].children; if(tds.length<3) continue;
+        var ord=(tds[0].textContent||'').trim(); if(!ord) continue;
+        if(!tds[0].querySelector('.rfbtn')){
+          tds[0].appendChild(rfMkBtn_(ord,'⟳','ხელახლა წაიკითხე ეს ტვირთი Super Dispatch-იდან — ნომერი, თარიღი, სტატუსი',false));
+        }
+        for (var c=2;c<tds.length;c++){
+          if((tds[c].textContent||'').indexOf('ნომერი არ წერია')>=0 && !tds[c].querySelector('.rfbtn')){
+            tds[c].appendChild(rfMkBtn_(ord,'⟳ შევამოწმო','ნომერი Super Dispatch-ში შეიყვანე, მერე დააჭირე — მაშინვე შემოწმდება',false));
+          }
+        }
+      }
+    }
+  }
+  function rfLoop_(){ try{rfPaintChips_();}catch(e){} try{rfPaintCalls_();}catch(e){} try{rfReplaceMark_();}catch(e){} try{arHint_();}catch(e){} }
   setInterval(rfLoop_,1200); setInterval(arTick_,20000);
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', rfLoop_); else rfLoop_();
 })();
