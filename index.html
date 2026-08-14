@@ -4660,5 +4660,90 @@ try{
 })();
 </script>
 
+<script>
+/* === wrapper v5 (დოკ. 141) — 2026-08-14 ===
+   ერთი და იგივე ინფორმაცია ორად იყო გაყოფილი: მძღოლის ბარათი ზემოთ და
+   „N აგვისტოს ტვირთები" ცვლის დახურვაში. ✓/· სლოტები ავიტანეთ ბარათზე,
+   ქვემოთ კი ერთსტრიქონიანი შეჯამება რჩება.
+   სლოტებს თავიდან არ ვითვლით — ვიღებთ ზუსტად იმას, რაც ბაზისურმა კოდმა
+   დახატა, ე.ი. ლოგიკა არ იცვლება. */
+(function () {
+  'use strict';
+
+  function nmOfCard_(c) {
+    var n = c.querySelector('.nm');
+    if (!n) return '';
+    return ((n.childNodes[0] && n.childNodes[0].nodeValue) || n.textContent || '').trim();
+  }
+  function nmOfRow_(r) {
+    var w = r.querySelector('.who');
+    if (!w) return '';
+    return ((w.childNodes[0] && w.childNodes[0].nodeValue) || w.textContent || '').trim();
+  }
+
+  function mergeSlots_() {
+    var v = document.getElementById('view'); if (!v) return;
+    var rows = Array.prototype.slice.call(v.querySelectorAll('.stdrow'));
+    if (!rows.length) return;
+    var cards = Array.prototype.slice.call(v.querySelectorAll('.driver'));
+    if (!cards.length) return;
+    var missing = 0, matched = 0, lastRow = null;
+
+    rows.forEach(function (row) {
+      var nm = nmOfRow_(row); if (!nm) return;
+      var card = null;
+      for (var i = 0; i < cards.length; i++) { if (nmOfCard_(cards[i]) === nm) { card = cards[i]; break; } }
+      if (!card) { lastRow = row; return; }
+      matched++;
+      var slots = row.querySelector('.slots');
+      var tot = slots ? slots.querySelectorAll('.slot').length : 0;
+      var on  = slots ? slots.querySelectorAll('.slot.on').length : 0;
+      if (tot && on < tot) missing++;
+
+      var nmEl = card.querySelector('.nm');
+      if (nmEl && !nmEl.querySelector('.slotsup')) {
+        var h = document.createElement('span');
+        h.className = 'slotsup';
+        h.style.cssText = 'margin-left:10px;display:inline-flex;gap:4px;vertical-align:middle';
+        h.innerHTML = slots ? slots.innerHTML : '';
+        h.title = 'რამდენი ტვირთი სჭირდება ამ მძღოლს და რამდენი აქვს აღებული';
+        nmEl.appendChild(h);
+      }
+      /* ვმალავთ მხოლოდ მაშინ, თუ ბარათზე ახსნის ღილაკი მართლა არსებობს,
+         ან საჩივარი საერთოდ არ არის — თორემ დისპეჩერს გამოსავალს წავართმევთ. */
+      var hasBtn = Array.prototype.slice.call(card.querySelectorAll('button'))
+        .some(function (b) { return (b.textContent || '').indexOf('ახსნ') >= 0; });
+      if (!tot || on >= tot || hasBtn) { row.style.display = 'none'; }
+      lastRow = row;
+    });
+
+    if (!matched || !lastRow) return;
+    var host = lastRow.parentNode; if (!host) return;
+    var sum = host.querySelector('.stdsum');
+    if (!sum) {
+      sum = document.createElement('div');
+      sum.className = 'stdsum';
+      sum.style.cssText = 'padding:2px 15px 10px 49px;font-size:12.5px;opacity:.9';
+      lastRow.insertAdjacentElement('afterend', sum);
+    }
+    var txt = missing
+      ? ('ტვირთი აკლია ' + missing + ' მძღოლს — იხილე მძღოლების ბარათები ზემოთ (✓ = აღებული ტვირთი)')
+      : 'ყველა მძღოლს საჭირო ტვირთი აღებული აქვს ✓';
+    if (sum.textContent !== txt) sum.textContent = txt;
+  }
+
+  try {
+    var mo = new MutationObserver(function () { try { mergeSlots_(); } catch (e) {} });
+    function mgObserve_() {
+      var v = document.getElementById('view');
+      if (v && !v.__mgObs) { v.__mgObs = 1; mo.observe(v, { childList: true, subtree: true }); }
+    }
+    mgObserve_();
+    setInterval(mgObserve_, 1000);
+  } catch (e) {}
+  setInterval(function () { try { mergeSlots_(); } catch (e) {} }, 400);
+})();
+</script>
+
 </body>
 </html>
