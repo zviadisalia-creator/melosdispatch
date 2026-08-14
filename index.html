@@ -4728,8 +4728,18 @@ try{
     }
     var txt = missing
       ? ('ტვირთი აკლია ' + missing + ' მძღოლს — იხილე მძღოლების ბარათები ზემოთ (✓ = აღებული ტვირთი)')
-      : 'ყველა მძღოლს საჭირო ტვირთი აღებული აქვს ✓';
+      : '';
     if (sum.textContent !== txt) sum.textContent = txt;
+    sum.style.display = missing ? '' : 'none';
+
+    /* როცა ყველაფერი წესრიგშია, მთელი ბლოკი ზედმეტია — ბარათები ისედაც ჩანს.
+       წითლად კი რჩება, თორემ დისპეჩერი ვერ მიხვდება, რა აკავებს დახურვას. */
+    var gate = null, gs = v.querySelectorAll('.gate');
+    for (var g = 0; g < gs.length; g++) {
+      var b = gs[g].querySelector('b');
+      if (b && /ტვირთები\s*$/.test(b.textContent || '')) { gate = gs[g]; break; }
+    }
+    if (gate) gate.style.display = missing ? '' : 'none';
   }
 
   try {
