@@ -4755,5 +4755,35 @@ try{
 })();
 </script>
 
+<script>
+/* === wrapper v6 (დოკ. 143) — 2026-08-14 ===
+   „shipper = ვენიუ" გამონაკლისი არ მუშაობდა, როცა ვენიუს სახელი შედგენილია:
+   „NEW UNLIMITED MOTORS / Elhaj Trading LLC" — ბროკერის სახელი შიგნითაა, არა
+   დასაწყისში, ამიტომ პრეფიქსით შედარება ვერ ცნობდა და ზარს ითხოვდა.
+   ახლა ბროკერის სახელს ვეძებთ ვენიუს შიგნითაც, სიტყვის საზღვრებზე.
+   დაცვა ცრუ გამონაკლისისგან: მინიმუმ 10 სიმბოლო და მინიმუმ 2 სიტყვა.
+   გაზომილი 2026-08-14: ბოლო 14 დღის 535 ტვირთიდან დამატებით მხოლოდ 4 ხვდება,
+   ოთხივე სწორია. */
+(function () {
+  'use strict';
+  try {
+    if (typeof window.sameOrg_ !== 'function' || typeof window.orgKey_ !== 'function') return;
+    var inside = function (hay, needle) {
+      if (needle.length < 10) return false;
+      if (needle.split(' ').length < 2) return false;
+      return (' ' + hay + ' ').indexOf(' ' + needle + ' ') >= 0;
+    };
+    window.sameOrg_ = function (a, b) {
+      var x = orgKey_(a), y = orgKey_(b);
+      if (!x || !y) return false;
+      if (x === y) return true;
+      var pre = function (s, l) { return l.length >= 8 && s.indexOf(l + ' ') === 0; };
+      if (pre(x, y) || pre(y, x)) return true;
+      return inside(x, y) || inside(y, x);
+    };
+  } catch (e) {}
+})();
+</script>
+
 </body>
 </html>
