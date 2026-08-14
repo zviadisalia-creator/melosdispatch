@@ -4361,6 +4361,32 @@ try{
       }
     }
   }
+  /* 5. ცვლის დახურვის შემოწმება ყოველ განახლებაზე ხელახლა ჩაიტვირთოს (დოკ. 128).
+        ხარვეზი: ახალი ტვირთი ბარათზე ჩნდებოდა, მაგრამ ზარების gate ძველ
+        (ცარიელ) შედეგს ინახავდა და მწვანედ ატარებდა. */
+  function rfSafeRender_(){
+    try{
+      var a=document.activeElement, v=document.getElementById('view');
+      if (a && v && v.contains(a) && (a.tagName==='INPUT'||a.tagName==='TEXTAREA')) return;
+      if (typeof render==='function') render();
+    }catch(e){}
+  }
+  try {
+    if (typeof window.refreshLive_ === 'function' && !window.__rfRlPatched) {
+      window.__rfRlPatched = true;
+      var _rlOrig = window.refreshLive_;
+      window.refreshLive_ = function () {
+        var res = _rlOrig.apply(this, arguments);
+        return Promise.resolve(res).then(function (r) {
+          if (typeof window.loadPlanContacts !== 'function') return r;
+          return Promise.resolve(window.loadPlanContacts()).catch(function(){}).then(function(){
+            rfSafeRender_(); return r;
+          });
+        }).catch(function(){ return res; });
+      };
+    }
+  } catch (e) {}
+
   function rfLoop_(){ try{rfPaintChips_();}catch(e){} try{rfPaintCalls_();}catch(e){} try{rfReplaceMark_();}catch(e){} try{arHint_();}catch(e){} }
   setInterval(rfLoop_,1200); setInterval(arTick_,20000);
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', rfLoop_); else rfLoop_();
