@@ -4448,10 +4448,139 @@ try{
     }).catch(function(){ CC_BUSY=false; });
   }
 
+  /* 7. ახალი ვერსიის შემჩნევა — რომ გამოსწორება ავტომატურად მიაღწიოს (დოკ. 133) */
+  var VER_FP = null, VER_SHOWN = false, VER_SEEN_AT = 0;
+  function verStrip_(t){
+    try {
+      var re = new RegExp(String.fromCharCode(60) + "script[^>]*src=['\"]https://melosdispatch\\.com/[^'\"]*['\"][^>]*" + String.fromCharCode(62) + String.fromCharCode(60) + "/script" + String.fromCharCode(62), "g");
+      return t.replace(re, "");
+    } catch(e){ return t; }
+  }
+  function verFp_(t){
+    var s = verStrip_(t), a = 0;
+    for (var i = 0; i < s.length; i += 613) { a = (a * 31 + s.charCodeAt(i)) >>> 0; }
+    return s.length + ":" + a;
+  }
+  function verBanner_(){
+    if (VER_SHOWN) return; VER_SHOWN = true; VER_SEEN_AT = Date.now();
+    var d = document.createElement("div"); d.id = "verBar";
+    d.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:2147483647;background:#1d4ed8;color:#fff;padding:11px 16px;font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:14px;justify-content:center;box-shadow:0 2px 14px rgba(0,0,0,.35)";
+    var sp = document.createElement("span");
+    sp.textContent = "აპლიკაცია განახლდა — გადატვირთე, რომ ახალი ვერსია მიიღო";
+    var b = document.createElement("button");
+    b.textContent = "განაახლე ახლავე";
+    b.style.cssText = "border:0;border-radius:8px;padding:6px 14px;font-weight:700;font-size:13px;cursor:pointer;background:#fff;color:#1d4ed8";
+    b.onclick = function(){ location.reload(); };
+    d.appendChild(sp); d.appendChild(b); document.body.appendChild(d);
+  }
+  function verTick_(){
+    try {
+      fetch("index.html?v=" + Date.now(), { cache: "no-store" }).then(function(r){ return r.text(); })
+        .then(function(t){
+          var fp = verFp_(t);
+          if (VER_FP === null) { VER_FP = fp; return; }
+          if (fp !== VER_FP) verBanner_();
+        }).catch(function(){});
+      if (VER_SHOWN && Date.now() - VER_SEEN_AT > 120000) {
+        var a = document.activeElement;
+        if (!(a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA"))) location.reload();
+      }
+    } catch (e) {}
+  }
+  setInterval(verTick_, 180000);
+  setTimeout(verTick_, 20000);
+
   function rfLoop_(){ try{rfPaintCalls_();}catch(e){} try{ccEnsure_();}catch(e){} try{rfReplaceMark_();}catch(e){} try{arHint_();}catch(e){} }
   setInterval(rfLoop_,1200); setInterval(arTick_,20000);
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', rfLoop_); else rfLoop_();
 })();
 </script>
+<script>
+/* === wrapper v3 (დოკ. 135) — 2026-08-14 ===
+   „ავტომოპასუხე" მხოლოდ მაშინ, როცა მართლა ავტომოპასუხეა.
+   მიზეზი: content gate-ის დაცემისას PCONT-ში pu_verified/del_verified იწერებოდა false-ად,
+   ხოლო ბაზისური callCell_ ამ მდგომარეობას (ზარი არის + verified არაა) კითხულობდა როგორც
+   ხმოვან ფოსტას. შედეგად ცოცხალი 4-წუთიანი საუბრის მერე დისპეჩერს ეწერებოდა „ავტომოპასუხე".
+   აქ უჯრედის ტექსტს ვაბრუნებთ ტელეფონის ნომერზე, ხოლო მიზეზი რჩება ქვემოთ ხაზად.
+   არსებული ფუნქციების სხეულს არ ვეხებით. */
+(function () {
+  'use strict';
+  var VM_MAP = null, VM_KEY = '', VM_BUSY = false;
+
+  function vmTable_() {
+    var ts = document.querySelectorAll('#view table');
+    for (var i = 0; i < ts.length; i++) {
+      var ths = ts[i].querySelectorAll('th'), o = false, p = false, d = false;
+      for (var h = 0; h < ths.length; h++) {
+        var x = ths[h].textContent || '';
+        if (/Order ID/i.test(x)) o = true;
+        if (x.indexOf('ფიქაფი') >= 0) p = true;
+        if (x.indexOf('დელივერი') >= 0) d = true;
+      }
+      if (o && p && d) return ts[i];
+    }
+    return null;
+  }
+  function vmOrd_(tr) { return (((tr.children[0] || {}).textContent) || '').replace(/⟳[\s\S]*$/, '').trim(); }
+  function vmPhone_(s) {
+    try { if (typeof fmtPhone_ === 'function') return fmtPhone_(s) || '—'; } catch (e) {}
+    return s || '—';
+  }
+
+  function vmPaint_() {
+    var t = vmTable_(); if (!t || !VM_MAP) return;
+    var rows = t.querySelectorAll('tbody tr');
+    var sides = [[2, 'pu', 'pickup_phone'], [3, 'del', 'delivery_phone']];
+    for (var r = 0; r < rows.length; r++) {
+      var tds = rows[r].children; if (tds.length < 4) continue;
+      var cc = VM_MAP[vmOrd_(rows[r])]; if (!cc) continue;
+      for (var i = 0; i < sides.length; i++) {
+        var td = tds[sides[i][0]], pre = sides[i][1];
+        if (td.getAttribute('data-vm')) continue;
+        var cell = td.querySelector('.ccell'); if (!cell) continue;
+        if ((cell.textContent || '').indexOf('ავტომოპასუხე') < 0) continue;
+        td.setAttribute('data-vm', '1');
+        /* ნამდვილი ავტომოპასუხე: ზარი შედგა, შეფასებაც არსებობს, მაგრამ
+           AI-მ ყველა ზარი ხმოვან ფოსტად/IVR-ად ცნო. */
+        var genuine = !!cc[pre + '_call'] && !cc[pre + '_verified'] &&
+                      !cc[pre + '_sms'] && !cc[pre + '_pending'];
+        cell.textContent = '✗ ' + vmPhone_(cc[sides[i][2]]);
+        cell.title = genuine
+          ? 'ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა'
+          : 'ცოცხალი საუბარი დაფიქსირდა — წითელია საუბრის შინაარსის გამო (მიზეზი ქვემოთ)';
+        if (genuine) {
+          var old = td.querySelector('.ccnote');
+          if (old && old.parentNode) old.parentNode.removeChild(old);
+          td.setAttribute('data-cc', '1');
+          if (!td.querySelector('.vmnote')) {
+            var n = document.createElement('div');
+            n.className = 'vmnote';
+            n.style.cssText = 'font-size:11px;opacity:.9;margin-top:3px;font-weight:600;line-height:1.35';
+            n.textContent = 'ავტომოპასუხე';
+            td.appendChild(n);
+          }
+        }
+      }
+    }
+  }
+
+  function vmEnsure_() {
+    var t = vmTable_(); if (!t) return;
+    var ords = [], rows = t.querySelectorAll('tbody tr');
+    for (var r = 0; r < rows.length; r++) { var o = vmOrd_(rows[r]); if (o) ords.push(o); }
+    if (!ords.length || VM_BUSY) return;
+    var key = ords.slice().sort().join('|');
+    if (key === VM_KEY) { vmPaint_(); return; }
+    VM_BUSY = true;
+    sb.rpc('contact_check_orders', { p_orders: ords }).then(function (r) {
+      var m = {}; (r.data || []).forEach(function (x) { m[x.order_number] = x; });
+      VM_MAP = m; VM_KEY = key; VM_BUSY = false; vmPaint_();
+    }).catch(function () { VM_BUSY = false; });
+  }
+
+  setInterval(function () { try { vmEnsure_(); } catch (e) {} }, 1300);
+})();
+</script>
+
 </body>
 </html>
