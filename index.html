@@ -4496,16 +4496,23 @@ try{
 })();
 </script>
 <script>
-/* === wrapper v3 (დოკ. 135) — 2026-08-14 ===
+/* === wrapper v3.1 (დოკ. 135) — 2026-08-14 ===
    „ავტომოპასუხე" მხოლოდ მაშინ, როცა მართლა ავტომოპასუხეა.
-   მიზეზი: content gate-ის დაცემისას PCONT-ში pu_verified/del_verified იწერებოდა false-ად,
-   ხოლო ბაზისური callCell_ ამ მდგომარეობას (ზარი არის + verified არაა) კითხულობდა როგორც
-   ხმოვან ფოსტას. შედეგად ცოცხალი 4-წუთიანი საუბრის მერე დისპეჩერს ეწერებოდა „ავტომოპასუხე".
-   აქ უჯრედის ტექსტს ვაბრუნებთ ტელეფონის ნომერზე, ხოლო მიზეზი რჩება ქვემოთ ხაზად.
+
+   მიზეზი: content gate-ის დაცემისას PCONT-ში pu_verified/del_verified იწერებოდა
+   false-ად, ხოლო ბაზისური callCell_ ამ მდგომარეობას (ზარი არის + verified არაა)
+   კითხულობდა როგორც ხმოვან ფოსტას. შედეგად ცოცხალი 4-წუთიანი საუბრის მერე
+   დისპეჩერს ეწერებოდა „ავტომოპასუხე".
+
+   გარჩევა სინქრონულია, PCONT-იდან — ქსელი არ სჭირდება, ე.ი. მცდარი სიტყვა
+   წამითაც არ ჩნდება ეკრანზე:
+     · pu_reason / del_reason არსებობს  → წითელია შინაარსის გამო →
+       უჯრაში ტელეფონის ნომერი, მიზეზი ქვემოთ (მიზეზს ccPaint_ წერს).
+     · მიზეზი არ არის                   → წითელია კონტაქტის gate-ის გამო, ე.ი.
+       AI-მ ზარი ხმოვან ფოსტად/IVR-ად ცნო → ნომერი, ქვემოთ „ავტომოპასუხე".
    არსებული ფუნქციების სხეულს არ ვეხებით. */
 (function () {
   'use strict';
-  var VM_MAP = null, VM_KEY = '', VM_BUSY = false;
 
   function vmTable_() {
     var ts = document.querySelectorAll('#view table');
@@ -4526,59 +4533,54 @@ try{
     try { if (typeof fmtPhone_ === 'function') return fmtPhone_(s) || '—'; } catch (e) {}
     return s || '—';
   }
+  function vmNote_(td, text) {
+    if (td.querySelector('.vmnote')) return;
+    var n = document.createElement('div');
+    n.className = 'vmnote';
+    n.style.cssText = 'font-size:11px;opacity:.9;margin-top:3px;font-weight:600;line-height:1.35';
+    n.textContent = text;
+    td.appendChild(n);
+  }
+
+  var SIDES = [[2, 'pu', 'pickup_phone'], [3, 'del', 'delivery_phone']];
 
   function vmPaint_() {
-    var t = vmTable_(); if (!t || !VM_MAP) return;
+    var t = vmTable_(); if (!t) return;
+    var P = {};
+    try { (window.PCONT || []).forEach(function (x) { P[x.order_number] = x; }); } catch (e) { return; }
     var rows = t.querySelectorAll('tbody tr');
-    var sides = [[2, 'pu', 'pickup_phone'], [3, 'del', 'delivery_phone']];
     for (var r = 0; r < rows.length; r++) {
       var tds = rows[r].children; if (tds.length < 4) continue;
-      var cc = VM_MAP[vmOrd_(rows[r])]; if (!cc) continue;
-      for (var i = 0; i < sides.length; i++) {
-        var td = tds[sides[i][0]], pre = sides[i][1];
+      var p = P[vmOrd_(rows[r])]; if (!p) continue;
+      for (var i = 0; i < SIDES.length; i++) {
+        var td = tds[SIDES[i][0]], pre = SIDES[i][1];
         if (td.getAttribute('data-vm')) continue;
         var cell = td.querySelector('.ccell'); if (!cell) continue;
         if ((cell.textContent || '').indexOf('ავტომოპასუხე') < 0) continue;
         td.setAttribute('data-vm', '1');
-        /* ნამდვილი ავტომოპასუხე: ზარი შედგა, შეფასებაც არსებობს, მაგრამ
-           AI-მ ყველა ზარი ხმოვან ფოსტად/IVR-ად ცნო. */
-        var genuine = !!cc[pre + '_call'] && !cc[pre + '_verified'] &&
-                      !cc[pre + '_sms'] && !cc[pre + '_pending'];
-        cell.textContent = '✗ ' + vmPhone_(cc[sides[i][2]]);
-        cell.title = genuine
-          ? 'ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა'
-          : 'ცოცხალი საუბარი დაფიქსირდა — წითელია საუბრის შინაარსის გამო (მიზეზი ქვემოთ)';
-        if (genuine) {
-          var old = td.querySelector('.ccnote');
-          if (old && old.parentNode) old.parentNode.removeChild(old);
-          td.setAttribute('data-cc', '1');
-          if (!td.querySelector('.vmnote')) {
-            var n = document.createElement('div');
-            n.className = 'vmnote';
-            n.style.cssText = 'font-size:11px;opacity:.9;margin-top:3px;font-weight:600;line-height:1.35';
-            n.textContent = 'ავტომოპასუხე';
-            td.appendChild(n);
-          }
+        var contentFail = !!p[pre + '_reason'];
+        cell.textContent = '✗ ' + vmPhone_(p[SIDES[i][2]]);
+        if (contentFail) {
+          cell.title = 'ცოცხალი საუბარი დაფიქსირდა — წითელია საუბრის შინაარსის გამო (მიზეზი ქვემოთ)';
+        } else {
+          cell.title = 'ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა';
+          vmNote_(td, 'ავტომოპასუხე');
         }
       }
     }
   }
 
-  function vmEnsure_() {
-    var t = vmTable_(); if (!t) return;
-    var ords = [], rows = t.querySelectorAll('tbody tr');
-    for (var r = 0; r < rows.length; r++) { var o = vmOrd_(rows[r]); if (o) ords.push(o); }
-    if (!ords.length || VM_BUSY) return;
-    var key = ords.slice().sort().join('|');
-    if (key === VM_KEY) { vmPaint_(); return; }
-    VM_BUSY = true;
-    sb.rpc('contact_check_orders', { p_orders: ords }).then(function (r) {
-      var m = {}; (r.data || []).forEach(function (x) { m[x.order_number] = x; });
-      VM_MAP = m; VM_KEY = key; VM_BUSY = false; vmPaint_();
-    }).catch(function () { VM_BUSY = false; });
-  }
-
-  setInterval(function () { try { vmEnsure_(); } catch (e) {} }, 1300);
+  /* MutationObserver — იმავე კადრში ვასწორებთ, ე.ი. მცდარი სიტყვა არ ციმციმებს */
+  try {
+    var mo = new MutationObserver(function () { try { vmPaint_(); } catch (e) {} });
+    function vmObserve_() {
+      var v = document.getElementById('view');
+      if (v && !v.__vmObs) { v.__vmObs = 1; mo.observe(v, { childList: true, subtree: true }); }
+    }
+    vmObserve_();
+    setInterval(vmObserve_, 1000);
+  } catch (e) {}
+  setInterval(function () { try { vmPaint_(); } catch (e) {} }, 300);
 })();
 </script>
 
