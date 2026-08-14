@@ -4546,8 +4546,12 @@ try{
 
   function vmPaint_() {
     var t = vmTable_(); if (!t) return;
-    var P = {};
-    try { (window.PCONT || []).forEach(function (x) { P[x.order_number] = x; }); } catch (e) { return; }
+    var P = {}, SRC = [];
+    /* PCONT გვერდზე `let`-ითაა გამოცხადებული — ე.ი. window.PCONT არ არსებობს.
+       ლექსიკურად ვკითხულობთ, თორემ სია ცარიელი გვგონია და გასწორება არ ხდება. */
+    try { SRC = (typeof PCONT !== 'undefined' && Array.isArray(PCONT)) ? PCONT : []; } catch (e) { return; }
+    if (!SRC.length) return;
+    for (var q = 0; q < SRC.length; q++) P[SRC[q].order_number] = SRC[q];
     var rows = t.querySelectorAll('tbody tr');
     for (var r = 0; r < rows.length; r++) {
       var tds = rows[r].children; if (tds.length < 4) continue;
