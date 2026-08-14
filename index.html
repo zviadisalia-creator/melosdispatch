@@ -4785,5 +4785,64 @@ try{
 })();
 </script>
 
+<script>
+/* === wrapper v7 (დოკ. 144) — 2026-08-14 ===
+   ინვოისის სექციაში ხელით მონიშნულ ტვირთს ეწერა მწვანე „გაგზავნილი", gate კი
+   წითელი რჩებოდა (სწორად — ჭეშმარიტება SD-ია, დოკ. 122). დისპეჩერს გამოსავალი
+   არ ჰქონდა: „⟳ შეამოწმე SD-ში" ღილაკი მხოლოდ მონიშვნამდე ჩნდებოდა.
+   ახლა მონიშნულ ტვირთსაც აქვს ⟳, ხოლო ჩიპის ტექსტი აღარ ტყუის. */
+(function () {
+  'use strict';
+
+  function invFix_() {
+    var v = document.getElementById('view'); if (!v) return;
+    var rows = v.querySelectorAll('.gate');
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (row.getAttribute('data-invfix')) continue;
+      var chip = null, chips = row.querySelectorAll('.chip');
+      for (var c = 0; c < chips.length; c++) {
+        if ((chips[c].textContent || '').indexOf('გაგზავნილი') >= 0) { chip = chips[c]; break; }
+      }
+      if (!chip) continue;
+      /* მხოლოდ ინვოისის სტრიქონი — BOL-ის ბმული ამის ნიშანია */
+      var isInv = false, as = row.querySelectorAll('a');
+      for (var a = 0; a < as.length; a++) if ((as[a].textContent || '').trim() === 'BOL') isInv = true;
+      if (!isInv) continue;
+      var b = row.querySelector('b'); if (!b) continue;
+      var ord = (b.textContent || '').trim(); if (!ord) continue;
+      row.setAttribute('data-invfix', '1');
+
+      chip.textContent = 'მონიშნულია — SD-ს ელოდება';
+      chip.className = 'chip y';
+      chip.title = 'შენ მონიშნე, რომ გააგზავნე. სანამ Super Dispatch-ში ინვოისი არ გამოჩნდება, gate არ იხურება.';
+
+      if (typeof window.sdRefresh === 'function' && !row.querySelector('.rfbtn2')) {
+        var btn = document.createElement('button');
+        btn.className = 'fixbtn rfbtn2';
+        btn.type = 'button';
+        btn.textContent = '⟳ შეამოწმე SD-ში';
+        btn.title = 'ინვოისი Super Dispatch-ში გააგზავნე, მერე დააჭირე — აპლიკაცია SD-დან შეამოწმებს';
+        btn.style.cssText = 'margin-left:6px;padding:2px 9px;font-size:12px;cursor:pointer';
+        btn.onclick = (function (o) {
+          return function (ev) { ev.preventDefault(); ev.stopPropagation(); return window.sdRefresh(o, this, true); };
+        })(ord);
+        chip.insertAdjacentElement('afterend', btn);
+      }
+    }
+  }
+
+  try {
+    var mo = new MutationObserver(function () { try { invFix_(); } catch (e) {} });
+    function ivObserve_() {
+      var v = document.getElementById('view');
+      if (v && !v.__ivObs) { v.__ivObs = 1; mo.observe(v, { childList: true, subtree: true }); }
+    }
+    ivObserve_(); setInterval(ivObserve_, 1000);
+  } catch (e) {}
+  setInterval(function () { try { invFix_(); } catch (e) {} }, 500);
+})();
+</script>
+
 </body>
 </html>
