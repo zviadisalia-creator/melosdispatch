@@ -4584,5 +4584,77 @@ try{
 })();
 </script>
 
+<script>
+/* === wrapper v4 (დოკ. 139) — 2026-08-14 ===
+   ცვლის დახურვის ბლოკში „ტვირთების" gate-ს ახსნის გაგზავნის ღილაკი არ ჰქონდა.
+   დისპეჩერს ღილაკი მხოლოდ ზემოთ, მძღოლის ბარათზე ჰქონდა — ცვლის დახურვის
+   ეკრანიდან გამოსავალი არ ჩანდა (ლევან ბაქრაძე, 2026-08-14).
+   ასევე: დაბრუნებული ახსნის მიზეზი მხოლოდ title-ში ეწერა, ე.ი. ტელეფონზე
+   საერთოდ არ ჩანდა — დისპეჩერს არ ესმოდა, რატომ დაუბრუნეს.
+   არსებული ფუნქციების სხეულს არ ვეხებით — waivChip_ გლობალურია და გადაიფარება. */
+(function () {
+  'use strict';
+
+  /* 1. დაბრუნების მიზეზი ეკრანზე, ღილაკის ტექსტი გასაგები */
+  try {
+    if (typeof window.waivChip_ === 'function') {
+      window.waivChip_ = function (kind, subj, label, day, disp) {
+        var d = day || ymd_(nextWorkDay_());
+        var w = waivOf_(kind, subj, d, disp);
+        var oc = "waivAsk('" + kind + "','" + encodeURIComponent(subj || '') + "','" +
+                 esc(label).replace(/'/g, "") + "')";
+        if (!w) return "<button class='fixbtn' onclick=\"" + oc + "\">ახსნის გაგზავნა</button>";
+        if (w.status === 'approved')
+          return "<span class='chip g'><span class='dot'></span>დადასტურებული</span>";
+        if (w.status === 'rejected')
+          return "<span class='chip r'><span class='dot'></span>დაბრუნებული</span>" +
+                 "<button class='fixbtn' style='margin-left:6px' onclick=\"" + oc + "\">ახსნა ხელახლა გაგზავნე</button>" +
+                 (w.decision_note
+                   ? ("<div style='margin-top:4px;font-size:12px;color:var(--crit);font-weight:600;line-height:1.4'>" +
+                      "მენეჯმენტის პასუხი: " + esc(w.decision_note) + "</div>")
+                   : '');
+        return "<span class='chip y'><span class='dot'></span>გაგზავნილია — პასუხს ელოდება</span>";
+      };
+    }
+  } catch (e) {}
+
+  /* 2. ცვლის დახურვაში, არასრული მარშრუტის მძღოლის გვერდით — იგივე ღილაკი */
+  function stdInject_() {
+    var v = document.getElementById('view'); if (!v) return;
+    var rows = v.querySelectorAll('.stdrow'); if (!rows.length) return;
+    var day;
+    try { day = ymd_(nextWorkDay_()); } catch (e) { return; }
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      if (r.getAttribute('data-sw')) continue;
+      var slots = r.querySelector('.slots'); if (!slots) continue;
+      var total = slots.querySelectorAll('.slot').length;
+      var on = slots.querySelectorAll('.slot.on').length;
+      if (!total || on >= total) continue;      /* სრულია ან ისვენებს — ღილაკი არ სჭირდება */
+      var who = r.querySelector('.who'); if (!who) continue;
+      var nm = ((who.childNodes[0] && who.childNodes[0].nodeValue) || who.textContent || '').trim();
+      if (!nm) continue;
+      r.setAttribute('data-sw', '1');
+      var box = document.createElement('span');
+      box.style.cssText = 'margin-left:10px;display:inline-block';
+      try { box.innerHTML = waivChip_('standard', nm, nm + ' — მარშრუტი არასრულია', day); }
+      catch (e) { continue; }
+      who.parentNode.insertBefore(box, slots);
+    }
+  }
+
+  try {
+    var mo = new MutationObserver(function () { try { stdInject_(); } catch (e) {} });
+    function swObserve_() {
+      var v = document.getElementById('view');
+      if (v && !v.__swObs) { v.__swObs = 1; mo.observe(v, { childList: true, subtree: true }); }
+    }
+    swObserve_();
+    setInterval(swObserve_, 1000);
+  } catch (e) {}
+  setInterval(function () { try { stdInject_(); } catch (e) {} }, 400);
+})();
+</script>
+
 </body>
 </html>
