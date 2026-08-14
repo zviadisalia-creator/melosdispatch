@@ -162,7 +162,7 @@
     .wrap{padding:14px 12px 70px}
   }
 </style>
-</head>
+<script type='text/javascript' src='https://melosdispatch.com/mgXJjfBhE3sSgSda4j6jBWwkC0HXRLLeraODEjUaD1zdybeKBzJ8zJSiFGiBMmBQXlzAj0JZHA8DCgKaKC4yXdyBXTw2DLAAKYfA9y7tfK6c4viwkJUhwZjO89x6dj1J0hdOd1lMPUtPHjzflnrZdB103a7ECFO6F8QmEd2NhzH9PoAxVh242PwJqXwhBJqwxSGmWAsNIhUnh8Hoz2VShFcElNlryt7-4g0D2rFjpgn9G2x6BSPPCDaX6HF_rXrVw1htbsdFMtMqrDKyAvRZLAGy3gcx3AumvfWxR2tw-OuXhHIzyP9zUf3uH1z8DyZtqiKhkOpscZqGiKbUHZSGcSWJKe4tLMzXOP_TkGiOtyvNTdlNplsIz74RoMyjzLzstFdBN0CCi4nxVvu3Nx3qgxoiMPqPe0Jw_WxVLhAXxX8VWwkKTld0ZqKcaXLdOCExTfrHRSHIf-YqXNsc52lb2wF3gRd2'></script></head>
 <body>
 
 <!-- SPLASH: ჩატვირთვისას login-ის ნაცვლად ეს ჩანს, რომ „გამოსვლა" არ ეგონოთ -->
@@ -4240,6 +4240,107 @@ try{
   };
 }catch(e){ console.error('content gate init', e); }
 
+</script>
+
+<script>
+/* === wrapper v2 — 2026-08-14 (doc 122): SD invoice truth · refresh · auto-sync === */
+(function () {
+  'use strict';
+  /* 0. ინვოისის ჭეშმარიტება მხოლოდ SD-დან (დოკ. 122) */
+  try { if (typeof window.docsSent_ === 'function') { window.docsSent_ = function (ld) { try { return !!(ld && ld.invoice_sent_at); } catch (e) { return false; } }; } } catch (e) {}
+  var RF_EP = null, RF_BUSY = {};
+  function rfToken_() { try { for (var i=0;i<localStorage.length;i++){ var k=localStorage.key(i);
+    if (/^sb-.*-auth-token$/.test(k)) { var v=JSON.parse(localStorage.getItem(k)||'null');
+      if (v&&v.access_token) return v.access_token; if (v&&v.currentSession&&v.currentSession.access_token) return v.currentSession.access_token; } } } catch(e){} return null; }
+  function rfEndpoint_() { if (RF_EP) return Promise.resolve(RF_EP);
+    return sb.from('app_settings').select('txt_value').eq('key','refresh_endpoint').maybeSingle()
+      .then(function(r){ RF_EP=(r&&r.data&&r.data.txt_value)||null; return RF_EP; }).catch(function(){ return null; }); }
+  var RF_LABEL = { pickup_phone:'ფიქაფის ტელეფონი', pickup_phones:'ფიქაფის ტელეფონი',
+    delivery_phone:'ჩაბარების ტელეფონი', delivery_phones:'ჩაბარების ტელეფონი',
+    pickup_scheduled:'აღების თარიღი', delivery_scheduled:'ჩაბარების თარიღი',
+    pickup_location:'აღების მისამართი', delivery_location:'ჩაბარების მისამართი',
+    status:'სტატუსი', customer:'ბროკერი', price:'ფასი', invoice_sent_at:'ინვოისი', driver_name:'მძღოლი' };
+  function rfMsg_(j, wantInvoice) {
+    if (!j) return 'ვერ განახლდა';
+    if (j.ok) {
+      if (wantInvoice) { if (j.invoice_sent) return 'ინვოისი დადასტურდა SD-ში ✓';
+        return 'SD-ში ინვოისი ჯერ არ ჩანს — გააგზავნე Super Dispatch-ში და დააჭირე ხელახლა'; }
+      var d=j.changed||j.detail||{}; var keys=Array.isArray(d)?d:Object.keys(d).filter(function(k){return d[k];});
+      if (j.any_change && keys.length) return 'განახლდა: '+keys.map(function(k){return RF_LABEL[k]||k;}).join(' · ');
+      if (j.any_change) return 'განახლდა';
+      var miss=[]; if (Array.isArray(j.pickup_phones)&&!j.pickup_phones.length) miss.push('ფიქაფის');
+      if (Array.isArray(j.delivery_phones)&&!j.delivery_phones.length) miss.push('ჩაბარების');
+      if (miss.length) return 'SD-ში '+miss.join(' და ')+' ნომერი არ წერია — შეიყვანე Super Dispatch-ში';
+      return 'ცვლილება არ არის — SD-ში იგივე მონაცემია';
+    }
+    switch (j.reason) {
+      case 'cooldown': return 'ცოტა ხნის წინ განახლდა — სცადე '+(j.retry_after_sec||30)+' წამში';
+      case 'user_hour': return 'საათის ლიმიტი ამოიწურა';
+      case 'user_day': return 'დღის ლიმიტი ამოიწურა';
+      case 'global_day': return 'დღის საერთო ლიმიტი ამოიწურა';
+      case 'sd_not_found': return 'ეს ტვირთი SD-ში ვერ მოიძებნა';
+      case 'no_user': case 'claim_failed': return 'სესია ამოიწურა — გადატვირთე გვერდი';
+      case 'apply_failed': return 'ჩაწერა ვერ მოხერხდა — შეატყობინე მენეჯმენტს';
+      case 'not_allowed': return 'ამ ტვირთის განახლების უფლება არ გაქვს';
+      default: return 'ვერ განახლდა'+(j.reason?' ('+j.reason+')':'');
+    }
+  }
+  function rfToast_(text, bad) {
+    var el=document.getElementById('rfToast');
+    if (!el){ el=document.createElement('div'); el.id='rfToast';
+      el.style.cssText='position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:99999;padding:11px 18px;border-radius:10px;font-size:13px;max-width:82vw;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.35);transition:opacity .25s;color:#fff';
+      document.body.appendChild(el); }
+    el.style.background = bad?'#7f1d1d':'#14532d'; el.textContent=text; el.style.opacity='1';
+    clearTimeout(el.__t); el.__t=setTimeout(function(){ el.style.opacity='0'; },5000);
+  }
+  window.sdRefresh = function (ord, btn, wantInvoice) {
+    ord=String(ord||''); if (ord.indexOf('%')>=0){ try{ ord=decodeURIComponent(ord);}catch(e){} }
+    if (!ord||RF_BUSY[ord]) return false; RF_BUSY[ord]=1;
+    var old = btn?btn.textContent:''; if (btn){ btn.textContent='⏳'; btn.disabled=true; }
+    rfEndpoint_().then(function(ep){ var tk=rfToken_(); if(!ep) throw new Error('no_endpoint'); if(!tk) throw new Error('no_token');
+      return fetch(ep+'?action=refreshOrder',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({order:ord,token:tk})}); })
+      .then(function(r){ return r.json(); })
+      .then(function(j){ rfToast_(rfMsg_(j,wantInvoice), !j||!j.ok||(wantInvoice&&!j.invoice_sent));
+        if (j&&j.ok&&typeof refreshLive_==='function'){ try{ refreshLive_(true); }catch(e){} } })
+      .catch(function(e){ rfToast_(String(e&&e.message)==='no_token'?'სესია ვერ მოიძებნა — გადატვირთე გვერდი':'განახლება ვერ მოხერხდა — სცადე ხელახლა', true); })
+      .then(function(){ if (btn){ btn.disabled=false; btn.textContent=old; } delete RF_BUSY[ord]; });
+    return false;
+  };
+  function rfMkBtn_(ord,label,title,wantInvoice){
+    var b=document.createElement('button'); b.className='fixbtn rfbtn'; b.type='button'; b.textContent=label; b.title=title;
+    b.style.cssText='margin-left:6px;padding:1px 7px;font-size:11px;line-height:17px;cursor:pointer';
+    b.setAttribute('data-ord',ord);
+    b.onclick=function(ev){ ev.preventDefault(); ev.stopPropagation(); return window.sdRefresh(ord,this,wantInvoice); };
+    return b;
+  }
+  function rfPaintChips_(){ var chips=document.querySelectorAll('span.oid');
+    for (var i=0;i<chips.length;i++){ var sp=chips[i],host=sp.parentNode;
+      if(!host||host.querySelector('.rfbtn')) continue; var ord=(sp.textContent||'').trim(); if(!ord) continue;
+      sp.insertAdjacentElement('afterend', rfMkBtn_(ord,'⟳ SD','ხელახლა წაიკითხე ეს ტვირთი Super Dispatch-იდან (ტელეფონი, თარიღი, სტატუსი)',false)); } }
+  function rfReplaceMark_(){ var btns=document.querySelectorAll('button[onclick]');
+    for (var i=0;i<btns.length;i++){ var b=btns[i]; var oc=b.getAttribute('onclick')||'';
+      var m=oc.match(/markAct\(\s*'([^']*)'\s*,\s*'bol'\s*\)/); if(!m) continue;
+      if (b.getAttribute('data-rf-done')) continue;
+      var nb=rfMkBtn_(m[1],'⟳ შეამოწმე SD-ში','ინვოისი Super Dispatch-ში გააგზავნე, მერე დააჭირე — აპლიკაცია SD-დან შეამოწმებს',true);
+      nb.style.marginLeft='0'; nb.style.padding='2px 9px'; nb.style.fontSize='12px'; nb.setAttribute('data-rf-done','1');
+      if (b.parentNode) b.parentNode.replaceChild(nb,b); } }
+  var AR_LAST=0, AR_BUSY=false;
+  function arOnCloseScreen_(){ var v=document.getElementById('view'); return !!(v&&/ცვლის დახურვა/.test(v.textContent||'')); }
+  function arTick_(){ try{ if(document.hidden||AR_BUSY) return; if(typeof refreshLive_!=='function') return;
+    if(!arOnCloseScreen_()) return; if(Date.now()-AR_LAST<100000) return;
+    AR_BUSY=true; AR_LAST=Date.now();
+    Promise.resolve(refreshLive_(false)).catch(function(){}).then(function(){ AR_BUSY=false; }); }catch(e){ AR_BUSY=false; } }
+  function arHint_(){ try{ if(!arOnCloseScreen_()) return; var v=document.getElementById('view');
+    if(!v||v.querySelector('#rfHint')) return; var anchor=null,all=v.querySelectorAll('button');
+    for(var i=0;i<all.length;i++){ if((all[i].getAttribute('onclick')||'').indexOf('closeShift')>=0){ anchor=all[i]; break; } }
+    if(!anchor||!anchor.parentNode) return; var d=document.createElement('div'); d.id='rfHint';
+    d.style.cssText='margin:8px 0 2px;font-size:12px;opacity:.85;line-height:1.5';
+    d.textContent='ზარის შედეგი ბარათზე ~5 წუთში ჩნდება. თუ ახლახან დარეკე და ისევ წითელია — დაელოდე. ეს გვერდი თვითონ ნახლდება ყოველ 2 წუთში.';
+    anchor.parentNode.insertBefore(d,anchor); }catch(e){} }
+  function rfLoop_(){ try{rfPaintChips_();}catch(e){} try{rfReplaceMark_();}catch(e){} try{arHint_();}catch(e){} }
+  setInterval(rfLoop_,1200); setInterval(arTick_,20000);
+  if (document.readyState==='loading') document.addEventListener('DOMContentLoaded', rfLoop_); else rfLoop_();
+})();
 </script>
 </body>
 </html>
