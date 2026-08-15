@@ -4844,5 +4844,72 @@ try{
 })();
 </script>
 
+<script>
+/* === wrapper v8 (დოკ. 146) — 2026-08-15 ===
+   ვერსიის შემოწმება ტაიმერით მუშაობს (3 წუთში ერთხელ). ტელეფონზე ფონური
+   ჩანართი „იყინება" — ტაიმერი არ ირთვება, ე.ი. დისპეჩერი შეიძლება საათობით
+   ძველ ვერსიაზე დარჩეს (ნოდარის შემთხვევა, 2026-08-14).
+   აქ ვამატებთ შემოწმებას მაშინ, როცა ჩანართს ისევ უყურებენ — visibilitychange
+   და focus. ძველ შემოწმებას არ ვცვლით, ვავსებთ. */
+(function () {
+  'use strict';
+  var FP = null, BUSY = false, LAST = 0;
+
+  function strip_(t) {
+    try {
+      var re = new RegExp(String.fromCharCode(60) + 'script[^>]*src=[\'"]https://melosdispatch\\.com/[^\'"]*[\'"][^>]*' +
+                          String.fromCharCode(62) + String.fromCharCode(60) + '/script' + String.fromCharCode(62), 'g');
+      return t.replace(re, '');
+    } catch (e) { return t; }
+  }
+  function fp_(t) {
+    var s = strip_(t), a = 0;
+    for (var i = 0; i < s.length; i += 613) { a = (a * 31 + s.charCodeAt(i)) >>> 0; }
+    return s.length + ':' + a;
+  }
+  function bar_() {
+    if (document.getElementById('verBar') || document.getElementById('verBar2')) return;
+    var d = document.createElement('div'); d.id = 'verBar2';
+    d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:2147483647;background:#1d4ed8;color:#fff;' +
+      'padding:11px 16px;font-size:13.5px;font-weight:650;display:flex;align-items:center;gap:14px;' +
+      'justify-content:center;box-shadow:0 2px 14px rgba(0,0,0,.35)';
+    var sp = document.createElement('span');
+    sp.textContent = 'აპლიკაცია განახლდა — გადატვირთე, რომ ახალი ვერსია მიიღო';
+    var b = document.createElement('button');
+    b.textContent = 'განაახლე ახლავე';
+    b.style.cssText = 'border:0;border-radius:8px;padding:6px 14px;font-weight:700;font-size:13px;cursor:pointer;background:#fff;color:#1d4ed8';
+    b.onclick = function () { location.reload(); };
+    d.appendChild(sp); d.appendChild(b);
+    document.body.appendChild(d);
+    setTimeout(function () {
+      var a = document.activeElement;
+      if (!(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA'))) location.reload();
+    }, 90000);
+  }
+  function check_(force) {
+    if (BUSY) return;
+    if (!force && Date.now() - LAST < 30000) return;
+    BUSY = true; LAST = Date.now();
+    fetch('index.html?vv=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.text(); })
+      .then(function (t) {
+        var f = fp_(t);
+        if (FP === null) { FP = f; return; }
+        if (f !== FP) bar_();
+      })
+      .catch(function () {})
+      .then(function () { BUSY = false; });
+  }
+
+  setTimeout(function () { check_(true); }, 8000);
+  try {
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) check_(false); });
+    window.addEventListener('focus', function () { check_(false); });
+    window.addEventListener('pageshow', function () { check_(false); });
+  } catch (e) {}
+  setInterval(function () { if (!document.hidden) check_(false); }, 240000);
+})();
+</script>
+
 </body>
 </html>
