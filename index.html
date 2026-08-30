@@ -4420,6 +4420,13 @@ try{
         var td=tds[sides[i][0]], pre=sides[i][1];
         if(td.getAttribute('data-cc')) continue;
         if(c[pre+'_content_ok']!==false) continue;
+        /* ccPaint_ must honour the same exemption the close gate already applies.
+           puOk_/delOk_ and callP use callSkip_(loadOf_(order),side); painting an
+           exempt leg red contradicts the gate and is a display-only false red.
+           Fail-safe: if the load is not in LBYON, callSkip_ returns null and the
+           painter behaves exactly as before. */
+        if(typeof callSkip_==='function' && typeof loadOf_==='function'
+           && callSkip_(loadOf_(ccOrd_(rows[r])), pre)) continue;
         td.setAttribute('data-cc','1');
         var cell=td.querySelector('.ccell');
         if(cell) cell.className=(cell.className||'').replace(/\bok\b/,'no');
