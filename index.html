@@ -193,7 +193,8 @@
   <div id="demoBanner">ცოცხალი აპი · ცნობარი DisCarry / Quo-დან (წაკითხვა) · პარამეტრები ინახება ბაზაში</div>
   <div class="topbar">
     <div class="logo"><span class="m2">M</span><span>Melos Dispatch</span></div>
-    <span class="cswitch"><span class="bdg"></span>მოქმედი კომპანია: <b>Geotranspo Inc</b> ▾</span>
+    <span class="cswitch"><span class="bdg"></span>მოქმედი კომპანია:
+      <select id="coswitch" onchange="coSwitch(this.value)" style="display:none;font:inherit;color:inherit;background:transparent;border:0;font-weight:700;cursor:pointer"></select></span>
     <span class="spacer"></span>
     <div class="rolepill" id="rolepill">
       <button id="rDisp" class="on" onclick="setRole('disp')">დისპეტჩერი</button>
@@ -231,6 +232,17 @@ const SUPERADMIN = ['zviadisalia@gmail.com'];
 let VIEWAS = null;          // დისპეტჩერის სახელი, ვისი ხედითაც ვუყურებთ
 let DISPLIST = [];          // allowlist-ის აქტიური დისპეტჩერები
 function isSuper(){ return !!(USER && SUPERADMIN.indexOf((USER.email||'').toLowerCase())>=0); }
+    /* --- active company (NOVA-COMPANY-SELECTION-001) -------------------
+       COLIST is the company registry read from the database; CO is the one
+       the dispatcher is working in right now. Every company-sensitive read
+       and write goes through COID(). The choice is remembered per browser,
+       exactly like the theme, and is re-validated against the registry on
+       every login so a stale or forbidden code can never be used. */
+    var COLIST=[], CO=null;
+    function COID(){ return CO && CO.company_id; }
+    function COCODE(){ return CO && CO.code; }
+    function coRemember_(){ try{ localStorage.setItem('md_company', CO?CO.code:''); }catch(e){} }
+    function coRemembered_(){ try{ return localStorage.getItem('md_company')||''; }catch(e){ return ''; } }
 function MYD(){ return VIEWAS || (USER && USER.dispatcher) || ''; }
 function isMgmtView(){ return !!(USER && USER.role==='mgmt' && !VIEWAS); }
 let RECV = {};             // received marks by order id
@@ -334,14 +346,14 @@ function chkOpen_(l){
 function docsSent_(l){ return !!(l && (l.invoice_sent_at || actOf_(l.order_number).bol_sent_at)); }
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
-async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()) }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
+async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: COID() }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
 /* გამოცხადებულ სიაზე — ზარები ზუსტად იმ ტვირთებზე მოწმდება, რაც დისპეტჩერმა აირჩია */
 let PCONT = [];
 async function loadPlanContacts(){
   try{
     var ons=planLoads_(ymd_(nextWorkDay_())).map(function(l){ return l.order_number; });
     if(!ons.length){ PCONT=[]; return; }
-    const { data, error } = await sb.rpc('contact_check_orders', { p_orders: ons });
+    const { data, error } = await sb.rpc('contact_check_orders', { p_orders: ons, p_company_id: COID() });
     if(error) throw error;
     PCONT = data || [];
   }catch(e){ console.error(e); PCONT = []; }
@@ -451,9 +463,9 @@ function assignExpected_(l){
 /* ---- მძღოლების როსტერი: მუდმივი მიმაგრება + დროებითი გადაბარება ---- */
 var DASG=[], DIR=[], DIRBY={};
 async function loadAssign(){
-  try{ DASG=await selAll_(function(){ return sb.from('driver_assignment').select('*').is('canceled_at',null); },'id');
+  try{ DASG=await selAll_(function(){ return sb.from('driver_assignment').select('*').eq('company_id', COID()).is('canceled_at',null); },'id');
   }catch(e){ console.error(e); DASG=[]; }
-  try{ var d=await sb.rpc('driver_directory'); DIR=d.data||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
+  try{ var d=await sb.rpc('driver_directory', { p_company_id: COID() }); DIR=d.data||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
   catch(e){ console.error(e); DIR=[]; DIRBY={}; }
 }
 /* მუდმივი მიმაგრება drivers.dispatcher_name-შია (მენეჯმენტი ცვლის) */
@@ -522,7 +534,7 @@ function driverActive_(name){
   return !(reg && reg.active===false);
 }
 async function assignSave(row){
-  var res=await sb.from('driver_assignment').insert(row);
+  var res=await sb.from('driver_assignment').insert(Object.assign({company_id:COID()}, row));
   if(res.error) throw res.error;
   await loadAssign();
 }
@@ -530,7 +542,7 @@ async function setPermDisp(encName, disp){
   var name=decodeURIComponent(encName);
   var v=(disp && disp!=='—') ? disp : null;
   try{
-    var res=await sb.from('drivers').upsert({name:name, dispatcher_name:v, updated_at:new Date().toISOString(), updated_by:USER.email},{onConflict:'name'});
+    var res=await sb.from('drivers').upsert({company_id:COID(), name:name, dispatcher_name:v, updated_at:new Date().toISOString(), updated_by:USER.email},{onConflict:'company_id,name'});
     if(res.error) throw res.error;
     if(!DRIVERS_BY_NAME[name]) DRIVERS_BY_NAME[name]={name:name};
     DRIVERS_BY_NAME[name].dispatcher_name=v;
@@ -638,7 +650,7 @@ async function selAll_(qb, orderCols){
   return all;
 }
 async function loadRates(){ try{ const { data } = await sb.from('dispatcher_rates').select('*'); DRATES={}; (data||[]).forEach(function(r){ DRATES[r.dispatcher_name]=r; }); }catch(e){ console.error(e); DRATES={}; } }
-async function loadActions(){ try{ const data = await selAll_(function(){ return sb.from('load_actions').select('*'); },'order_number'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
+async function loadActions(){ try{ const data = await selAll_(function(){ return sb.from('load_actions').select('*').eq('company_id', COID()); },'order_number'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
 
 /* ---------- auth + data bootstrap ---------- */
 async function signIn(){
@@ -712,9 +724,38 @@ async function afterLogin_(session){
   startApp();
   if(loadErr) toast('ნაწილი მონაცემებისა ვერ ჩაიტვირთა — განაახლე გვერდი');
 }
+async function loadCompanies(){
+  var r=await sb.from('company').select('company_id,code,legal_name,active,sort_order')
+                .eq('active',true).order('sort_order');
+  COLIST=(r.data||[]);
+  if(!COLIST.length) throw new Error('no company is available for this account');
+  var want=coRemembered_();
+  CO=COLIST.filter(function(c){ return c.code===want; })[0] || COLIST[0];
+  coRemember_();
+}
+function coSwitch(code){
+  var next=COLIST.filter(function(c){ return c.code===code; })[0];
+  if(!next || (CO && next.code===CO.code)) return;
+  CO=next; coRemember_(); paintCompany_();
+  /* every cached table in this browser belongs to the company we just left */
+  LIVE=[]; ACT={}; DPLAN=[]; WAIV={}; CONTACTS=[]; PCONT=[]; SCLOSE=null;
+  toast('კომპანია: '+CO.legal_name);
+  loadData().then(function(){ render(); }).catch(function(e){ console.error(e); toast('ვერ ჩაიტვირთა'); });
+}
+function paintCompany_(){
+  var el=document.getElementById('coswitch');
+  if(!el) return;
+  el.innerHTML=COLIST.map(function(c){
+    return '<option value="'+c.code+'"'+(CO&&c.code===CO.code?' selected':'')+'>'+c.legal_name+'</option>';
+  }).join('');
+  el.style.display = COLIST.length>1 ? '' : 'none';
+}
+
 async function loadData(){
+  await loadCompanies();
+  paintCompany_();
   if(USER.role==='mgmt'){
-    const { data:drv } = await sb.from('drivers').select('*');
+    const { data:drv } = await sb.from('drivers').select('*').eq('company_id', COID());
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
     /* `payment_received` აღარ იკითხება: ეს ხელით მონიშვნა snapshot-ის ეპოქიდან დარჩა,
        ცხრილი ცარიელია და ინტერფეისში არსად გამოიყენებოდა. ფულის შემოსვლის ერთადერთი
@@ -726,7 +767,7 @@ async function loadData(){
       loadAssign(), loadPlanContacts(), loadLedger(), loadWeekRoster(), loadDispatchers()
     ]);
   } else {
-    const { data:drv } = await sb.from('drivers').select('*');   // RLS: only my drivers
+    const { data:drv } = await sb.from('drivers').select('*').eq('company_id', COID());   // RLS: only my drivers
     DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
     await Promise.all([
       loadLiveLoads(),   // RLS scopes loads to this dispatcher only
@@ -849,7 +890,7 @@ async function saveDriver(encName, field, value){
   else if(field==='active') v=!!value;
   else if(field==='category' && v==='—') v=null;
   try{
-    const { error } = await sb.from('drivers').upsert({name:name, [field]:v, updated_at:new Date().toISOString(), updated_by:USER.email},{onConflict:'name'});
+    const { error } = await sb.from('drivers').upsert({company_id:COID(), name:name, [field]:v, updated_at:new Date().toISOString(), updated_by:USER.email},{onConflict:'company_id,name'});
     if(error) throw error;
     if(!DRIVERS_BY_NAME[name]) DRIVERS_BY_NAME[name]={name}; DRIVERS_BY_NAME[name][field]=v;
     toast('შენახულია ✓');
@@ -948,7 +989,7 @@ var ATT={};    // contact_attempts by order_number
 var WAIV={};   // waivers
 function wkey_(disp,day,kind,subj){ return (disp||'')+'|'+day+'|'+kind+'|'+(subj||''); }
 async function loadAttempts(){
-  try{ var r=await sb.rpc('contact_attempts',{p_day:ymd_(nextWorkDay_())}); ATT={};
+  try{ var r=await sb.rpc('contact_attempts',{p_day:ymd_(nextWorkDay_()), p_company_id: COID()}); ATT={};
     (r.data||[]).forEach(function(a){ ATT[a.order_number]=a; });
   }catch(e){ console.error(e); ATT={}; }
 }
@@ -973,7 +1014,7 @@ async function wrSave(){
       if(st==='off'){
         off.push(n);
         if(!cur){
-          var res=await sb.from('driver_assignment').insert({driver_name:n, dispatcher_name:MYD(), kind:'off',
+          var res=await sb.from('driver_assignment').insert({company_id:COID(), driver_name:n, dispatcher_name:MYD(), kind:'off',
             from_day:today, to_day:sun, reason:(String(WRSEL[n].why||'').trim()||'ამ კვირაში არ მუშაობს'), created_by:USER.email});
           if(res.error) throw res.error;
         }
@@ -1014,7 +1055,7 @@ function weekBox_(all){
     "<div style='margin-top:14px'><button class='bigbtn' style='padding:9px 18px;font-size:13px' onclick='wrSave()'>დადასტურება</button></div></div>";
 }
 async function loadWaivers(){
-  try{ var r=await selAll_(function(){ return sb.from('load_waivers').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
+  try{ var r=await selAll_(function(){ return sb.from('load_waivers').select('*').eq('company_id', COID()).gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
     WAIV={}; (r||[]).forEach(function(w){ WAIV[wkey_(w.dispatcher_name,w.work_day,w.kind,w.order_number)]=w; });
   }catch(e){ console.error(e); WAIV={}; }
 }
@@ -1141,7 +1182,7 @@ async function waivSend(kind, encSubj){
   var txt=(document.getElementById('_wtxt')||{}).value||'';
   if(txt.trim().length<10){ toast('მიზეზი უფრო დეტალურად დაწერე'); return; }
   var day=ymd_(nextWorkDay_());
-  var row={order_number:subj||null, dispatcher_name:MYD(), work_day:day, kind:kind,
+  var row={company_id:COID(), order_number:subj||null, dispatcher_name:MYD(), work_day:day, kind:kind,
            reason:txt.trim(), status:'pending', requested_at:new Date().toISOString(), requested_by:USER.email,
            decided_at:null, decided_by:null, decision_note:null};
   try{
@@ -1534,17 +1575,17 @@ function rBoard(){
 }
 var SCLOSE=null;
 async function loadClose(){
-  try{ var r=await sb.from('shift_close').select('*').eq('work_day', ymd_(nextWorkDay_())).eq('dispatcher_name', MYD()).maybeSingle();
+  try{ var r=await sb.from('shift_close').select('*').eq('company_id', COID()).eq('work_day', ymd_(nextWorkDay_())).eq('dispatcher_name', MYD()).maybeSingle();
     SCLOSE=r.data||null; }catch(e){ console.error(e); SCLOSE=null; }
 }
 async function closeShift(){
   try{
     var day=ymd_(nextWorkDay_());
     var frozen=planLoads_(day).map(function(l){ return l.order_number; });
-    var row={dispatcher_name:MYD(), work_day:day, closed_at:new Date().toISOString(), closed_by:USER.email,
+    var row={company_id:COID(), dispatcher_name:MYD(), work_day:day, closed_at:new Date().toISOString(), closed_by:USER.email,
              gates:{ok:true, orders:frozen, count:frozen.length,
                     gross:planLoads_(day).reduce(function(s,l){ return s+grossOf_(l); },0)}};
-    var res=await sb.from('shift_close').upsert(row,{onConflict:'dispatcher_name,work_day'});
+    var res=await sb.from('shift_close').upsert(row,{onConflict:'company_id,dispatcher_name,work_day'});
     if(res.error) throw res.error;
     SCLOSE=row; toast('ცვლა დახურულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ დაიხურა'); }
@@ -1590,7 +1631,7 @@ async function apptSave(enc){
   var iso=v.slice(0,16)+':00+00:00';
   try{
     var now=new Date().toISOString();
-    var res=await sb.from('load_actions').upsert({order_number:on, appt_at:iso, appt_by:USER.email, updated_at:now},{onConflict:'order_number'});
+    var res=await sb.from('load_actions').upsert({company_id:COID(), order_number:on, appt_at:iso, appt_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
     await loadActions(); toast('Appointment შენახულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა — '+(e&&e.message?e.message:'')); }
@@ -1626,14 +1667,14 @@ async function upFile_(on, f, kind){
   try{
     var ext=(f.name.split('.').pop()||'jpg').toLowerCase().replace(/[^a-z0-9]/g,'');
     var safe=on.replace(/[^A-Za-z0-9_-]/g,'_');
-    var path=(kind==='gate'?'gatepass/':'')+safe+'/'+Date.now()+'.'+ext;
+    var path=(COCODE()?COCODE().toLowerCase()+'/':'')+(kind==='gate'?'gatepass/':'')+safe+'/'+Date.now()+'.'+ext;
     var up=await sb.storage.from('checks').upload(path, f, {upsert:true, contentType:f.type||'image/jpeg'});
     if(up.error) throw up.error;
     var now=new Date().toISOString();
     var row=(kind==='gate')
-      ? {order_number:on, gate_pass_path:path, gate_pass_at:now, gate_pass_by:USER.email, updated_at:now}
-      : {order_number:on, check_path:path, check_uploaded_at:now, check_by:USER.email};
-    var res=await sb.from('load_actions').upsert(row,{onConflict:'order_number'});
+      ? {company_id:COID(), order_number:on, gate_pass_path:path, gate_pass_at:now, gate_pass_by:USER.email, updated_at:now}
+      : {company_id:COID(), order_number:on, check_path:path, check_uploaded_at:now, check_by:USER.email};
+    var res=await sb.from('load_actions').upsert(row,{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
     await loadActions(); toast(kind==='gate'?'Gate Pass ატვირთულია ✓':'ჩეკი ატვირთულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ აიტვირთა — '+(e&&e.message?e.message:'')); }
@@ -1653,8 +1694,8 @@ async function chkResolve(enc, kind){
   if(!confirm('ტვირთი '+on+' — მონიშნო როგორც „'+CHKRES[kind]+'“?\n\nეს თანხა მძღოლთან დარჩენილად ჩაითვლება და ხელფასიდან გამოაკლდება.')) return;
   try{
     var now=new Date().toISOString();
-    var res=await sb.from('load_actions').upsert({order_number:on, check_resolution:kind, check_resolution_at:now,
-      check_resolution_by:USER.email, updated_at:now},{onConflict:'order_number'});
+    var res=await sb.from('load_actions').upsert({company_id:COID(), order_number:on, check_resolution:kind, check_resolution_at:now,
+      check_resolution_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
     ACT[on]=Object.assign(ACT[on]||{},{check_resolution:kind,check_resolution_at:now,check_resolution_by:USER.email});
     toast('მონიშნულია — '+CHKRES[kind]+' ✓'); render();
@@ -1663,8 +1704,8 @@ async function chkResolve(enc, kind){
 async function chkResolveUndo(enc){
   var on=decodeURIComponent(enc);
   try{
-    var res=await sb.from('load_actions').upsert({order_number:on, check_resolution:null, check_resolution_at:null,
-      check_resolution_by:null, updated_at:new Date().toISOString()},{onConflict:'order_number'});
+    var res=await sb.from('load_actions').upsert({company_id:COID(), order_number:on, check_resolution:null, check_resolution_at:null,
+      check_resolution_by:null, updated_at:new Date().toISOString()},{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
     ACT[on]=Object.assign(ACT[on]||{},{check_resolution:null});
     toast('მონიშვნა მოიხსნა'); render();
@@ -1672,11 +1713,11 @@ async function chkResolveUndo(enc){
 }
 async function markAct(enc, kind){
   const o=decodeURIComponent(enc); const now=new Date().toISOString();
-  const row={order_number:o, updated_at:now};
+  const row={company_id:COID(), order_number:o, updated_at:now};
   if(kind==='bol'){ row.bol_sent_at=now; row.bol_by=USER.email; }
   else { row.check_uploaded_at=now; row.check_by=USER.email; }
   try{
-    const { error } = await sb.from('load_actions').upsert(row,{onConflict:'order_number'});
+    const { error } = await sb.from('load_actions').upsert(row,{onConflict:'company_id,order_number'});
     if(error) throw error;
     ACT[o]=Object.assign(ACT[o]||{},row);
     toast(kind==='bol'?'BOL მონიშნულია ✓':'ჩეკი მონიშნულია ✓');
@@ -1722,7 +1763,7 @@ function myLoadCalls_(){
   if(MYCS!==null || MYCS_LOADING) return;
   MYCS_LOADING=true; MYCS_ERR=false;
   var to=new Date(), from=new Date(Date.now()-30*864e5);
-  sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
+  sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to), p_company_id: COID()}).then(function(r){
     if(r && r.error){ console.error(r.error); MYCS=[]; MYCS_ERR=true; }
     else { MYCS=r.data||[]; }
     MYCS_LOADING=false; if(ROLE==='disp' && TAB==='profile') rProfile();
@@ -1849,7 +1890,7 @@ async function saveDeadHead(enc, v){
   if(n!=null && !isFinite(n)){ toast('რიცხვი ჩაწერე'); return; }
   try{
     const now=new Date().toISOString();
-    const { error } = await sb.from('load_actions').upsert({order_number:o, dead_head:n, dead_head_by:USER.email, updated_at:now},{onConflict:'order_number'});
+    const { error } = await sb.from('load_actions').upsert({company_id:COID(), order_number:o, dead_head:n, dead_head_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
     if(error) throw error;
     ACT[o]=Object.assign(ACT[o]||{},{dead_head:n});
     toast('შენახულია ✓');
@@ -1945,7 +1986,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin').is('deleted_at', null).order('order_number',{ascending:true}).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin').eq('company_id', COID()).is('deleted_at', null).order('order_number',{ascending:true}).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -2212,7 +2253,7 @@ function ovLoadCalls_(){
   if(OVCS!==null || OVCS_LOADING) return;
   OVCS_LOADING=true;
   var to=new Date(), from=new Date(Date.now()-30*864e5);
-  sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
+  sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to), p_company_id: COID()}).then(function(r){
     OVCS=r.data||[]; OVCS_LOADING=false;
     if(ROLE==='mgmt' && MTAB==='overview') rOverview();
   },function(e){ console.error(e); OVCS=[]; OVCS_LOADING=false;
@@ -2496,7 +2537,7 @@ async function mgCoverSave(){
   try{
     for(var i=0;i<names.length;i++){
       if((DRIVERS_BY_NAME[names[i]]||{}).dispatcher_name===to) continue;   /* უკვე მისია */
-      var res=await sb.from('driver_assignment').insert({driver_name:names[i], dispatcher_name:to, kind:'cover',
+      var res=await sb.from('driver_assignment').insert({company_id:COID(), driver_name:names[i], dispatcher_name:to, kind:'cover',
         from_day:workToday_(), to_day:(until||null), reason:why, created_by:USER.email});
       if(res.error) throw res.error;
     }
@@ -2680,7 +2721,7 @@ function rLeader(){
     CSTAT_LOADING=true;
     $('view').innerHTML=ph('რეიტინგი','დისპეტჩერების ქულა — ცოცხალი მონაცემიდან')+
       '<div class="card p"><div class="muted">ითვლება ზარებისა და SMS-ების სტატისტიკა Quo-დან… (10-15 წამი)</div></div>';
-    sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to)}).then(function(r){
+    sb.rpc('contact_stats',{p_from:ymd_(from),p_to:ymd_(to), p_company_id: COID()}).then(function(r){
       CSTAT={}; (r.data||[]).forEach(function(x){ CSTAT[x.dispatcher]=x; });
       CSTAT_LOADING=false;
       if(MTAB==='leaderboard') rLeader();
@@ -3283,8 +3324,8 @@ function driverRate_(reg){
 /* ---- მძღოლის ხელფასის კორექტირებები და გადარიცხვა ---- */
 var DLED=[], DPAY={};
 async function loadLedger(){
-  try{ DLED=await selAll_(function(){ return sb.from('driver_ledger').select('*'); },'id'); }catch(e){ console.error(e); DLED=[]; }
-  try{ var p=await selAll_(function(){ return sb.from('driver_payout').select('*'); },['driver_name','week']); DPAY={}; (p||[]).forEach(function(x){ DPAY[x.driver_name+'|'+x.week]=x; }); }catch(e){ console.error(e); DPAY={}; }
+  try{ DLED=await selAll_(function(){ return sb.from('driver_ledger').select('*').eq('company_id', COID()); },'id'); }catch(e){ console.error(e); DLED=[]; }
+  try{ var p=await selAll_(function(){ return sb.from('driver_payout').select('*').eq('company_id', COID()); },['driver_name','week']); DPAY={}; (p||[]).forEach(function(x){ DPAY[x.driver_name+'|'+x.week]=x; }); }catch(e){ console.error(e); DPAY={}; }
 }
 var LKIND={advance:{l:'ავანსი / სესხი',s:-1},deduction:{l:'დაქვითვა',s:-1},
   carry:{l:'წინა კვირის ნაშთი',s:-1},tip_dispatcher:{l:'დისპეტჩერს აჩუქა',s:-1}};
@@ -3315,7 +3356,7 @@ async function ledAdd(encName, wk){
   }
   var note=prompt('კომენტარი (რისთვის):','')||'';
   try{
-    var res=await sb.from('driver_ledger').insert({driver_name:name,week:wk,kind:k,amount:a,note:note,dispatcher_name:disp,created_by:USER.email});
+    var res=await sb.from('driver_ledger').insert({company_id:COID(), driver_name:name,week:wk,kind:k,amount:a,note:note,dispatcher_name:disp,created_by:USER.email});
     if(res.error) throw res.error;
     await loadLedger(); toast('დაემატა ✓'); rPayroll();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
@@ -3333,7 +3374,7 @@ async function carryPrev(encName, wk){
   if(n>=0){ toast('წინა კვირა მინუსში არ დასრულებულა ('+money(n)+')'); return; }
   if(!confirm('წინა კვირის ნაშთი '+money(n)+' გადმოვიტანო ამ კვირაზე?')) return;
   try{
-    var res=await sb.from('driver_ledger').insert({driver_name:name,week:wk,kind:'carry',amount:Math.abs(n),
+    var res=await sb.from('driver_ledger').insert({company_id:COID(), driver_name:name,week:wk,kind:'carry',amount:Math.abs(n),
       note:'ავტომატურად გადმოტანილი — კვირა '+prev, created_by:USER.email});
     if(res.error) throw res.error;
     await loadLedger(); toast('გადმოტანილია ✓'); rPayroll();
@@ -3344,12 +3385,12 @@ async function togglePaid(encName, wk, amt){
   var ex=payoutOf_(name,wk);
   try{
     if(ex && ex.paid_at){
-      var res=await sb.from('driver_payout').update({paid_at:null,amount:null,paid_by:USER.email,updated_at:new Date().toISOString()}).eq('driver_name',name).eq('week',wk);
+      var res=await sb.from('driver_payout').update({paid_at:null,amount:null,paid_by:USER.email,updated_at:new Date().toISOString()}).eq('company_id',COID()).eq('driver_name',name).eq('week',wk);
       if(res.error) throw res.error; toast('მონიშვნა მოიხსნა');
     } else {
       var m=prompt('რითი გადაირიცხა? (ბანკი / ქეში / სხვა)','ბანკი')||'';
-      var res2=await sb.from('driver_payout').upsert({driver_name:name,week:wk,paid_at:new Date().toISOString(),
-        amount:Number(amt)||0,method:m,paid_by:USER.email,updated_at:new Date().toISOString()},{onConflict:'driver_name,week'});
+      var res2=await sb.from('driver_payout').upsert({company_id:COID(), driver_name:name,week:wk,paid_at:new Date().toISOString(),
+        amount:Number(amt)||0,method:m,paid_by:USER.email,updated_at:new Date().toISOString()},{onConflict:'company_id,driver_name,week'});
       if(res2.error) throw res2.error; toast('გადარიცხულად მოინიშნა ✓');
     }
     await loadLedger(); rPayroll();
@@ -3505,7 +3546,7 @@ function rPayMix(){
 var DPLAN=[];      // day_plan rows
 var PQ='';         // ძებნის ტექსტი
 async function loadPlan(){
-  try{ DPLAN=await selAll_(function(){ return sb.from('day_plan').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
+  try{ DPLAN=await selAll_(function(){ return sb.from('day_plan').select('*').eq('company_id', COID()).gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
   }catch(e){ console.error(e); DPLAN=[]; }
   PDRVC=null;   /* მძღოლის ხელით მიბმის ქეში თავიდან აეწყოს */
 }
@@ -3664,10 +3705,10 @@ async function planAdd(enc, action, preset, drv){
     if(String(why).trim().length<5){ toast('მიზეზი ჩაწერე'); return; }
   }
   try{
-    var row={dispatcher_name:MYD(), work_day:day, order_number:on, action:action,
+    var row={company_id:COID(), dispatcher_name:MYD(), work_day:day, order_number:on, action:action,
              reason:String(why).trim(), driver_name:(drv||(l?l.driver_name:null)||null),
              sd_pickup_date:(l?puDay_(l):null), created_by:USER.email, created_at:new Date().toISOString()};
-    var res=await sb.from('day_plan').upsert(row,{onConflict:'dispatcher_name,work_day,order_number'});
+    var res=await sb.from('day_plan').upsert(row,{onConflict:'company_id,dispatcher_name,work_day,order_number'});
     if(res.error) throw res.error;
     await loadPlan(); await loadPlanContacts(); PQ=''; toast(action==='add'?'დაემატა ✓':'მოიხსნა ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
@@ -3744,7 +3785,7 @@ function rPlan(){
 /* ---- დახურვები და მოთხოვნები (მენეჯმენტი) ---- */
 var SCLOSES=[];
 async function loadCloses(){
-  try{ SCLOSES=await selAll_(function(){ return sb.from('shift_close').select('*').gte('work_day', addDays_(ymd_(new Date()),-21)); },['work_day','dispatcher_name']);
+  try{ SCLOSES=await selAll_(function(){ return sb.from('shift_close').select('*').eq('company_id', COID()).gte('work_day', addDays_(ymd_(new Date()),-21)); },['work_day','dispatcher_name']);
     SCLOSES.sort(function(a,b){ return String(b.closed_at||'').localeCompare(String(a.closed_at||'')); });
   }catch(e){ console.error(e); SCLOSES=[]; }
 }
@@ -4227,7 +4268,7 @@ try{
     try{
       if(!Array.isArray(PCONT) || !PCONT.length) return;
       var ons = PCONT.map(function(r){ return r.order_number; });
-      var res = await sb.rpc('contact_content_orders', { p_orders: ons });
+      var res = await sb.rpc('contact_content_orders', { p_orders: ons, p_company_id: COID() });
       if(res.error) return;
       var m = {}; (res.data||[]).forEach(function(x){ m[x.order_number] = x; });
       PCONT.forEach(function(r){
@@ -4449,7 +4490,7 @@ try{
     var key=ords.slice().sort().join('|');
     if(key===CC_KEY){ ccPaint_(); return; }
     CC_BUSY=true;
-    sb.rpc('contact_content_orders',{p_orders:ords}).then(function(r){
+    sb.rpc('contact_content_orders',{p_orders:ords, p_company_id: COID()}).then(function(r){
       var m={}; (r.data||[]).forEach(function(x){ m[x.order_number]=x; });
       CC_MAP=m; CC_KEY=key; CC_BUSY=false; ccPaint_();
     }).catch(function(){ CC_BUSY=false; });
