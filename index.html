@@ -4961,3 +4961,315 @@ try{
 
 </body>
 </html>
+
+<!-- =====================================================================
+     AI-OPS SHIFT CLOSE HELP — APPENDED BLOCK, CANDIDATE, NOT PUBLISHED
+     Task: AI-OPS-DISPATCHER-SHIFT-CLOSE-HELP-MVP-005
+
+     This block is APPENDED to the end of the existing index.html body.
+     It must satisfy the standing frontend rule: the candidate file is
+     the live file plus this tail and nothing else, so that
+        candidate.startsWith(live) === true
+     Every business-rule region of the existing file stays byte-identical.
+
+     What this block may do:            what it must never do:
+       * read window state it is         * write any business table
+         given by the close card         * set .disabled on any control
+       * POST to the Edge Function       * change a gate, a waiver or a
+       * render the reply                  close decision
+                                         * call .upsert/.insert/.update/
+                                           .delete on an existing table
+
+     D-9 ADAPTER PATCH, 2026-09-10. The frozen block assumed five page
+     symbols; four of them do not exist in this app. They were measured
+     against the live close card and corrected here, inside this tail
+     only. No existing line of index.html is touched.
+
+     It creates one modal and ONE launcher button, inserted next to the
+     real close button (#logoutBtn, inside #closeCard .closebar). It adds
+     no MTABS entry: that would mean editing the live file and would break
+     the append-only property this whole procedure rests on. If the anchor
+     is ever missing the button simply does not appear, and
+     window.openShiftCloseHelp(orderHint) stays callable either way.
+===================================================================== -->
+<style>
+  #aiHelpModal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:9999;
+    align-items:center;justify-content:center;padding:16px}
+  #aiHelpModal.on{display:flex}
+  #aiHelpCard{background:#fff;color:#111;max-width:640px;width:100%;border-radius:12px;
+    padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.3);font:14px/1.5 system-ui,sans-serif;
+    max-height:86vh;overflow:auto}
+  #aiHelpCard h3{margin:0 0 4px;font-size:17px}
+  #aiHelpCard .sub{color:#666;font-size:12px;margin-bottom:14px}
+  #aiHelpMsg{width:100%;min-height:90px;padding:10px;border:1px solid #ccc;border-radius:8px;
+    font:inherit;resize:vertical}
+  #aiHelpCard .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+  #aiHelpCard button{padding:9px 16px;border-radius:8px;border:1px solid #ccc;background:#f6f6f6;
+    cursor:pointer;font:inherit}
+  #aiHelpCard button.primary{background:#111;color:#fff;border-color:#111}
+  #aiHelpCard button[disabled]{opacity:.5;cursor:default}
+  #aiHelpOut{margin-top:14px;padding:12px;border-radius:8px;background:#f7f7f8;white-space:pre-wrap;
+    display:none}
+  #aiHelpOut.on{display:block}
+  #aiHelpOut.sys{background:#fff4e5;border:1px solid #f0c48a}
+  #aiHelpOut.act{background:#eef6ff;border:1px solid #a8c8f0}
+  #aiHelpOut.err{background:#fdecec;border:1px solid #f0a8a8}
+  #aiHelpOut .cav{margin-top:10px;color:#666;font-size:12px}
+  .ai-help-launch{margin-left:8px;font-size:12px;padding:4px 10px;border-radius:6px;
+    border:1px solid #bbb;background:#fafafa;cursor:pointer}
+</style>
+
+<div id="aiHelpModal" role="dialog" aria-modal="true" aria-labelledby="aiHelpTitle">
+  <div id="aiHelpCard">
+    <h3 id="aiHelpTitle">Shift Close Help</h3>
+    <div class="sub" id="aiHelpCtx"></div>
+    <textarea id="aiHelpMsg" maxlength="2000"
+      placeholder="დაწერე შენი სიტყვებით რა მოხდა. მაგ: აღებას დავურეკე და ყველაფერი ვკითხე, მაინც წითელია."></textarea>
+    <div class="row">
+      <button id="aiHelpCancel" type="button">დახურვა</button>
+      <button id="aiHelpSend" class="primary" type="button">გაგზავნა</button>
+    </div>
+    <div id="aiHelpOut"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  // ---- config -------------------------------------------------------
+  // Same Supabase project the page already uses; the function is a
+  // sibling of /rest/v1. No new host, no new login.
+  // D-9 ADAPTER PATCH. window.SUPABASE_URL does not exist in this app: the
+  // project URL and publishable key are module-scoped consts in the page's
+  // own inline script. They are read from there, so nothing is duplicated,
+  // nothing new is hardcoded, and this follows the app if the project moves.
+  function appConf() {
+    if (appConf._c) return appConf._c;
+    var url = null, key = null;
+    try {
+      var ss = document.getElementsByTagName("script");
+      for (var i = 0; i < ss.length && !(url && key); i++) {
+        if (ss[i].src) continue;
+        var t = ss[i].textContent || "";
+        var mu = t.match(/const\s+SB_URL\s*=\s*["']([^"']+)["']/);
+        var mk = t.match(/const\s+SB_KEY\s*=\s*["']([^"']+)["']/);
+        if (mu) url = mu[1];
+        if (mk) key = mk[1];
+      }
+    } catch (e) {}
+    appConf._c = { url: url, key: key };
+    return appConf._c;
+  }
+  function fnUrl() { var u = appConf().url; return u ? (u + "/functions/v1/ai-shift-close-help") : null; }
+
+  // The app's own client is a module-scoped const and is not reachable from
+  // here. This builds a second, READ-ONLY client on the same project, the
+  // same storage and the library's default storage key, so it sees exactly
+  // the session the app already stored. autoRefreshToken is off: this client
+  // never competes with the app's own refresh loop.
+  function aiHelpAuth() {
+    if (aiHelpAuth._c) return aiHelpAuth._c;
+    var c = appConf();
+    if (!c.url || !c.key || !window.supabase || typeof window.supabase.createClient !== "function") return null;
+    try {
+      aiHelpAuth._c = window.supabase.createClient(c.url, c.key, {
+        auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, storage: window.localStorage }
+      });
+    } catch (e) { aiHelpAuth._c = null; }
+    return aiHelpAuth._c;
+  }
+
+  var modal = document.getElementById("aiHelpModal");
+  var out   = document.getElementById("aiHelpOut");
+  var box   = document.getElementById("aiHelpMsg");
+  var send  = document.getElementById("aiHelpSend");
+  var ctxEl = document.getElementById("aiHelpCtx");
+  var ctx   = null;
+
+  // ---- context collection -------------------------------------------
+  // Everything the dispatcher should not have to type. Read-only: this
+  // reads what the close card already computed and never recomputes,
+  // overrides or writes a gate.
+  function collectContext(orderHint) {
+    var c = {
+      company_id: null, work_day: null, order_numbers: [],
+      ui_gate_snapshot: { orders: {} }
+    };
+    try { c.company_id = (typeof COID === "function" ? COID() : null) || window.CURRENT_COMPANY_ID || null; } catch (e) {}
+    // D-9: window.CLOSE_CARD does not exist here. The work day comes from
+    // the app OWN helpers, so the "next work day, Sunday skipped" rule is
+    // never re-implemented in this block.
+    try { c.work_day = (window.CLOSE_CARD && window.CLOSE_CARD.work_day)
+              || ((typeof ymd_ === "function" && typeof nextWorkDay_ === "function") ? ymd_(nextWorkDay_()) : null)
+              || window.CURRENT_WORK_DAY || null; } catch (e) {}
+    try {
+      var card = window.CLOSE_CARD || {};
+      if (card.rem !== undefined) c.ui_gate_snapshot.rem = card.rem;
+      if (card.gates) c.ui_gate_snapshot.gates = card.gates;
+      var rows = card.orders || {};
+      Object.keys(rows).forEach(function (k) {
+        c.ui_gate_snapshot.orders[k] = {
+          pickup:   rows[k] && rows[k].pickup   === true,
+          delivery: rows[k] && rows[k].delivery === true
+        };
+        c.order_numbers.push(k);
+      });
+    } catch (e) {}
+    // D-9: read the RENDERED close card, using the app OWN "remaining
+    // gates" formula and the section rows exactly as painted. Per-order
+    // pickup/delivery state is deliberately NOT read: the card renders
+    // per-order rows only for a failing calls gate, and guessing that
+    // mapping would be inventing one. The server treats an absent orders
+    // map as unknown, never as green, and falls back to the day plan when
+    // no order number is supplied.
+    try {
+      var cc = document.getElementById("closeCard");
+      if (cc) {
+        if (c.ui_gate_snapshot.rem === undefined) {
+          c.ui_gate_snapshot.rem = document.querySelectorAll("#closeCard .gate.no, #closeCard .gate.wait").length;
+        }
+        // A gates map is deliberately NOT built from the DOM. Measured on
+        // the live card 2026-09-10: ".gate" rows directly under #closeCard
+        // are sometimes gate sections and sometimes per-order rows, and the
+        // two cannot be told apart without inventing a rule. rem above is
+        // the app own formula and is unambiguous, so the snapshot carries
+        // only what can be proved correct. The server records the snapshot
+        // as context and decides on its own facts either way.
+      }
+    } catch (e) {}
+    if (orderHint && c.order_numbers.indexOf(orderHint) === -1) c.order_numbers.push(orderHint);
+    if (orderHint) c.order_numbers = [orderHint];
+    c.order_numbers = c.order_numbers.slice(0, 10);
+    return c;
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (m) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m];
+    });
+  }
+
+  window.openShiftCloseHelp = function (orderHint) {
+    ctx = collectContext(orderHint);
+    out.className = ""; out.textContent = ""; box.value = "";
+    send.disabled = false; send.textContent = "გაგზავნა";
+    ctxEl.textContent = "Company: " + (ctx.company_id ? "selected" : "not detected") +
+      " · work day: " + (ctx.work_day || "not detected") +
+      " · orders attached: " + ctx.order_numbers.length;
+    modal.classList.add("on");
+    box.focus();
+  };
+  function close() { modal.classList.remove("on"); }
+  document.getElementById("aiHelpCancel").addEventListener("click", close);
+  modal.addEventListener("click", function (e) { if (e.target === modal) close(); });
+
+  // ---- submit --------------------------------------------------------
+  send.addEventListener("click", async function () {
+    var text = (box.value || "").trim();
+    if (!text) { box.focus(); return; }
+    if (!ctx || !ctx.company_id || !ctx.work_day) {
+      out.className = "on err";
+      out.textContent = "ვერ დავადგინე კომპანია ან სამუშაო დღე ამ ეკრანიდან. " +
+        "გთხოვ განაახლე გვერდი და სცადე ისევ. (Nothing was changed.)";
+      return;
+    }
+    send.disabled = true; send.textContent = "მოწმდება…";
+    out.className = "on"; out.textContent = "ვამოწმებ მტკიცებულებას…";
+
+    var token = null;
+    try {
+      var cl = aiHelpAuth();
+      var s = cl ? await cl.auth.getSession() : null;
+      token = s && s.data && s.data.session ? s.data.session.access_token : null;
+    } catch (e) {}
+    if (!token) {
+      out.className = "on err";
+      out.textContent = "სესია ვერ მოიძებნა. გთხოვ ხელახლა შეხვიდე სისტემაში.";
+      send.disabled = false; send.textContent = "გაგზავნა";
+      return;
+    }
+
+    try {
+      var res = await fetch(fnUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+        body: JSON.stringify({
+          company_id: ctx.company_id,
+          work_day: ctx.work_day,
+          message: text,
+          order_numbers: ctx.order_numbers,
+          ui_gate_snapshot: ctx.ui_gate_snapshot
+        })
+      });
+      var j = await res.json();
+
+      // Failure is shown as failure. An error is never rendered as an
+      // empty or reassuring result.
+      var cls = j.outcome === "system_issue" ? "sys"
+              : j.outcome === "dispatcher_action" ? "act"
+              : (j.outcome === "error" || j.outcome === "refused") ? "err" : "";
+      out.className = "on " + cls;
+      var head = j.outcome === "system_issue"
+            ? "სავარაუდოდ სისტემის პრობლემაა — გახსნილია საინჟინრო ქეისი"
+        : j.outcome === "dispatcher_action" ? "საჭიროა შენი მოქმედება"
+        : j.outcome === "insufficient_evidence" ? "არასაკმარისი მტკიცებულება"
+        : j.outcome === "no_issue" ? "სერვერზე ბლოკი არ ჩანს"
+        : j.outcome === "refused" ? "მოთხოვნა უარყოფილია" : "ვერ შემოწმდა";
+      // Provenance the dispatcher can see: whether the call recording was
+      // actually read, or only the stored records were consulted.
+      var prov = j.semantic_review === "verified"
+            ? "ზარი მოსმენილია და შემოწმებულია."
+        : j.semantic_review === "unavailable"
+            ? "ზარი არ მოსმენილა — მხოლოდ ჩანაწერებია გამოყენებული."
+        : j.semantic_review === "attempted_failed"
+            ? "ზარის შემოწმება ვერ დასრულდა — მხოლოდ ჩანაწერებია გამოყენებული."
+        : "";
+      out.innerHTML =
+        "<b>" + esc(head) + "</b>\n\n" + esc(j.message || "") +
+        (j.case_id ? "\n\n<b>Case:</b> " + esc(j.case_id) : "") +
+        "<div class='cav'>" + (prov ? esc(prov) + "<br>" : "") +
+        (j.caveats || []).map(esc).join("<br>") +
+        (j.phrasing === "deterministic" ? "<br>(wording assistant not in use)" : "") +
+        "</div>";
+    } catch (e) {
+      out.className = "on err";
+      out.textContent = "შემოწმება ვერ დასრულდა. არაფერი შეცვლილა. სცადე ხელახლა.";
+    } finally {
+      send.disabled = false; send.textContent = "გაგზავნა";
+    }
+  });
+
+  // ---- attach a launcher to the blocked close card -------------------
+  // Best-effort and non-fatal: if the anchor is not found the tab entry
+  // still works, and nothing on the page is modified.
+  function attach() {
+    try {
+      // D-9, measured on the live close card 2026-09-10: the action bar is
+      // #closeCard .closebar and the close button is #logoutBtn. The two
+      // selectors the frozen block looked for exist nowhere in this app;
+      // they are kept as trailing fallbacks.
+      var anchor = document.getElementById("logoutBtn")
+                || document.querySelector("[data-close-card-actions]")
+                || document.getElementById("closeShiftBtn");
+      if (!anchor) return;
+      // Idempotent by our own button presence, so nothing is ever written to
+      // an element the app owns. The close card re-renders and takes our
+      // button with it; the interval below puts it back.
+      if (document.getElementById("aiHelpLaunch")) return;
+      var b = document.createElement("button");
+      b.type = "button";
+      b.id = "aiHelpLaunch";
+      b.className = "ai-help-launch";
+      b.textContent = "დახმარება";
+      b.addEventListener("click", function (e) {
+        e.preventDefault(); e.stopPropagation();
+        window.openShiftCloseHelp(null);
+      });
+      anchor.parentNode.insertBefore(b, anchor.nextSibling);
+    } catch (e) { /* never break the close card */ }
+  }
+  if (document.readyState !== "loading") attach();
+  else document.addEventListener("DOMContentLoaded", attach);
+  setInterval(attach, 4000);   // the close card re-renders; re-attach idempotently
+})();
+</script>
