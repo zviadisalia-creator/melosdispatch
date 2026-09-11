@@ -910,7 +910,7 @@ function pymd(s){var m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||''));return 
 /* „გეგმა და რეალობა" დროებით დამალულია — კოდი ადგილზეა (`rPlan`), მხოლოდ
    ტაბი მოხსნილია სიიდან. დასაბრუნებლად უბრალოდ დააბრუნე ['plan','გეგმა და რეალობა']. */
 const DTABS=[['board','ჩემი დაფა'],['liveboard','ჩემი მძღოლები'],['liveloads','ჩემი ტვირთები'],['profile','ჩემი პროფილი'],['worklog','ჩემი ნამუშევარი']];
-const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['debt','ძველი ვალი'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['expenses','ხარჯები'],['paymix','გადახდის მეთოდები'],['closes','დახურვები']];
+const MTABS=[['overview','მიმოხილვა'],['liveboard','ცოცხალი დაფა'],['liveloads','ცოცხალი ტვირთები'],['coverage','მძღოლების სია'],['drivers','მძღოლების რეესტრი'],['leaderboard','რეიტინგი'],['exceptions','გამონაკლისები'],['analysis','ანალიზი'],['invoices','ინვოისები'],['receivables','მისაღები'],['overdue','ვადაგადაცილება'],['debt','ძველი ვალი'],['payroll','მძღ. ხელფასები'],['disppay','დისპ. ხელფასები'],['expenses','ხარჯები'],['paymix','გადახდის მეთოდები'],['closes','დახურვები'],['health','სისტემის ჯანმრთელობა']];
 
 function enterAs(kind){
   $('login').classList.add('hidden'); $('app').classList.remove('hidden');
@@ -950,7 +950,101 @@ function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if
 
 function render(){
   if(ROLE==='disp'){ if(TAB==='board')return rBoard(); if(TAB==='plan')return rPlan(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
-  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,debt:rDebt,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,paymix:rPayMix,closes:rCloses}[MTAB])();
+  ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,debt:rDebt,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,paymix:rPayMix,closes:rCloses,health:rHealth}[MTAB])();
+}
+
+/* ---------- სისტემის ჯანმრთელობა (URGENT-NOVA-POST-R3-003 · Scope D) ----------
+   მხოლოდ მენეჯმენტი, მხოლოდ კითხვა. ყველა მოთხოვნა მიდის მომხმარებლის საკუთარი
+   სესიით და არსებული RLS-ით (webhook_events / call_analysis = is_management,
+   call_logs = authenticated, quo_phone_numbers = is_known). ახალი ცხრილი, ფუნქცია
+   ან სერვერი არ არის. ფერი მხოლოდ იქ, სადაც პირობა იზომება; რიგი (backlog) არ
+   არის ავარია. Shift Close-ის წითელი კარიბჭე ბიზნეს-შედეგია და აქ არ ჩანს. */
+var HEALTH={loading:false, at:null, err:null, m:null};
+function hAge_(ts){ if(!ts) return null; var t=Date.parse(ts); return isFinite(t)?Math.max(0,(Date.now()-t)/60000):null; }
+function hAgeTxt_(min){ if(min==null) return '—'; if(min<1) return '< 1 წთ'; if(min<120) return Math.round(min)+' წთ'; if(min<48*60) return (min/60).toFixed(1)+' სთ'; return Math.round(min/1440)+' დღე'; }
+function hTs_(ts){ return ts? new Date(ts).toLocaleString('ka-GE'):'—'; }
+function hCls_(st){ return st==='g'?'g':(st==='r'?'r':(st==='y'?'w':'')); }
+function hChip_(st){ var L={g:'ნორმა',y:'ყურადღება',r:'პრობლემა',n:'ზღვარი არ აქვს'}; var C={g:'g',y:'y',r:'r',n:''}; return "<span class='chip "+C[st]+"'><span class='dot'></span>"+L[st]+"</span>"; }
+async function loadHealth_(){
+  if(HEALTH.loading) return; HEALTH.loading=true; HEALTH.err=null;
+  if(MTAB==='health') rHealth();
+  try{
+    var now=Date.now(), iso=function(ms){ return new Date(ms).toISOString(); };
+    var d24=iso(now-24*3600e3), d1=iso(now-3600e3);
+    var q=await Promise.all([
+      sb.from('webhook_events').select('received_at').order('received_at',{ascending:false}).limit(1),
+      sb.from('webhook_events').select('id',{count:'exact',head:true}).is('processed_at',null),
+      sb.from('webhook_events').select('received_at').is('processed_at',null).order('received_at',{ascending:true}).limit(1),
+      sb.from('call_logs').select('created_at').order('created_at',{ascending:false}).limit(1),
+      sb.from('call_logs').select('id',{count:'exact',head:true}).gte('created_at',d1),
+      sb.from('call_logs').select('quo_call_id,created_at,status,duration_seconds,quo_user_id,quo_phone_id,dispatcher_name').gte('created_at',d24).order('created_at',{ascending:false}).limit(2000),
+      sb.from('call_analysis').select('analyzed_at').eq('transcript_status','Completed').order('analyzed_at',{ascending:false}).limit(1),
+      sb.from('call_analysis').select('quo_call_id',{count:'exact',head:true}).gte('analyzed_at',d1),
+      sb.from('quo_phone_numbers').select('phone_number_id,updated_at').limit(5000)
+    ]);
+    for(var i=0;i<q.length;i++){ if(q[i].error) throw new Error('#'+(i+1)+': '+(q[i].error.message||q[i].error.code)); }
+    var calls=q[5].data||[];
+    /* ანალიზის მოლოდინი: ბოლო 24 სთ-ის დასრულებული ≥10 წმ ზარი, რომელსაც call_analysis-ში ჩანაწერი ჯერ არ აქვს */
+    var elig=calls.filter(function(c){ return c.quo_call_id && c.status==='completed' && (c.duration_seconds||0)>=10; });
+    var have={}, ids=elig.map(function(c){ return c.quo_call_id; });
+    for(var k=0;k<ids.length;k+=100){
+      var r=await sb.from('call_analysis').select('quo_call_id').in('quo_call_id',ids.slice(k,k+100));
+      if(r.error) throw new Error('analysis ids: '+(r.error.message||r.error.code));
+      (r.data||[]).forEach(function(x){ have[x.quo_call_id]=1; });
+    }
+    var pend=elig.filter(function(c){ return !have[c.quo_call_id]; });
+    var oldestPend=pend.reduce(function(m,c){ return (!m||c.created_at<m)?c.created_at:m; },null);
+    var cat={}, catMax=null; (q[8].data||[]).forEach(function(p){ cat[p.phone_number_id]=1; if(!catMax||p.updated_at>catMax) catMax=p.updated_at; });
+    var unU={}, unP={};
+    calls.forEach(function(c){
+      if(!c.dispatcher_name){ var u=c.quo_user_id||'(ცარიელი)'; unU[u]=(unU[u]||0)+1; }
+      if(c.quo_phone_id && !cat[c.quo_phone_id]) unP[c.quo_phone_id]=(unP[c.quo_phone_id]||0)+1;
+    });
+    HEALTH.m={
+      whLatest:(q[0].data[0]||{}).received_at||null, whUnproc:q[1].count||0, whOldestUnproc:(q[2].data[0]||{}).received_at||null,
+      clLatest:(q[3].data[0]||{}).created_at||null, cl1h:q[4].count||0, cl24h:calls.length, clCapped:calls.length>=2000,
+      pend:pend.length, pendOldest:oldestPend, elig:elig.length,
+      anLatest:(q[6].data[0]||{}).analyzed_at||null, an1h:q[7].count||0,
+      unU:unU, unP:unP, catMax:catMax, catN:Object.keys(cat).length
+    };
+    HEALTH.at=new Date().toISOString();
+  }catch(e){ console.error(e); HEALTH.err=String(e&&e.message||e); }
+  HEALTH.loading=false;
+  if(MTAB==='health') rHealth();
+}
+function rHealth(){
+  if(!isMgmtView()){ $('view').innerHTML=ph('სისტემის ჯანმრთელობა','მხოლოდ მენეჯმენტისთვის'); return; }
+  if(!HEALTH.m && !HEALTH.loading && !HEALTH.err){ loadHealth_(); return; }
+  var head=ph('სისტემის ჯანმრთელობა','Quo → ზარები → ანალიზი · მხოლოდ ნედლი მნიშვნელობები · '+(HEALTH.at?('განახლდა '+hTs_(HEALTH.at)):'იტვირთება…'))+
+    "<div style='display:flex;gap:8px;align-items:center;margin-bottom:12px'><button class='fixbtn' onclick='loadHealth_()' "+(HEALTH.loading?'disabled':'')+">"+(HEALTH.loading?'იტვირთება…':'განახლება')+"</button>"+
+    "<span class='muted' style='font-size:12px'>Shift Close-ის წითელი კარიბჭე ბიზნეს-შედეგია — აქ არ ითვლება.</span></div>";
+  if(HEALTH.err && !HEALTH.m){ $('view').innerHTML=head+"<div class='card p'><b style='color:var(--crit)'>ვერ ჩაიტვირთა:</b> "+esc(HEALTH.err)+"</div>"; return; }
+  if(!HEALTH.m){ $('view').innerHTML=head+"<div class='card p muted'>იტვირთება…</div>"; return; }
+  var m=HEALTH.m;
+  var whAge=hAge_(m.whLatest), clAge=hAge_(m.clLatest), anAge=hAge_(m.anLatest), unAge=hAge_(m.whOldestUnproc), pAge=hAge_(m.pendOldest);
+  var fr=function(a){ return a==null?'r':(a<=60?'g':(a<=360?'y':'r')); };
+  var sWh=fr(whAge);
+  var sUn=m.whUnproc===0?'g':((unAge!=null&&unAge<15)?'y':'r');
+  var sCl=fr(clAge);
+  var sPend=m.pend===0||(pAge!=null&&pAge<120)?'g':((anAge!=null&&anAge<=120)?'y':'r');
+  var sAn=m.elig===0?'n':(anAge!=null&&anAge<=120?'g':(anAge!=null&&anAge<=360?'y':'r'));
+  var nU=Object.keys(m.unU).length, nP=Object.keys(m.unP).length;
+  var sU=nU?'y':'g', sP=nP?'y':'g';
+  var list=function(o){ var k=Object.keys(o).sort(function(a,b){ return o[b]-o[a]; }); return k.length? k.map(function(x){ return esc(x)+' ('+o[x]+')'; }).join(', '):'—'; };
+  var row=function(lab,val,raw,st){ return "<tr><td><b>"+lab+"</b></td><td class='num'>"+val+"</td><td class='muted' style='font-size:12px'>"+raw+"</td><td>"+hChip_(st)+"</td></tr>"; };
+  var rows=[
+    row('ბოლო webhook მიღებულია', hAgeTxt_(whAge)+' წინ', hTs_(m.whLatest)+' · ≤60 წთ ნორმა, ≤6 სთ ყურადღება', sWh),
+    row('დაუმუშავებელი webhook', m.whUnproc, 'უძველესი: '+(m.whOldestUnproc?(hTs_(m.whOldestUnproc)+' · '+hAgeTxt_(unAge)+' წინ'):'—')+' · 0 ნორმა, <15 წთ ყურადღება', sUn),
+    row('ბოლო ზარი call_logs-ში', hAgeTxt_(clAge)+' წინ', hTs_(m.clLatest)+' · ბოლო 1 სთ: '+m.cl1h+' · ბოლო 24 სთ: '+m.cl24h+(m.clCapped?' (2000+)':''), sCl),
+    row('ანალიზს ელოდება (24 სთ)', m.pend+' / '+m.elig, 'დასრულებული ≥10 წმ ზარი call_analysis-ის ჩანაწერის გარეშე · უძველესი: '+(m.pendOldest?(hTs_(m.pendOldest)+' · '+hAgeTxt_(pAge)+' წინ'):'—')+' · რიგი ≠ ავარია, თუ ანალიზი მიდის', sPend),
+    row('ბოლო წარმატებული ანალიზი', hAgeTxt_(anAge)+' წინ', hTs_(m.anLatest)+' · ბოლო 1 სთ: '+m.an1h, sAn),
+    row('მიუბმელი Quo მომხმარებელი (24 სთ)', nU, list(m.unU)+' · ზარი დისპეტჩერის სახელის გარეშე', sU),
+    row('კატალოგში უცნობი Quo ნომერი (24 სთ)', nP, list(m.unP), sP),
+    row('ნომრების კატალოგის ბოლო განახლება', hAgeTxt_(hAge_(m.catMax))+' წინ', hTs_(m.catMax)+' · '+m.catN+' ნომერი · ზღვარი არ აქვს — მნიშვნელოვანია მხოლოდ მაშინ, როცა ზემოთ უცნობი ნომერი ჩანს', 'n'),
+    row('ფრონტენდის ჰოსტი', esc(location.host), 'ჰოსტებს შორის ვერსიის შედარება ამ ხედში არ იზომება', 'n')
+  ].join('');
+  $('view').innerHTML=head+(HEALTH.err?"<div class='card p' style='margin-bottom:12px'><b style='color:var(--crit)'>ბოლო განახლება ვერ მოხერხდა:</b> "+esc(HEALTH.err)+" — ქვემოთ წინა მნიშვნელობებია.</div>":"")+
+    "<div class='card'><div class='tablewrap'><table style='min-width:720px'><thead><tr><th>მაჩვენებელი</th><th>მნიშვნელობა</th><th>ნედლი მონაცემი / ზღვარი</th><th>სტატუსი</th></tr></thead><tbody>"+rows+"</tbody></table></div></div>";
 }
 
 /* ---------- DISPATCHER ---------- */
