@@ -349,14 +349,16 @@ function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ?
 async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: COID() }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
 /* გამოცხადებულ სიაზე — ზარები ზუსტად იმ ტვირთებზე მოწმდება, რაც დისპეტჩერმა აირჩია */
 let PCONT = [];
+let PCONT_ERR = false;   /* SCCEV-001: the contact RPC failed -> calls gate is UNKNOWN, never green */
 async function loadPlanContacts(){
+  PCONT_ERR = false;
   try{
     var ons=planLoads_(ymd_(nextWorkDay_())).map(function(l){ return l.order_number; });
     if(!ons.length){ PCONT=[]; return; }
     const { data, error } = await sb.rpc('contact_check_orders', { p_orders: ons, p_company_id: COID() });
     if(error) throw error;
     PCONT = data || [];
-  }catch(e){ console.error(e); PCONT = []; }
+  }catch(e){ console.error(e); PCONT = []; PCONT_ERR = true; }
 }
 var BFALL={};   // broker_flags — ყველა ჩანაწერი, customer-ის მიხედვით
 async function loadBrokerFlags(){
@@ -1467,13 +1469,19 @@ function rBoard(){
      მწვანეა და ასეც უნდა ეწეროს. აქამდე ასეთ დისპეტჩერს წითელი ხვდებოდა
      და „ხვალინდელ სიაში ჯერ ტვირთი არ არის", რაც სიმართლე არ იყო. */
   var contactN=(PCONT||[]).length;              /* გამოცხადებული სიის ტვირთები */
+  /* SCCEV-001: ხვალინდელი სიის ტვირთი, რომელზეც ზარების მონაცემი არ მოვიდა, უცნობია —
+     უცნობი მწვანე არ არის (იგივე წესი, რაც სერვერზე close_gates_co-ში). */
+  var pcSeen={}; (PCONT||[]).forEach(function(r){ pcSeen[r.order_number]=1; });
+  var unknownOns=PLAN2.map(function(l){ return l.order_number; })
+    .filter(function(on){ return !pcSeen[on] && !waivOk_('calls',on,tday); });
   var exemptAll=(contactN>0 && callList.length===0);
   /* სანამ თუნდაც ერთი ზარი მოწმდება, gate მწვანე არ ხდება — მაგრამ წითელიც არაა */
   var callWaived=waivOk_('calls_all','',tday);
-  var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && (callList.length>0 || exemptAll || contactN===0)));
+  var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && unknownOns.length===0));
   var callGate_="<div class='gate "+(callOkAll?'ok':(waitN&&!callP.length?'wait':'no'))+"'><div class='ic'>"+(callOkAll?'✓':(waitN&&!callP.length?'◔':'!'))+
     "</div><div class='t'><b>ზარები · Pickup / Delivery</b>"+
-    (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+"</div>"+
+    (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+
+    (unknownOns.length?("<span style='color:var(--crit);font-weight:600;font-size:12px'> · "+unknownOns.length+" ტვირთზე ზარების მონაცემი ვერ ჩაიტვირთა — განაახლე გვერდი</span>"):'')+"</div>"+
     (callP.length?waivChip_('calls_all','','ზარები — '+callP.length+' ტვირთი',tday):'')+"</div>"+
     (callList.length
       ? ("<div class='tablewrap' style='padding:0 15px 12px 49px'><table style='min-width:720px'><thead><tr>"+
@@ -1579,16 +1587,33 @@ async function loadClose(){
     SCLOSE=r.data||null; }catch(e){ console.error(e); SCLOSE=null; }
 }
 async function closeShift(){
+  /* SCCEV-001: the server decides. shift_close_submit() re-evaluates every gate
+     (close_gates_co), audits the attempt in close_event, and writes shift_close
+     only when every required gate is green. Red, pending and unknown refuse;
+     an approved waiver is the only exception. There is no direct table write. */
+  var btn=document.getElementById('logoutBtn'); if(btn) btn.disabled=true;
+  var LBL={roster:'კვირის როსტერი', standard:'ტვირთების სტანდარტი', calls:'ზარები',
+           'calls:pending':'ზარი ჯერ მოწმდება', invoice:'ინვოისი და BOL', check:'ჩეკი',
+           appt:'Copart appointment', gatepass:'Gate Pass', work_day_mismatch:'დღე შეიცვალა — განაახლე გვერდი'};
   try{
     var day=ymd_(nextWorkDay_());
-    var frozen=planLoads_(day).map(function(l){ return l.order_number; });
-    var row={company_id:COID(), dispatcher_name:MYD(), work_day:day, closed_at:new Date().toISOString(), closed_by:USER.email,
-             gates:{ok:true, orders:frozen, count:frozen.length,
-                    gross:planLoads_(day).reduce(function(s,l){ return s+grossOf_(l); },0)}};
-    var res=await sb.from('shift_close').upsert(row,{onConflict:'company_id,dispatcher_name,work_day'});
+    var PLd=planLoads_(day);
+    var frozen=PLd.map(function(l){ return l.order_number; });
+    var client={orders:frozen, count:frozen.length, rem:0,          /* the button is enabled only at rem===0 */
+                gross:PLd.reduce(function(s,l){ return s+grossOf_(l); },0)};
+    var res=await sb.rpc('shift_close_submit',{p_company_id:COID(), p_work_day:day, p_client:client,
+                                               p_dispatcher:(VIEWAS||null)});
     if(res.error) throw res.error;
-    SCLOSE=row; toast('ცვლა დახურულია ✓'); render();
-  }catch(e){ console.error(e); toast('ვერ დაიხურა'); }
+    var r=res.data||{};
+    if(r.closed){
+      await loadClose();
+      toast(r.already_closed?'ცვლა უკვე დახურულია ✓':'ცვლა დახურულია ✓'); render(); return;
+    }
+    var why=(r.reasons||[]).map(function(k){ var b=String(k).split(':')[0]; return LBL[k]||LBL[b]||k; });
+    toast('ცვლა ვერ დაიხურა — სერვერის შემოწმება: '+why.join(', '));
+    try{ await loadPlanContacts(); }catch(e){ console.error(e); }
+    render();
+  }catch(e){ console.error(e); toast('ვერ დაიხურა'); if(btn) btn.disabled=false; }
 }
 var CHKARM=null, CHKKIND='check';
 function chkArm(enc){
