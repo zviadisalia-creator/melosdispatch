@@ -972,13 +972,13 @@ async function loadHealth_(){
     var now=Date.now(), iso=function(ms){ return new Date(ms).toISOString(); };
     var d24=iso(now-24*3600e3), d1=iso(now-3600e3);
     var q=await Promise.all([
-      sb.from('webhook_events').select('received_at').order('received_at',{ascending:false}).limit(1),
+      sb.from('webhook_events').select('received_at').not('received_at','is',null).order('received_at',{ascending:false}).limit(1),
       sb.from('webhook_events').select('id',{count:'exact',head:true}).is('processed_at',null),
       sb.from('webhook_events').select('received_at').is('processed_at',null).order('received_at',{ascending:true}).limit(1),
-      sb.from('call_logs').select('created_at').order('created_at',{ascending:false}).limit(1),
+      sb.from('call_logs').select('created_at').not('created_at','is',null).order('created_at',{ascending:false}).limit(1),
       sb.from('call_logs').select('id',{count:'exact',head:true}).gte('created_at',d1),
       sb.from('call_logs').select('quo_call_id,created_at,status,duration_seconds,quo_user_id,quo_phone_id,dispatcher_name').gte('created_at',d24).order('created_at',{ascending:false}).limit(2000),
-      sb.from('call_analysis').select('analyzed_at').eq('transcript_status','Completed').order('analyzed_at',{ascending:false}).limit(1),
+      sb.from('call_analysis').select('analyzed_at').eq('transcript_status','Completed').not('analyzed_at','is',null).order('analyzed_at',{ascending:false}).limit(1),
       sb.from('call_analysis').select('quo_call_id',{count:'exact',head:true}).gte('analyzed_at',d1),
       sb.from('quo_phone_numbers').select('phone_number_id,updated_at').limit(5000)
     ]);
