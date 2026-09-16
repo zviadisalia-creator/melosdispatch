@@ -1440,7 +1440,9 @@ function rBoard(){
      ამ თარიღებამდე დარჩენილი ვალი დისპეტჩერს აღარ უჩანს და ცვლას არ კეტავს —
      ძველი ვალი მენეჯმენტის მხარეს იმართება, არა ცვლის დახურვისას. */
   var delDayOf_=function(l){ return String(l.delivery_completed||'').slice(0,10); };
-  var delivered=L.filter(function(l){ return delDayOf_(l) && delDayOf_(l)>=DOC_FROM; });
+  /* MCSR-006 B1: ინვოისი/ჩეკი — ვინც ტვირთი დაჯავშნა, მისი ვალია (მძღოლის გადასვლა ვალს არ გადაიტანს) */
+  var LD=docLoads_();
+  var delivered=LD.filter(function(l){ return delDayOf_(l) && delDayOf_(l)>=DOC_FROM; });
   /* SD-დან ინვოისის სტატუსი საათში ერთხელ მოდის — დისპეტჩერს იმდენ ხანს
      ოფისში ჯდომა არ უნდა უწევდეს. „გავაგზავნე“ მონიშვნა gate-ს მაშინვე ხურავს,
      SD მერე ადასტურებს (მენეჯმენტს დაუდასტურებელი მონიშვნა გამონაკლისებში უჩანს). */
@@ -1454,7 +1456,7 @@ function rBoard(){
        ეჭვობს დოკუმენტს, მაგრამ დისპეტჩერს ახსნის საშუალება უნდა ჰქონდეს. */
     if(waivOk_('invoice',l.order_number,tday)) return false;
     return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
-  var chkP=L.filter(function(l){ return chkOpen_(l) && chkDueDay_(l)>=CHK_FROM; })
+  var chkP=LD.filter(function(l){ return chkOpen_(l) && chkDueDay_(l)>=CHK_FROM; })
             .sort(function(a,b){ return chkDueDay_(b).localeCompare(chkDueDay_(a)); });
 
   function gate_(title, n, sub, kind, subj){
@@ -2105,7 +2107,7 @@ function weekLabel(mon){
 async function loadLiveLoads(){
   var all=[], from=0;
   while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin').eq('company_id', COID()).is('deleted_at', null).order('order_number',{ascending:true}).range(from, from+999);
+    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin,booking_dispatcher').eq('company_id', COID()).is('deleted_at', null).order('order_number',{ascending:true}).range(from, from+999);
     if(res.error){ console.error(res.error); break; }
     var d=res.data||[]; all=all.concat(d);
     if(d.length<1000) break;
@@ -2253,6 +2255,13 @@ function mineWork_(l){
   return !!(l.driver_name && dispOfDriver_(l.driver_name)===MYD());
 }
 function myLoads_(){ return (LIVE||[]).filter(mineWork_); }
+/* MCSR-006 B1 — same rule as close_gates_co: booked by me, or (booking unknown) my current work */
+function docMine_(l){
+  if(!USER || isMgmtView()) return true;
+  if(l.booking_dispatcher) return l.booking_dispatcher===MYD();
+  return mineWork_(l);
+}
+function docLoads_(){ return (LIVE||[]).filter(docMine_); }
 
 function boardDrivers_(){
   var L=LIVE||[];
@@ -5272,9 +5281,12 @@ try{
     ctx = collectContext(orderHint);
     out.className = ""; out.textContent = ""; box.value = "";
     send.disabled = false; send.textContent = "გაგზავნა";
-    ctxEl.textContent = "Company: " + (ctx.company_id ? "selected" : "not detected") +
-      " · work day: " + (ctx.work_day || "not detected") +
-      " · orders attached: " + ctx.order_numbers.length;
+    /* SC005: the real company name, never "selected" */
+    var coName = null;
+    try { coName = (typeof CO !== "undefined" && CO && CO.company_id === ctx.company_id) ? (CO.legal_name || CO.code) : null; } catch (e) {}
+    ctxEl.textContent = "კომპანია: " + (coName || (ctx.company_id ? "—" : "ვერ დადგინდა")) +
+      " · სამუშაო დღე: " + (ctx.work_day || "ვერ დადგინდა") +
+      " · " + (ctx.order_numbers.length ? ("ტვირთები: " + ctx.order_numbers.join(", ")) : "ტვირთები: დღის სერვერის სია (ნომერი შეტყობინებაშიც შეგიძლია ჩაწერე)");
     modal.classList.add("on");
     box.focus();
   };
@@ -5286,6 +5298,13 @@ try{
   send.addEventListener("click", async function () {
     var text = (box.value || "").trim();
     if (!text) { box.focus(); return; }
+    /* SC005: re-read company and work day at send time, so a company or day
+       switch while the modal was open can never send stale context. */
+    try {
+      var fresh = collectContext(null);
+      if (fresh.company_id && fresh.company_id !== ctx.company_id) { ctx.company_id = fresh.company_id; ctx.order_numbers = []; ctx.ui_gate_snapshot = fresh.ui_gate_snapshot; }
+      if (fresh.work_day) ctx.work_day = fresh.work_day;
+    } catch (e) {}
     if (!ctx || !ctx.company_id || !ctx.work_day) {
       out.className = "on err";
       out.textContent = "ვერ დავადგინე კომპანია ან სამუშაო დღე ამ ეკრანიდან. " +
@@ -5317,7 +5336,8 @@ try{
           work_day: ctx.work_day,
           message: text,
           order_numbers: ctx.order_numbers,
-          ui_gate_snapshot: ctx.ui_gate_snapshot
+          ui_gate_snapshot: ctx.ui_gate_snapshot,
+          context_version: "SC005-help-ka-1"
         })
       });
       var j = await res.json();
@@ -5345,14 +5365,14 @@ try{
         : "";
       out.innerHTML =
         "<b>" + esc(head) + "</b>\n\n" + esc(j.message || "") +
-        (j.case_id ? "\n\n<b>Case:</b> " + esc(j.case_id) : "") +
+        (j.case_id && String(j.message || "").indexOf(j.case_id) < 0 ? "\n\n<b>ქეისი:</b> " + esc(j.case_id) : "") +
+        (j.request_id && (j.outcome === "error" || j.outcome === "system_issue") ? "\n<span style='opacity:.7'>მოთხოვნის ნომერი: " + esc(j.request_id) + "</span>" : "") +
         "<div class='cav'>" + (prov ? esc(prov) + "<br>" : "") +
         (j.caveats || []).map(esc).join("<br>") +
-        (j.phrasing === "deterministic" ? "<br>(wording assistant not in use)" : "") +
         "</div>";
     } catch (e) {
       out.className = "on err";
-      out.textContent = "შემოწმება ვერ დასრულდა. არაფერი შეცვლილა. სცადე ხელახლა.";
+      out.textContent = "შემოწმება ვერ დასრულდა (კავშირის შეცდომა — სერვერმა პასუხი არ დააბრუნა, ქეისი ამ მოთხოვნაზე არ შეინახა). არაფერი შეცვლილა. სცადე ხელახლა.";
     } finally {
       send.disabled = false; send.textContent = "გაგზავნა";
     }
