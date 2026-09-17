@@ -5808,7 +5808,11 @@ try{
         body: JSON.stringify(body)
       });
       var j = null; try { j = await res.json(); } catch (e) {}
-      if (res.status === 401 || res.status === 403) return { kind: "auth", json: j };
+      // Deployed Edge contract: 401 = no/invalid session; 403 + outcome "refused" is a
+      // real server answer (e.g. not authorized for this company) and is shown as such;
+      // 503 + outcome "error" carries the technical message and any saved case id.
+      if (res.status === 401) return { kind: "auth", json: j };
+      if (res.status === 403 && !(j && j.outcome === "refused" && typeof j.message === "string")) return { kind: "auth", json: j };
       if (!j || typeof j.message !== "string" || !j.outcome) return { kind: res.ok ? "uncertain" : "failed" };
       return { kind: "ok", json: j };
     } catch (e) {
