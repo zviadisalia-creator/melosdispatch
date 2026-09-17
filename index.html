@@ -5412,3 +5412,545 @@ try{
   setInterval(attach, 4000);   // the close card re-renders; re-attach idempotently
 })();
 </script>
+
+<!-- =====================================================================
+     SUPPORT-NOVA-001 — AI ASSISTANT CHAT (append-only tail, 2026-09-17)
+     Appended after the SC005 Help tail. No earlier byte of index.html is
+     changed: candidate.startsWith(baseline 29e2e9be) === true.
+
+     Kill switch: set AI_CHAT_V2 below to false and the page behaves exactly
+     like the baseline (the old "დახმარება" modal is untouched).
+
+     What this block does                 What it never does
+       * one labelled launcher on every     * write any business table
+         screen after login                 * enable/disable a gate or button
+       * side panel (wide) / full screen    * choose a case type, model or rule
+         (narrow), free text only           * treat browser text as authority
+       * posts to the SAME Edge function    * store anything outside this tab
+         with the SAME body as the old
+         modal; the server derives the
+         dispatcher from the session and
+         re-authorizes company and order
+       * "ვკითხო ასისტენტს" on red close-
+         card rows: passes gate/order as
+         context, never sends by itself
+       * keeps the transcript and draft in
+         sessionStorage keyed by
+         auth user + company; wiped on
+         logout, user change and company
+         switch
+===================================================================== -->
+<style>
+  #aiChatLaunch{position:fixed;right:18px;bottom:18px;z-index:9990;display:none;align-items:center;gap:8px;
+    padding:11px 18px;border-radius:999px;border:0;background:#125c7a;color:#fff;font:600 15px/1.2 system-ui,sans-serif;
+    box-shadow:0 6px 22px rgba(0,0,0,.25);cursor:pointer}
+  #aiChatLaunch.on{display:flex}
+  #aiChatLaunch:focus-visible,#aiChat button:focus-visible,#aiChat textarea:focus-visible{outline:3px solid #2a78d6;outline-offset:2px}
+  #aiChatLaunch svg{width:18px;height:18px;flex:none}
+  body.ai-chat-open #aiChatLaunch{display:none}
+  body.ai-chat-v2 #aiHelpLaunch{display:none!important}
+  body.ai-chat-v2{padding-bottom:76px}
+  #aiChat{box-sizing:border-box;position:fixed;top:0;right:0;bottom:0;width:420px;max-width:100%;z-index:9995;display:none;flex-direction:column;
+    background:#fff;color:#173346;border-left:1px solid #d9e3e9;box-shadow:-8px 0 30px rgba(0,0,0,.12);font:15px/1.6 system-ui,sans-serif}
+  #aiChat.on{display:flex}
+  @media (min-width:1100px){ body.ai-chat-open{margin-right:420px} }
+  @media (max-width:760px){ #aiChat{width:100%;border-left:0} }
+  #aiChat .hd{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid #d9e3e9}
+  #aiChat .hd .mk{width:34px;height:34px;border-radius:10px;background:#125c7a;color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+  #aiChat .hd .tt{font-weight:600;font-size:16px;margin:0}
+  #aiChat .hd .co{font-size:12px;color:#506877;margin:0}
+  #aiChat .hd .x{margin-left:auto;border:1px solid #d9e3e9;background:#fff;border-radius:8px;min-width:44px;min-height:44px;font-size:20px;cursor:pointer;color:#173346}
+  #aiChat .bd{flex:1;overflow:auto;padding:16px 14px}
+  #aiChat .welcome h2{font-size:21px;line-height:1.4;margin:6px 0 8px;font-weight:600}
+  #aiChat .welcome p{margin:0;color:#506877}
+  #aiChatLog{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+  #aiChat .m{max-width:94%;overflow-wrap:anywhere}
+  #aiChat .m.u{align-self:flex-end}
+  #aiChat .m .sp{font-size:12px;color:#506877;margin:0 0 3px}
+  #aiChat .m.u .sp{text-align:right}
+  #aiChat .m .bb{padding:11px 14px;border-radius:13px;white-space:pre-wrap;background:#edf5f8}
+  #aiChat .m.u .bb{background:#125c7a;color:#fff;border-bottom-right-radius:4px}
+  #aiChat .m.a .bb{border-bottom-left-radius:4px}
+  #aiChat .m .st{display:inline-block;font-size:12px;font-weight:600;border-radius:6px;padding:2px 8px;margin-bottom:6px}
+  #aiChat .st.act{background:#e6f0fb;color:#1c4f8a}
+  #aiChat .st.wait{background:#fff4e0;color:#7a5010}
+  #aiChat .st.tech{background:#fdecec;color:#8a2020}
+  #aiChat .st.ok{background:#e7f6ec;color:#1f6a36}
+  #aiChat .st.mgmt{background:#f1ecfb;color:#4b2d8a}
+  #aiChat .m .nt{font-size:12px;color:#506877;margin:4px 0 0}
+  #aiChat .m .nt.bad{color:#9a2b2b}
+  #aiChat .m .cv{font-size:12px;color:#506877;margin-top:8px}
+  #aiChat .m .rt{margin-top:6px;border:1px solid #d9e3e9;background:#fff;border-radius:8px;padding:6px 12px;min-height:40px;cursor:pointer;font:inherit;font-size:13px}
+  #aiChat .ft{border-top:1px solid #d9e3e9;padding:10px 14px 14px}
+  #aiChatCtx{display:none;font-size:12px;background:#f3f6f8;border:1px solid #d9e3e9;border-radius:8px;padding:6px 8px;margin-bottom:8px}
+  #aiChatCtx.on{display:block}
+  #aiChatCtx.chg{background:#fff4e0;border-color:#efc67e}
+  #aiChatCtx button{font:inherit;font-size:12px;margin:4px 6px 0 0;border:1px solid #cfcec5;background:#fff;border-radius:6px;padding:4px 8px;min-height:32px;cursor:pointer}
+  #aiChat label{display:block;font-weight:600;font-size:14px;margin-bottom:6px}
+  #aiChatMsg{display:block;width:100%;box-sizing:border-box;min-height:88px;max-height:40vh;resize:vertical;border:1px solid #cfd9df;border-radius:10px;padding:9px 10px;font:inherit;color:#173346;background:#fff}
+  #aiChat .sr{display:flex;align-items:center;gap:10px;margin-top:8px}
+  #aiChatStatus{font-size:12px;color:#506877;flex:1}
+  #aiChatStatus.bad{color:#9a2b2b}
+  #aiChatSend{border:0;border-radius:10px;padding:10px 20px;min-height:44px;background:#125c7a;color:#fff;font:600 15px system-ui,sans-serif;cursor:pointer}
+  #aiChatSend[disabled]{opacity:.55;cursor:default}
+  .ai-ask{margin-left:8px;font-size:12px;padding:3px 9px;border-radius:6px;border:1px solid #9cc3d6;background:#eef6fa;color:#125c7a;cursor:pointer;white-space:nowrap}
+</style>
+
+<button id="aiChatLaunch" type="button" aria-haspopup="dialog" aria-controls="aiChat">
+  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v11H9l-5 4z"/></svg>
+  <span>მიწერე AI ასისტენტს</span>
+</button>
+
+<section id="aiChat" role="dialog" aria-modal="false" aria-labelledby="aiChatTitle">
+  <div class="hd">
+    <div class="mk" aria-hidden="true">AI</div>
+    <div><p class="tt" id="aiChatTitle">AI ასისტენტი</p><p class="co" id="aiChatCo"></p></div>
+    <button class="x" id="aiChatClose" type="button" aria-label="ჩატის დახურვა">×</button>
+  </div>
+  <div class="bd" id="aiChatBody">
+    <div class="welcome" id="aiChatWelcome">
+      <h2>რა გიშლის ხელს მუშაობაში?</h2>
+      <p>მომწერე შენი სიტყვებით — მაგალითად, რატომ არ იხურავს ცვლა ან რატომ ჩანს ტვირთი წითელად. კატეგორიის არჩევა არ სჭირდება.</p>
+    </div>
+    <div id="aiChatLog" role="log" aria-live="polite" aria-label="მიმოწერა"></div>
+  </div>
+  <div class="ft">
+    <div id="aiChatCtx" aria-live="polite"></div>
+    <label for="aiChatMsg">შენი შეტყობინება</label>
+    <textarea id="aiChatMsg" maxlength="2000" placeholder="მაგ: ფიქაფზე დავურეკე, მაგრამ ზარები ისევ წითელია."></textarea>
+    <div class="sr">
+      <span id="aiChatStatus" role="status">Ctrl+Enter — გაგზავნა</span>
+      <button id="aiChatSend" type="button">გაგზავნა</button>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  var AI_CHAT_V2 = true;               // kill switch: false = baseline behaviour
+  if (!AI_CHAT_V2) return;
+
+  var EDGE_CONTEXT_VERSION = "SC005-help-ka-1"; // same body the deployed modal sends
+  var RECHECK_MS = 120000, RECHECK_MAX = 4;     // bounded automatic re-read while analysis is pending
+  var KEY_PREFIX = "md_ai_chat_v2:";
+
+  // ---- same config/session access as the SC005 tail (read-only client) ----
+  function appConf() {
+    if (appConf._c) return appConf._c;
+    var url = null, key = null;
+    try {
+      var ss = document.getElementsByTagName("script");
+      for (var i = 0; i < ss.length && !(url && key); i++) {
+        if (ss[i].src) continue;
+        var t = ss[i].textContent || "";
+        var mu = t.match(/const\s+SB_URL\s*=\s*["']([^"']+)["']/);
+        var mk = t.match(/const\s+SB_KEY\s*=\s*["']([^"']+)["']/);
+        if (mu) url = mu[1];
+        if (mk) key = mk[1];
+      }
+    } catch (e) {}
+    appConf._c = { url: url, key: key };
+    return appConf._c;
+  }
+  function client() {
+    if (client._c) return client._c;
+    var c = appConf();
+    if (!c.url || !c.key || !window.supabase || typeof window.supabase.createClient !== "function") return null;
+    try {
+      client._c = window.supabase.createClient(c.url, c.key, {
+        auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, storage: window.localStorage }
+      });
+    } catch (e) { client._c = null; }
+    return client._c;
+  }
+  async function session() {
+    try {
+      var cl = client(); if (!cl) return null;
+      var s = await cl.auth.getSession();
+      return s && s.data && s.data.session ? s.data.session : null;
+    } catch (e) { return null; }
+  }
+
+  // ---- app facts (read only) ---------------------------------------------
+  function coId()   { try { return (typeof COID === "function" ? COID() : null) || null; } catch (e) { return null; } }
+  function coName() { try { return (typeof CO !== "undefined" && CO) ? (CO.legal_name || CO.code) : null; } catch (e) { return null; } }
+  function workDay() { try { return (typeof ymd_ === "function" && typeof nextWorkDay_ === "function") ? ymd_(nextWorkDay_()) : null; } catch (e) { return null; } }
+  function appUserReady() { try { return typeof USER !== "undefined" && !!USER; } catch (e) { return false; } }
+  function remNow() { try { return document.querySelectorAll("#closeCard .gate.no, #closeCard .gate.wait").length; } catch (e) { return undefined; } }
+
+  var busy = false;
+  // ---- scoped transcript (this tab only; never authorization) ------------
+  var scope = null;   // {user, company, gen}
+  var scopeGen = 0;   // bumped on every scope change; in-flight work of an older generation is discarded
+  var state = { items: [], draft: "", draftCtx: null };
+  var recheckTimer = null;
+  function setScope(next) {
+    scopeGen++;
+    if (recheckTimer) { clearTimeout(recheckTimer); recheckTimer = null; }
+    busy = false;
+    scope = next ? { user: next.user, company: next.company, gen: scopeGen } : null;
+  }
+  function clearScope() { setScope(null); wipeAll(null); state = { items: [], draft: "", draftCtx: null }; }
+  // A request/timer started under sc may touch the chat only while sc is still
+  // the current scope AND the app still shows that company.
+  function alive(sc) { return !!(sc && scope && sc.gen === scopeGen && scope.gen === sc.gen && coId() === sc.company && appUserReady()); }
+  async function aliveAfterAwait(sc) {
+    if (!alive(sc)) return false;
+    var s = await session();
+    return !!(s && s.user && s.user.id === sc.user && alive(sc));
+  }
+  function skey(sc) { return KEY_PREFIX + sc.user + ":" + sc.company; }
+  function wipeAll(exceptKey) {
+    try {
+      for (var i = sessionStorage.length - 1; i >= 0; i--) {
+        var k = sessionStorage.key(i);
+        if (k && k.indexOf(KEY_PREFIX) === 0 && k !== exceptKey) sessionStorage.removeItem(k);
+      }
+    } catch (e) {}
+  }
+  function save() {
+    if (!scope) return;
+    try { sessionStorage.setItem(skey(scope), JSON.stringify({ items: state.items.slice(-60), draft: state.draft, draftCtx: state.draftCtx })); } catch (e) {}
+  }
+  function load(sc) {
+    state = { items: [], draft: "", draftCtx: null };
+    try {
+      var raw = sessionStorage.getItem(skey(sc));
+      if (raw) { var j = JSON.parse(raw); state.items = Array.isArray(j.items) ? j.items : []; state.draft = String(j.draft || ""); state.draftCtx = j.draftCtx || null; }
+    } catch (e) {}
+    // A reload interrupts an in-flight send: it was never confirmed.
+    state.items.forEach(function (it) { if (it.role === "u" && it.phase === "sending") it.phase = "uncertain"; });
+  }
+  // Returns false when there is no signed-in user or company.
+  async function syncScope() {
+    var s = await session();
+    var co = coId();
+    if (!s || !s.user) { if (scope || state.items.length || state.draft) { clearScope(); renderAll(); } return false; }
+    if (!co || co !== coId()) return false;   // app still loading / switching its company: do not use
+    var next = { user: s.user.id, company: co };
+    if (!scope || scope.user !== next.user || scope.company !== next.company) {
+      // user change or company switch: nothing from another scope survives
+      wipeAll(skey(next));
+      setScope(next); load(scope); pendingCtx = null; box.value = state.draft; renderAll();
+    }
+    return true;
+  }
+
+  // ---- dom ---------------------------------------------------------------
+  var $ = function (id) { return document.getElementById(id); };
+  var panel = $("aiChat"), launch = $("aiChatLaunch"), log = $("aiChatLog"), box = $("aiChatMsg"),
+      sendBtn = $("aiChatSend"), statusEl = $("aiChatStatus"), ctxEl = $("aiChatCtx"), welcome = $("aiChatWelcome");
+  document.body.classList.add("ai-chat-v2");
+
+  var pendingCtx = null;   // context offered by the most recent "ask" button, not yet confirmed for the draft
+
+  function setStatus(t, bad) { statusEl.textContent = t; statusEl.className = bad ? "bad" : ""; }
+  function uid() { try { return crypto.randomUUID(); } catch (e) { return String(Date.now()) + Math.random().toString(16).slice(2); } }
+  function ctxLabel(c) {
+    if (!c) return "";
+    var parts = [];
+    if (c.order) parts.push("ტვირთი " + c.order);
+    if (c.gate) parts.push(c.gate);
+    return parts.join(" · ");
+  }
+
+  var PHASE = {
+    sending:   ["იგზავნება…", false],
+    checking:  ["მიღებულია — ვამოწმებ", false],
+    done:      ["", false],
+    failed:    ["არ გაიგზავნა. ტექსტი შენახულია.", true],
+    uncertain: ["მიღება ვერ დადასტურდა. ტექსტი შენახულია.", true]
+  };
+  function outcomeBadge(j) {
+    var o = j && j.outcome;
+    if (o === "dispatcher_action") return ["act", "საჭიროა შენი მოქმედება"];
+    if (o === "waiting") return ["wait", "ანალიზი მიმდინარეობს — ხელახლა დარეკვა არ სჭირდება"];
+    if ((o === "system_issue" || o === "error") && j.case_id) return ["tech", "ტექნიკური ხარვეზი — საინჟინრო ქეისი შენახულია"];
+    if (o === "system_issue" || o === "error") return ["tech", "ტექნიკური ხარვეზი — ქეისი ვერ შეინახა"];
+    if (o === "management" || o === "management_review") return ["mgmt", "მენეჯმენტის განხილვა"];
+    if (o === "insufficient_evidence") return ["wait", "მტკიცებულება ჯერ არ არის საკმარისი"];
+    if (o === "no_issue") return ["ok", "სერვერზე ბლოკი არ ჩანს"];
+    if (o === "refused") return ["tech", "მოთხოვნა უარყოფილია"];
+    return ["wait", "ვერ შემოწმდა"];
+  }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function renderAll() {
+    var frag = document.createDocumentFragment();
+    state.items.forEach(function (it) {
+      var row = el("div", "m " + (it.role === "u" ? "u" : "a"));
+      row.appendChild(el("p", "sp", it.role === "u" ? ("შენ" + (it.ctx ? " · " + ctxLabel(it.ctx) : "")) : "AI ასისტენტი"));
+      var bb = el("div", "bb");
+      if (it.role === "a") {
+        var b = outcomeBadge(it.res || {});
+        bb.appendChild(el("span", "st " + b[0], b[1])); bb.appendChild(document.createElement("br"));
+        bb.appendChild(document.createTextNode(String((it.res && it.res.message) || "")));
+        var r = it.res || {};
+        if (r.case_id && String(r.message || "").indexOf(r.case_id) < 0) bb.appendChild(el("div", "cv", "საინჟინრო ქეისი: " + r.case_id));
+        if (r.request_id && !r.case_id && (r.outcome === "error" || r.outcome === "system_issue")) bb.appendChild(el("div", "cv", "მოთხოვნის ნომერი: " + r.request_id));
+        var prov = r.semantic_review === "verified" ? "ზარი მოსმენილია და შემოწმებულია."
+                 : r.semantic_review === "unavailable" ? "ზარი არ მოსმენილა — მხოლოდ ჩანაწერებია გამოყენებული."
+                 : r.semantic_review === "attempted_failed" ? "ზარის შემოწმება ვერ დასრულდა — მხოლოდ ჩანაწერებია გამოყენებული." : "";
+        var cav = [prov].concat(Array.isArray(r.caveats) ? r.caveats : []).filter(Boolean);
+        if (cav.length) bb.appendChild(el("div", "cv", cav.join("\n")));
+        if (it.recheck) bb.appendChild(el("div", "cv", it.recheck));
+      } else {
+        bb.textContent = it.text;
+      }
+      row.appendChild(bb);
+      if (it.role === "u" && it.phase && it.phase !== "done") {
+        var ph = PHASE[it.phase] || ["", false];
+        if (ph[0]) row.appendChild(el("p", "nt" + (ph[1] ? " bad" : ""), ph[0]));
+        if (it.phase === "failed" || it.phase === "uncertain") {
+          var rb = el("button", "rt", "ხელახლა გაგზავნა");
+          rb.type = "button";
+          rb.addEventListener("click", function () { resend(it.id); });
+          row.appendChild(rb);
+        }
+      }
+      frag.appendChild(row);
+    });
+    log.replaceChildren(frag);
+    welcome.hidden = state.items.length > 0;
+    $("aiChatCo").textContent = [coName() ? "კომპანია: " + coName() : null, workDay() ? "სამუშაო დღე: " + workDay() : null].filter(Boolean).join(" · ");
+    renderCtx();
+    controls();
+    var bd = $("aiChatBody"); bd.scrollTop = bd.scrollHeight;
+  }
+  function renderCtx() {
+    ctxEl.replaceChildren();
+    ctxEl.className = "";
+    var draftHas = !!state.draft.trim();
+    if (pendingCtx && draftHas && state.draftCtx && ctxLabel(state.draftCtx) !== ctxLabel(pendingCtx)) {
+      ctxEl.className = "on chg";
+      ctxEl.appendChild(el("div", null, "შენი დაუგზავნელი ტექსტი ეხება: " + (ctxLabel(state.draftCtx) || "ზოგად კითხვას") + ". ახლა გახსნე: " + ctxLabel(pendingCtx) + "."));
+      var keep = el("button", null, "დარჩეს: " + (ctxLabel(state.draftCtx) || "ზოგადი")); keep.type = "button";
+      keep.addEventListener("click", function () { pendingCtx = null; renderCtx(); controls(); box.focus(); });
+      var sw = el("button", null, "შეცვალე: " + ctxLabel(pendingCtx)); sw.type = "button";
+      sw.addEventListener("click", function () { state.draftCtx = pendingCtx; pendingCtx = null; save(); renderCtx(); controls(); box.focus(); });
+      ctxEl.appendChild(keep); ctxEl.appendChild(sw);
+      return;
+    }
+    var c = state.draftCtx;
+    if (c) {
+      ctxEl.className = "on";
+      ctxEl.appendChild(el("span", null, "კონტექსტი: " + ctxLabel(c) + " "));
+      var rm = el("button", null, "მოშორე"); rm.type = "button";
+      rm.addEventListener("click", function () { state.draftCtx = null; save(); renderCtx(); box.focus(); });
+      ctxEl.appendChild(rm);
+    }
+  }
+  function ctxConflict() { return !!(pendingCtx && state.draft.trim() && state.draftCtx && ctxLabel(state.draftCtx) !== ctxLabel(pendingCtx)); }
+  function controls() {
+    sendBtn.disabled = busy || !box.value.trim() || ctxConflict();
+    sendBtn.textContent = busy ? "იგზავნება…" : "გაგზავნა";
+  }
+
+  // ---- open / close ------------------------------------------------------
+  async function openChat(ctx) {
+    if (!(await syncScope())) { setStatus("შედი აპში შენი ანგარიშით.", true); }
+    if (ctx && (ctx.order || ctx.gate)) {
+      if (!state.draft.trim()) { state.draftCtx = ctx; pendingCtx = null; save(); }
+      else if (!state.draftCtx) { state.draftCtx = ctx; pendingCtx = null; save(); }
+      else if (ctxLabel(state.draftCtx) !== ctxLabel(ctx)) { pendingCtx = ctx; }
+    }
+    box.value = state.draft;
+    panel.classList.add("on");
+    document.body.classList.add("ai-chat-open");
+    avoidTopBars();
+    renderAll();
+    box.focus();            // opening never sends anything
+  }
+  function closeChat() {
+    panel.classList.remove("on");
+    document.body.classList.remove("ai-chat-open");
+    launch.focus();
+  }
+  launch.addEventListener("click", function () { openChat(null); });
+  $("aiChatClose").addEventListener("click", closeChat);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && panel.classList.contains("on")) closeChat(); });
+  box.addEventListener("input", function () {
+    state.draft = box.value;
+    if (!state.draft.trim() && pendingCtx) { state.draftCtx = pendingCtx; pendingCtx = null; renderCtx(); }
+    save(); controls();
+  });
+  box.addEventListener("keydown", function (e) {
+    // Enter = new line (also on phones); Ctrl/Cmd+Enter = send
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (!sendBtn.disabled) doSend(); }
+  });
+  sendBtn.addEventListener("click", function () { doSend(); });
+
+  // The existing entry points open the new chat too.
+  window.openShiftCloseHelp = function (orderHint) { openChat(orderHint ? { order: String(orderHint) } : null); };
+  window.openAiAssistant = function (ctx) { openChat(ctx || null); };
+
+  // ---- send ----------------------------------------------------------------
+  async function post(item, sc) {
+    var s = await session();
+    if (!s) return { kind: "auth" };
+    if (!alive(sc) || s.user.id !== sc.user) return { kind: "scope" };
+    var c = appConf();
+    if (!c.url) return { kind: "failed" };
+    var body = {
+      company_id: sc.company,
+      work_day: item.workDay,
+      message: item.text,
+      order_numbers: item.ctx && item.ctx.order ? [item.ctx.order] : [],
+      ui_gate_snapshot: { orders: {}, rem: item.rem },
+      context_version: EDGE_CONTEXT_VERSION
+    };
+    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 60000);
+    try {
+      var res = await fetch(c.url + "/functions/v1/ai-shift-close-help", {
+        method: "POST", signal: ctl.signal,
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + s.access_token },
+        body: JSON.stringify(body)
+      });
+      var j = null; try { j = await res.json(); } catch (e) {}
+      if (res.status === 401 || res.status === 403) return { kind: "auth", json: j };
+      if (!j || typeof j.message !== "string" || !j.outcome) return { kind: res.ok ? "uncertain" : "failed" };
+      return { kind: "ok", json: j };
+    } catch (e) {
+      // The request may or may not have reached the server.
+      return { kind: "uncertain" };
+    } finally { clearTimeout(timer); }
+  }
+  function findItem(id) { for (var i = 0; i < state.items.length; i++) if (state.items[i].id === id) return state.items[i]; return null; }
+
+  async function run(item) {
+    var sc = scope;
+    if (!alive(sc)) return;
+    busy = true; item.phase = "sending"; save(); renderAll();
+    setStatus("იგზავნება…");
+    var t0 = setTimeout(function () { if (alive(sc) && item.phase === "sending") { item.phase = "checking"; renderAll(); setStatus("ვამოწმებ ფაქტებს…"); } }, 1200);
+    var r = await post(item, sc);
+    clearTimeout(t0);
+    // The response belongs to sc. If the user, company or login changed while it
+    // was in flight, it is dropped: it must never enter another scope's chat.
+    if (!(await aliveAfterAwait(sc))) { if (sc && sc.gen === scopeGen) busy = false; return; }
+    busy = false;
+    if (r.kind === "ok") {
+      item.phase = "done";
+      var a = { id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now() };
+      state.items.push(a);
+      setStatus(r.json.outcome === "waiting" ? "ანალიზის შედეგს ავტომატურად ხელახლა შევამოწმებ." : "");
+      if (r.json.outcome === "waiting") scheduleRecheck(item, a, 1);
+    } else if (r.kind === "auth") {
+      item.phase = "failed"; setStatus("სესია დასრულდა — შედი ხელახლა. ტექსტი შენახულია.", true);
+    } else if (r.kind === "scope") {
+      item.phase = "failed"; setStatus("ანგარიში ან კომპანია შეიცვალა — შეტყობინება არ გაიგზავნა.", true);
+    } else {
+      item.phase = r.kind === "uncertain" ? "uncertain" : "failed";
+      setStatus(item.phase === "uncertain" ? "სერვერის პასუხი არ მივიდა. თუ ხელახლა გაგზავნე, შესაძლოა ერთი კითხვა ორჯერ დაფიქსირდეს." : "გაგზავნა ვერ მოხერხდა.", true);
+    }
+    save(); renderAll();
+  }
+  async function doSend() {
+    if (busy || ctxConflict()) return;
+    if (!(await syncScope())) { setStatus("შედი აპში შენი ანგარიშით. ტექსტი შენახულია.", true); return; }
+    var text = box.value.trim(); if (!text) return;
+    var wd = workDay();
+    if (!wd) { setStatus("სამუშაო დღე ვერ დადგინდა — განაახლე გვერდი. ტექსტი შენახულია.", true); return; }
+    if (busy || !box.value.trim()) return;
+    var item = { id: uid(), role: "u", text: text, ctx: state.draftCtx, workDay: wd, rem: remNow(), at: Date.now() };
+    state.items.push(item);
+    state.draft = ""; state.draftCtx = pendingCtx || null; pendingCtx = null; box.value = "";
+    await run(item);
+  }
+  async function resend(id) {
+    if (busy) return;
+    var sc = scope;
+    if (!(await syncScope())) { setStatus("შედი აპში შენი ანგარიშით.", true); return; }
+    if (!sc || scope.gen !== sc.gen) return;           // scope changed during the check
+    var it = findItem(id); if (!it || it.phase === "done") return;
+    await run(it);
+  }
+
+  // ---- bounded re-read while call analysis is pending ----------------------
+  function scheduleRecheck(item, answer, n) {
+    if (recheckTimer) clearTimeout(recheckTimer);
+    if (n > RECHECK_MAX) { answer.recheck = "ავტომატური შემოწმება დასრულდა. როცა ანალიზი მოვა, gate თავად განახლდება; აქ ხელახლა მომწერე, თუ საჭიროა."; save(); renderAll(); return; }
+    var sc = scope;
+    if (!alive(sc)) return;
+    recheckTimer = setTimeout(async function () {
+      recheckTimer = null;
+      if (!alive(sc)) return;                                  // scope changed: stop for good
+      if (busy) { scheduleRecheck(item, answer, n); return; }
+      var r = await post({ text: item.text, ctx: item.ctx, workDay: item.workDay, rem: remNow() }, sc);
+      if (!(await aliveAfterAwait(sc))) return;                // late answer for an old scope: dropped
+      if (state.items.indexOf(answer) < 0) return;             // transcript was replaced
+      if (r.kind !== "ok") { answer.recheck = "ავტომატური შემოწმება ვერ მოხერხდა (" + n + "/" + RECHECK_MAX + ")."; save(); renderAll(); scheduleRecheck(item, answer, n + 1); return; }
+      if (r.json.outcome === "waiting" && r.json.message === (answer.res && answer.res.message)) {
+        answer.recheck = "ხელახლა შემოწმდა " + new Date().toLocaleTimeString("ka-GE", { hour: "2-digit", minute: "2-digit" }) + " — ჯერ მუშავდება (" + n + "/" + RECHECK_MAX + ").";
+        save(); renderAll(); scheduleRecheck(item, answer, n + 1); return;
+      }
+      answer.recheck = "ეს პასუხი ჩანაცვლდა ახალი შედეგით ქვემოთ.";
+      var a2 = { id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now(), recheck: "ავტომატურად განახლებული შედეგი." };
+      state.items.push(a2); save(); renderAll();
+      if (r.json.outcome === "waiting") scheduleRecheck(item, a2, n + 1);
+    }, RECHECK_MS);
+  }
+
+  // ---- entry points: launcher visibility, red-row "ask" buttons -------------
+  function isOrderNo(s) { return /^[A-Za-z0-9][A-Za-z0-9-]{3,19}$/.test(s || ""); }
+  function attachAsk() {
+    try {
+      var cc = document.getElementById("closeCard"); if (!cc) return;
+      var rows = cc.querySelectorAll(":scope > .gate");
+      var lastGate = null, lastRed = false;
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        var isChild = /padding-left\s*:\s*34px/.test(r.getAttribute("style") || "");
+        var b = r.querySelector(".t > b");
+        var title = b ? b.textContent.trim() : "";
+        if (!isChild) {
+          lastGate = title; lastRed = r.classList.contains("no") || r.classList.contains("wait");
+          if (lastRed && !r.querySelector(".ai-ask")) addAsk(r, { gate: title });
+        } else if (lastRed && isOrderNo(title) && !r.querySelector(".ai-ask")) {
+          addAsk(r, { gate: lastGate, order: title });
+        }
+      }
+    } catch (e) { /* never break the close card */ }
+  }
+  function addAsk(row, ctx) {
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.className = "ai-ask"; btn.textContent = "ვკითხო ასისტენტს";
+    btn.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); openChat(ctx); });
+    var t = row.querySelector(".t");
+    if (t) t.appendChild(btn); else row.appendChild(btn);
+  }
+  var lastCo = null;
+  // The app's own "new version" bar (#verBar / #verBar2) is fixed at the top with the
+  // maximum z-index; keep the chat header and its close button below it.
+  function avoidTopBars() {
+    try {
+      var vb = document.getElementById("verBar2") || document.getElementById("verBar");
+      var h = vb ? Math.max(0, Math.round(vb.getBoundingClientRect().bottom)) : 0;
+      var want = h ? h + "px" : "";
+      if (panel.style.top !== want) panel.style.top = want;
+    } catch (e) {}
+  }
+  async function tick() {
+    avoidTopBars();
+    var ready = appUserReady() && !!coId();
+    launch.classList.toggle("on", ready);
+    if (!ready) {
+      if (panel.classList.contains("on")) closeChat();
+      if (scope) setScope(null);                 // no user/company on screen: stop all in-flight work now
+      if (!(await session())) { clearScope(); log.replaceChildren(); box.value = ""; }
+      return;
+    }
+    var co = coId();
+    lastCo = co;
+    if (!scope || scope.company !== co) { await syncScope(); }
+    else { var s = await session(); if (!s || !s.user || s.user.id !== scope.user) await syncScope(); }
+    attachAsk();
+  }
+  // Logout in another tab removes the auth token from localStorage.
+  window.addEventListener("storage", function (e) { if (e.storageArea === localStorage && e.newValue === null && /auth-token/.test(e.key || "")) { clearScope(); closeChat(); renderAll(); } });
+  if (document.readyState !== "loading") tick(); else document.addEventListener("DOMContentLoaded", tick);
+  setInterval(tick, 1500);
+  syncScope();   // on reload a still-valid session resumes this tab's conversation; no session wipes it
+})();
+</script>
