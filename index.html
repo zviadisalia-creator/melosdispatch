@@ -217,9 +217,53 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- CP3-R5 / R3-05. The project this page talks to is NOT hardcoded any more.
+     config.js decides, and there is no default: a page shipped for staging
+     testing that silently falls back to production is exactly the accident
+     this release must not ship. Copy config.staging.template.js to config.js
+     and fill it in. -->
+<script src="./config.js"></script>
 <script>
-const SB_URL="https://gdbvmypxndevwaalgvoa.supabase.co";
-const SB_KEY="sb_publishable_JnalNMnmAlzgLIWa6tW1Yw_QqbBEJnz";
+/* =====================================================================
+   CP3-R5 · environment binding, with a refusal instead of a default.
+   ===================================================================== */
+const DOS_CFG = window.DISPATCH_OS_CONFIG ?? null;
+const DOS_PRODUCTION_REF = "gdbvmypxndevwaalgvoa";
+
+function dosRefuse(why) {
+  document.body.innerHTML =
+    '<div style="max-width:40rem;margin:4rem auto;padding:1.5rem;border:2px solid #b00;'
+    + 'border-radius:8px;font:15px/1.6 system-ui,sans-serif;color:#b00">'
+    + '<b>კონფიგურაცია არ არის დაყენებული</b><br><br>' + why
+    + '<br><br><code>config.js</code> — იხილე <code>frontend/README_CONFIG.md</code>.</div>';
+  throw new Error("Dispatch OS config refused: " + why);
+}
+
+if (!DOS_CFG || !DOS_CFG.url || !DOS_CFG.key || !DOS_CFG.mode) {
+  dosRefuse("config.js is missing, or does not define { mode, url, key }. "
+    + "This build never falls back to a default project.");
+}
+const DOS_REF = String(DOS_CFG.url).replace(/^https?:\/\//, "").split(".")[0];
+if (DOS_CFG.mode !== "production" && DOS_REF === DOS_PRODUCTION_REF) {
+  dosRefuse("config.js says mode=" + DOS_CFG.mode + " but points at the PRODUCTION project ("
+    + DOS_PRODUCTION_REF + "). Refusing to start.");
+}
+if (DOS_CFG.mode === "production" && DOS_REF !== DOS_PRODUCTION_REF) {
+  dosRefuse("config.js says mode=production but points at " + DOS_REF + ".");
+}
+const SB_URL = DOS_CFG.url;
+const SB_KEY = DOS_CFG.key;
+/* a visible, permanent marker whenever this is not production, so a screenshot
+   from a staging session can never be mistaken for a live one */
+if (DOS_CFG.mode !== "production") {
+  document.addEventListener("DOMContentLoaded", () => {
+    const b = document.createElement("div");
+    b.textContent = "STAGING · " + DOS_REF + " · არა-საწარმოო გარემო";
+    b.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#b8860b;"
+      + "color:#fff;text-align:center;font:12px/1.8 system-ui,sans-serif;letter-spacing:.04em";
+    document.body.appendChild(b);
+  });
+}
 const sb = window.supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage: window.localStorage }
 });
@@ -416,18 +460,46 @@ function sameOrg_(a,b){
   var pre=function(s,l){ return l.length>=8 && s.indexOf(l+' ')===0; };
   return pre(x,y) || pre(y,x);
 }
+/* SUPPORT-NOVA-001-R1 · A1 — ერთი კლასიფიკაცია ფიქაფის აუქციონისთვის.
+   მფლობელის დაზუსტება (2026-09-17): დამოწმებული SD Shipper = Copart Inc ნიშნავს,
+   რომ ფიქაფი Copart-ია მაშინაც, როცა ფიქაფის Business Name-ში Copart არ წერია.
+   იდენტობა დგინდება ნორმალიზებული ზუსტი იურიდიული სახელით (orgKey_ — პუნქტუაცია და
+   Inc/LLC/Ltd იშლება), არა ქვე-სტრიქონით და არა ორდერის პრეფიქსით: 'Copart Inc.' → copart,
+   'Copartners LLC' → არა. ვენიუზე დაფუძნებული ამოცნობა უცვლელია და პირველია.
+   ეს მხოლოდ ფიქაფის მხარეს მოქმედებს — დელივერი დამოუკიდებლად ფასდება. */
+var SHIPPER_AUCT_ORG={'copart':'copart'};   /* orgKey_(customer) -> აუქციონის სახეობა */
+function shipperAuctionKind_(customer){
+  var k=orgKey_(customer);
+  return (k && Object.prototype.hasOwnProperty.call(SHIPPER_AUCT_ORG,k))? SHIPPER_AUCT_ORG[k] : '';
+}
+/* ფიქაფის აუქციონი + provenance (საიდან დადგინდა). წყაროს ველები არ იცვლება. */
+function puAuctionKind_(l){
+  if(!l) return null;
+  var k=venueKind_(l.pu_venue);
+  if(k) return {kind:k, src:'venue', ref:l.pu_venue};
+  k=venueKind_(l.pickup_location);
+  if(k) return {kind:k, src:'location', ref:l.pickup_location};
+  k=shipperAuctionKind_(l.customer);
+  if(k) return {kind:k, src:'shipper', ref:l.customer};
+  return null;
+}
 /* side: 'pu' ან 'del'. აბრუნებს null-ს (ზარი საჭიროა) ან მიზეზს. */
 function callSkip_(l, side){
   if(!l) return null;
+  if(side==='pu'){
+    var a=puAuctionKind_(l);
+    if(a) return {why:'auction', kind:a.kind, src:a.src, venue:a.ref,
+      text:venueLabel_(a.kind)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'
+        +(a.src==='shipper'? ' (shipper: '+a.ref+')':'')};
+  } else {
+    /* ვენიუ ყოველთვის არ არის დასინქრებული — აუქციონს მისამართის ტექსტშიც ვეძებთ. */
+    var kd=venueKind_(l.del_venue) || venueKind_(l.delivery_location);
+    if(kd) return {why:'auction', kind:kd, src:'venue', venue:l.del_venue||l.delivery_location,
+      text:venueLabel_(kd)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'};
+  }
   var venue=(side==='pu')? l.pu_venue : l.del_venue;
-  /* ვენიუ ყოველთვის არ არის დასინქრებული (ახალი/მიუბმელი ტვირთი) — მაშინ
-     აუქციონს მისამართის ტექსტშიც ვეძებთ, თორემ Copart-ზე ზარს მოვთხოვდით. */
-  var loc=(side==='pu')? l.pickup_location : l.delivery_location;
-  var k=venueKind_(venue) || venueKind_(loc);
-  if(k) return {why:'auction', kind:k, venue:venue||loc,
-    text:venueLabel_(k)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'};
   if(!venue) return null;
-  if(sameOrg_(l.customer, venue)) return {why:'shipper', venue:venue,
+  if(sameOrg_(l.customer, venue)) return {why:'shipper', src:'venue', venue:venue,
     text:'shipper = '+(side==='pu'?'ფიქაფი':'დელივერი')+' ('+venue+') — ზარი არ მოეთხოვება'};
   return null;
 }
@@ -442,7 +514,13 @@ function sdDayWarn_(l, day){
   if(!d || d===day) return '';
   return " <span style='color:var(--crit);font-size:10.5px;font-weight:640' title='SD-ში აღების თარიღი "+esc(gd(d))+"-ია. გაასწორე "+esc(gd(day))+"-ზე — თორემ ხვალინდელ სიაში ავტომატურად აღარ ჩაჯდება.'>⚠ SD-ში თარიღი "+esc(gd(d))+" — გაასწორე "+esc(gd(day))+"-ზე</span>";
 }
-function apptNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='copart'); }
+/* A1: Copart appointment ხილვადობა იმავე ფიქაფის კლასიფიკაციას იყენებს, რასაც ზარის
+   გამონაკლისი — თორემ ზარიც არ მოეთხოვება და appointment-ის შესატანი ველიც არ ჩანს.
+   R2 (დამოუკიდებელი განხილვა): Manheim-ის Gate Pass რჩება ზუსტად ისე, როგორც არის —
+   მხოლოდ pu_venue. ეს დავალება მხოლოდ Copart-ს ეხება; Manheim-ის გაფართოება ცალკე
+   გადაწყვეტილებაა და აქ არ კეთდება. სერვერზე იგივეა: close_gates_co-ს Manheim-ის
+   ფილტრი venue_kind(pu_venue)-ზე რჩება. */
+function apptNeeded_(l){ var a=puAuctionKind_(l); return !!(a && a.kind==='copart'); }
 function gatePassNeeded_(l){ return !!(l && venueKind_(l.pu_venue)==='manheim'); }
 function apptOf_(l){ return l? (actOf_(l.order_number).appt_at||null) : null; }
 function gatePassOf_(l){ return l? (actOf_(l.order_number).gate_pass_path||null) : null; }
@@ -5509,8 +5587,7 @@ try{
   </div>
   <div class="bd" id="aiChatBody">
     <div class="welcome" id="aiChatWelcome">
-      <h2>რა გიშლის ხელს მუშაობაში?</h2>
-      <p>მომწერე შენი სიტყვებით — მაგალითად, რატომ არ იხურავს ცვლა ან რატომ ჩანს ტვირთი წითელად. კატეგორიის არჩევა არ სჭირდება.</p>
+      <h2>რით შემიძლია დაგეხმარო?</h2>
     </div>
     <div id="aiChatLog" role="log" aria-live="polite" aria-label="მიმოწერა"></div>
   </div>
@@ -5532,6 +5609,10 @@ try{
   if (!AI_CHAT_V2) return;
 
   var EDGE_CONTEXT_VERSION = "SC005-help-ka-1"; // same body the deployed modal sends
+  // CP3 (requires M1 + Edge support_thread): request_key makes retries idempotent and the
+  // server thread becomes the conversation of record. Off = CP2 behaviour.
+  var SERVER_THREAD = true;
+  var PENDING_POLL_MS = 5000, PENDING_POLL_MAX = 24;
   var RECHECK_MS = 120000, RECHECK_MAX = 4;     // bounded automatic re-read while analysis is pending
   var KEY_PREFIX = "md_ai_chat_v2:";
 
@@ -5585,8 +5666,12 @@ try{
   var scopeGen = 0;   // bumped on every scope change; in-flight work of an older generation is discarded
   var state = { items: [], draft: "", draftCtx: null };
   var recheckTimer = null;
+  // CP3-R1: highest ai_support_message.seq already applied to this transcript.
+  // A later read that carries nothing newer can never replace what is on screen.
+  var seenSeq = 0;
   function setScope(next) {
     scopeGen++;
+    seenSeq = 0;
     if (recheckTimer) { clearTimeout(recheckTimer); recheckTimer = null; }
     busy = false;
     scope = next ? { user: next.user, company: next.company, gen: scopeGen } : null;
@@ -5655,6 +5740,14 @@ try{
     return parts.join(" · ");
   }
 
+  // R2: only a FINAL row closes a question. kind answer|recheck WITH an outcome
+  // is final; progress, engineering updates and management notes are not, and
+  // neither is a row whose outcome was never set. Nothing here invents no_issue.
+  function isFinalRes(m) {
+    if (!m) return false;
+    var k = m.kind || "answer";
+    return (k === "answer" || k === "recheck") && !!m.outcome;
+  }
   var PHASE = {
     sending:   ["იგზავნება…", false],
     checking:  ["მიღებულია — ვამოწმებ", false],
@@ -5666,6 +5759,7 @@ try{
     var o = j && j.outcome;
     if (o === "dispatcher_action") return ["act", "საჭიროა შენი მოქმედება"];
     if (o === "waiting") return ["wait", "ანალიზი მიმდინარეობს — ხელახლა დარეკვა არ სჭირდება"];
+    if (o === "progress" || j.final === false) return ["wait", "მუშავდება — შედეგი აქვე გამოჩნდება"];
     if ((o === "system_issue" || o === "error") && j.case_id) return ["tech", "ტექნიკური ხარვეზი — საინჟინრო ქეისი შენახულია"];
     if (o === "system_issue" || o === "error") return ["tech", "ტექნიკური ხარვეზი — ქეისი ვერ შეინახა"];
     if (o === "management" || o === "management_review") return ["mgmt", "მენეჯმენტის განხილვა"];
@@ -5692,8 +5786,21 @@ try{
         var prov = r.semantic_review === "verified" ? "ზარი მოსმენილია და შემოწმებულია."
                  : r.semantic_review === "unavailable" ? "ზარი არ მოსმენილა — მხოლოდ ჩანაწერებია გამოყენებული."
                  : r.semantic_review === "attempted_failed" ? "ზარის შემოწმება ვერ დასრულდა — მხოლოდ ჩანაწერებია გამოყენებული." : "";
-        var cav = [prov].concat(Array.isArray(r.caveats) ? r.caveats : []).filter(Boolean);
-        if (cav.length) bb.appendChild(el("div", "cv", cav.join("\n")));
+        // A4: the default answer stays short. Provenance, caveats and technical detail
+        // move behind one expander instead of being repeated under every message.
+        if (r.history === "unsaved" || r.history === "reply_unsaved") {
+          bb.appendChild(el("div", "cv", r.history === "unsaved"
+            ? "ეს კითხვა ისტორიაში ვერ შეინახა — პასუხი ნამდვილია, მაგრამ სხვა მოწყობილობაზე არ გამოჩნდება."
+            : "პასუხი ისტორიაში ვერ შეინახა — ეკრანზე ჩანს, სერვერის ისტორიაში ჯერ არა."));
+        }
+        var det = [prov].concat(Array.isArray(r.caveats) ? r.caveats : []).filter(Boolean);
+        if (Array.isArray(r.details)) det = det.concat(r.details.filter(Boolean));
+        if (det.length) {
+          var dx = document.createElement("details"); dx.className = "cv";
+          var sm = document.createElement("summary"); sm.textContent = "დეტალები";
+          dx.appendChild(sm); dx.appendChild(el("div", null, det.join("\n")));
+          bb.appendChild(dx);
+        }
         if (it.recheck) bb.appendChild(el("div", "cv", it.recheck));
       } else {
         bb.textContent = it.text;
@@ -5702,6 +5809,7 @@ try{
       if (it.role === "u" && it.phase && it.phase !== "done") {
         var ph = PHASE[it.phase] || ["", false];
         if (ph[0]) row.appendChild(el("p", "nt" + (ph[1] ? " bad" : ""), ph[0]));
+        if (it.progress) row.appendChild(el("p", "nt", it.progress));
         if (it.phase === "failed" || it.phase === "uncertain") {
           var rb = el("button", "rt", "ხელახლა გაგზავნა");
           rb.type = "button";
@@ -5756,6 +5864,7 @@ try{
       else if (ctxLabel(state.draftCtx) !== ctxLabel(ctx)) { pendingCtx = ctx; }
     }
     box.value = state.draft;
+    if (scope) mergeServer(scope);
     panel.classList.add("on");
     document.body.classList.add("ai-chat-open");
     avoidTopBars();
@@ -5800,6 +5909,15 @@ try{
       ui_gate_snapshot: { orders: {}, rem: item.rem },
       context_version: EDGE_CONTEXT_VERSION
     };
+    if (SERVER_THREAD && /^[0-9a-f-]{36}$/i.test(item.id || "")) {
+      body.request_key = item.id;                   // same key on every retry of this message
+      if (item.ctx && item.ctx.gate) body.gate = String(item.ctx.gate).slice(0, 80);
+      // CP3-REVIEW-03 fix: an automatic re-check is the SAME request (one dispatcher
+      // message, one case) asked again. refresh=n makes the server run a fresh check
+      // and save that answer as recheck:n in the same thread, instead of replaying the
+      // cached waiting reply, and instead of falling into the legacy unsaved path.
+      if (item.refresh) body.refresh = item.refresh;
+    }
     var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 60000);
     try {
       var res = await fetch(c.url + "/functions/v1/ai-shift-close-help", {
@@ -5834,8 +5952,19 @@ try{
     // was in flight, it is dropped: it must never enter another scope's chat.
     if (!(await aliveAfterAwait(sc))) { if (sc && sc.gen === scopeGen) busy = false; return; }
     busy = false;
-    if (r.kind === "ok") {
-      item.phase = "done";
+    if (r.kind === "ok" && r.json.outcome === "pending" && r.json.message_id) {
+      item.phase = "checking"; item.serverId = r.json.message_id;
+      setStatus("შეტყობინება მიღებულია — პასუხს ველოდები.");
+      pollReply(item, sc, 1);
+    } else if (r.kind === "ok" && (r.json.outcome === "progress" || r.json.final === false)) {
+      // R2: the server has progress, not a result. Keep the question open and
+      // keep polling; a progress note must never look like the final answer.
+      item.phase = "checking"; if (r.json.message_id) item.serverId = r.json.message_id;
+      item.progress = String(r.json.message || "");
+      setStatus("მუშავდება — პასუხს ველოდები.");
+      pollReply(item, sc, 1);
+    } else if (r.kind === "ok") {
+      item.phase = "done"; if (r.json.message_id) item.serverId = r.json.message_id;
       var a = { id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now() };
       state.items.push(a);
       setStatus(r.json.outcome === "waiting" ? "ანალიზის შედეგს ავტომატურად ხელახლა შევამოწმებ." : "");
@@ -5850,6 +5979,100 @@ try{
     }
     save(); renderAll();
   }
+  // ---- CP3: server thread ------------------------------------------------------
+  async function threadRead(sc) {
+    try {
+      var cl = client(); if (!cl || typeof cl.rpc !== "function") return null;
+      var r = await cl.rpc("ai_support_thread_read", { p_company_id: sc.company, p_after_seq: 0, p_limit: 100 });
+      if (r.error || !r.data || !Array.isArray(r.data.messages)) return null;
+      return r.data;
+    } catch (e) { return null; }
+  }
+  function pollReply(item, sc, n) {
+    setTimeout(async function () {
+      if (!alive(sc) || state.items.indexOf(item) < 0 || item.phase !== "checking") return;
+      var t = await threadRead(sc);
+      if (!(await aliveAfterAwait(sc))) return;
+      var reps = (t && t.messages.filter(function (m) { return m.role === "assistant" && m.reply_to === item.serverId; })) || [];
+      var fin = null;
+      for (var i = reps.length - 1; i >= 0; i--) { if (isFinalRes(reps[i])) { fin = reps[i]; break; } }
+      if (fin) {
+        item.phase = "done"; item.progress = "";
+        state.items.push({ id: fin.message_id, role: "a", res: { outcome: fin.outcome, message: fin.body, case_id: fin.case_id, request_id: fin.request_id, kind: fin.kind, final: true }, forId: item.id, at: Date.now() });
+        setStatus(""); save(); renderAll(); return;
+      }
+      // R2: a progress row is shown as progress and polling continues. The
+      // question is NOT closed and no outcome is invented for it.
+      var last = reps.length ? reps[reps.length - 1] : null;
+      if (last && String(last.body || "") !== item.progress) {
+        item.progress = String(last.body || ""); save(); renderAll();
+      }
+      if (n >= PENDING_POLL_MAX) { item.phase = "uncertain"; setStatus("პასუხი ჯერ არ მივიდა. „ხელახლა გაგზავნა“ იგივე შეტყობინებას გაგზავნის, ორჯერ არ დაფიქსირდება.", true); save(); renderAll(); return; }
+      pollReply(item, sc, n + 1);
+    }, PENDING_POLL_MS);
+  }
+  // Server history is the record: saved messages from other devices/tabs appear; local
+  // unsent/failed items (not on the server yet) are kept after it.
+  async function mergeServer(sc) {
+    if (!SERVER_THREAD) return;
+    var t = await threadRead(sc);
+    if (!t || !(await aliveAfterAwait(sc))) return;
+    // CP3-REVIEW-01 fix: a read that is not newer than what has already been applied
+    // is dropped. Previously a late/empty snapshot replaced the transcript and a
+    // completed local question + answer disappeared from the screen (2 items -> 0).
+    var maxSeq = 0;
+    t.messages.forEach(function (m) { var q = Number(m.seq) || 0; if (q > maxSeq) maxSeq = q; });
+    if (maxSeq <= seenSeq && seenSeq > 0) return;
+    var items = [];
+    t.messages.forEach(function (m) {
+      if (m.role === "dispatcher") {
+        items.push({ id: m.request_key || m.message_id, serverId: m.message_id, role: "u", text: m.body,
+          ctx: m.order_number || m.gate ? { order: m.order_number, gate: m.gate } : null,
+          // CP3-REVIEW-02 fix: the request scope of a restored message is carried from the
+          // server row, so a retry reuses request_key WITH its original work_day and gate.
+          // Nothing is invented here: a row saved without work_day stays without one.
+          workDay: m.work_day || null, seq: Number(m.seq) || 0,
+          phase: "done", at: Date.parse(m.created_at) });
+      } else {
+        items.push({ id: m.message_id, role: "a", seq: Number(m.seq) || 0,
+          res: { outcome: m.outcome, message: m.body, case_id: m.case_id, request_id: m.request_id, kind: m.kind },
+          forId: m.reply_to, at: Date.parse(m.created_at) });
+      }
+    });
+    // R3 fix: questions and answers are reconciled INDEPENDENTLY, by stable ids.
+    // The R1 version kept a local answer only while its question was absent from
+    // the server, so a partial snapshot — the question saved, its answer not yet
+    // (or reply_unsaved) — deleted a completed answer from the screen. Now an
+    // answer is dropped only when the server actually carries an answer for that
+    // question, and a question is only "checking" when neither side has one.
+    var serverIds = {}, answeredOnServer = {}, qById = {};
+    items.forEach(function (x) {
+      serverIds[x.id] = true;
+      if (x.role === "u") qById[x.id] = x;
+      else if (x.forId) answeredOnServer[x.forId] = true;
+    });
+    var localQ = state.items.filter(function (x) { return x.role === "u" && !serverIds[x.id]; });
+    var localQIds = {};
+    localQ.forEach(function (x) { localQIds[x.id] = true; });
+    var localA = state.items.filter(function (x) {
+      if (x.role !== "a" || serverIds[x.id] || !x.forId) return false;
+      if (localQIds[x.forId]) return true;                 // its question is local too
+      var sq = qById[x.forId];                             // its question is on the server
+      return !!sq && !answeredOnServer[sq.serverId];       // but its answer is not
+    });
+    // A saved question with no answer on either side stays "checking" and is polled.
+    items.forEach(function (x) {
+      if (x.role !== "u" || answeredOnServer[x.serverId]) return;
+      for (var i = 0; i < localA.length; i++) if (localA[i].forId === x.id) return;
+      x.phase = "checking";
+    });
+    state.items = items.concat(localQ, localA);
+    if (maxSeq > seenSeq) seenSeq = maxSeq;
+    save(); renderAll();
+    items.forEach(function (x) { if (x.role === "u" && x.phase === "checking") pollReply(x, sc, 1); });
+    localQ.forEach(function (x) { if (x.phase === "checking" && x.serverId) pollReply(x, sc, 1); });
+  }
+
   async function doSend() {
     if (busy || ctxConflict()) return;
     if (!(await syncScope())) { setStatus("შედი აპში შენი ანგარიშით. ტექსტი შენახულია.", true); return; }
@@ -5868,6 +6091,14 @@ try{
     if (!(await syncScope())) { setStatus("შედი აპში შენი ანგარიშით.", true); return; }
     if (!sc || scope.gen !== sc.gen) return;           // scope changed during the check
     var it = findItem(id); if (!it || it.phase === "done") return;
+    // The request scope is immutable: a retry re-sends the ORIGINAL work_day (from the
+    // server row for a restored message). Only a message that never reached the server
+    // may take the current work day.
+    if (!it.workDay && !it.serverId) {
+      var wd2 = workDay();
+      if (!wd2) { setStatus("სამუშაო დღე ვერ დადგინდა — განაახლე გვერდი.", true); return; }
+      it.workDay = wd2;
+    }
     await run(it);
   }
 
@@ -5881,11 +6112,13 @@ try{
       recheckTimer = null;
       if (!alive(sc)) return;                                  // scope changed: stop for good
       if (busy) { scheduleRecheck(item, answer, n); return; }
-      var r = await post({ text: item.text, ctx: item.ctx, workDay: item.workDay, rem: remNow() }, sc);
+      var r = await post({ id: item.id, text: item.text, ctx: item.ctx, workDay: item.workDay,
+                           rem: remNow(), refresh: n }, sc);
       if (!(await aliveAfterAwait(sc))) return;                // late answer for an old scope: dropped
       if (state.items.indexOf(answer) < 0) return;             // transcript was replaced
       if (r.kind !== "ok") { answer.recheck = "ავტომატური შემოწმება ვერ მოხერხდა (" + n + "/" + RECHECK_MAX + ")."; save(); renderAll(); scheduleRecheck(item, answer, n + 1); return; }
       if (r.json.outcome === "waiting" && r.json.message === (answer.res && answer.res.message)) {
+        // still processing: no new history row is expected for an unchanged waiting answer
         answer.recheck = "ხელახლა შემოწმდა " + new Date().toLocaleTimeString("ka-GE", { hour: "2-digit", minute: "2-digit" }) + " — ჯერ მუშავდება (" + n + "/" + RECHECK_MAX + ").";
         save(); renderAll(); scheduleRecheck(item, answer, n + 1); return;
       }
