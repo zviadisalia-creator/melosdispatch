@@ -6115,7 +6115,24 @@ try{
   }
 
   // ---- entry points: launcher visibility, red-row "ask" buttons -------------
-  function isOrderNo(s) { return /^[A-Za-z0-9][A-Za-z0-9-]{3,19}$/.test(s || ""); }
+  // D7c: ONE definition of an acceptable order label, mirroring
+  // public.ai_order_label_norm and the Edge orderLabelNorm. Real load
+  // names carry spaces and punctuation ("19 F250 OPENLANE",
+  // "RYAN PELLO (PICKUP MON-FRI 8:30-5:00)"), so the old narrow token
+  // pattern hid the ask button on exactly the rows a dispatcher needs
+  // it. Control characters are rejected, not cleaned up, and the length
+  // bound is unchanged in spirit: 3..64 canonical characters.
+  // Recognising the NAME is not authorization — the server still scopes
+  // every requested load to this dispatcher and company.
+  function orderLabelNorm(s) {
+    if (typeof s !== "string") return null;
+    if (/[\u0000-\u001F\u007F]/.test(s)) return null;
+    var v = s.replace(/ +/g, " ").replace(/^ | $/g, "");
+    if (v.length < 3 || v.length > 64) return null;
+    if (!/^[A-Za-z0-9][A-Za-z0-9 ._:/&,'#()+-]*$/.test(v)) return null;
+    return v;
+  }
+  function isOrderNo(s) { return orderLabelNorm(s) !== null; }
   function attachAsk() {
     try {
       var cc = document.getElementById("closeCard"); if (!cc) return;
