@@ -5245,31 +5245,22 @@ try{
   // ---- config -------------------------------------------------------
   // Same Supabase project the page already uses; the function is a
   // sibling of /rest/v1. No new host, no new login.
-  // D-9 ADAPTER PATCH. window.SUPABASE_URL does not exist in this app: the
-  // project URL and publishable key are module-scoped consts in the page's
-  // own inline script. They are read from there, so nothing is duplicated,
-  // nothing new is hardcoded, and this follows the app if the project moves.
+  // The main classic script validates config.js before binding SB_URL/SB_KEY.
+  // Read those bindings directly so chat follows the same environment.
   function appConf() {
-    if (appConf._c) return appConf._c;
-    var url = null, key = null;
+    // Use the same validated configuration as the main application.
+    // Classic scripts share global lexical bindings; no source-text parsing.
+    // Missing/uninitialized config fails closed and is never cached.
     try {
-      var ss = document.getElementsByTagName("script");
-      for (var i = 0; i < ss.length && !(url && key); i++) {
-        if (ss[i].src) continue;
-        var t = ss[i].textContent || "";
-        var mu = t.match(/const\s+SB_URL\s*=\s*["']([^"']+)["']/);
-        var mk = t.match(/const\s+SB_KEY\s*=\s*["']([^"']+)["']/);
-        if (mu) url = mu[1];
-        if (mk) key = mk[1];
+      if (typeof SB_URL === "string" && SB_URL && typeof SB_KEY === "string" && SB_KEY) {
+        return { url: SB_URL, key: SB_KEY };
       }
     } catch (e) {}
-    appConf._c = { url: url, key: key };
-    return appConf._c;
+    return { url: null, key: null };
   }
   function fnUrl() { var u = appConf().url; return u ? (u + "/functions/v1/ai-shift-close-help") : null; }
 
-  // The app's own client is a module-scoped const and is not reachable from
-  // here. This builds a second, READ-ONLY client on the same project, the
+  // Preserve the existing secondary auth-client behavior. It uses the
   // same storage and the library's default storage key, so it sees exactly
   // the session the app already stored. autoRefreshToken is off: this client
   // never competes with the app's own refresh loop.
@@ -5618,21 +5609,15 @@ try{
 
   // ---- same config/session access as the SC005 tail (read-only client) ----
   function appConf() {
-    if (appConf._c) return appConf._c;
-    var url = null, key = null;
+    // Use the same validated configuration as the main application.
+    // Classic scripts share global lexical bindings; no source-text parsing.
+    // Missing/uninitialized config fails closed and is never cached.
     try {
-      var ss = document.getElementsByTagName("script");
-      for (var i = 0; i < ss.length && !(url && key); i++) {
-        if (ss[i].src) continue;
-        var t = ss[i].textContent || "";
-        var mu = t.match(/const\s+SB_URL\s*=\s*["']([^"']+)["']/);
-        var mk = t.match(/const\s+SB_KEY\s*=\s*["']([^"']+)["']/);
-        if (mu) url = mu[1];
-        if (mk) key = mk[1];
+      if (typeof SB_URL === "string" && SB_URL && typeof SB_KEY === "string" && SB_KEY) {
+        return { url: SB_URL, key: SB_KEY };
       }
     } catch (e) {}
-    appConf._c = { url: url, key: key };
-    return appConf._c;
+    return { url: null, key: null };
   }
   function client() {
     if (client._c) return client._c;
