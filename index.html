@@ -5773,10 +5773,24 @@ try{
                  : r.semantic_review === "attempted_failed" ? "ზარის შემოწმება ვერ დასრულდა — მხოლოდ ჩანაწერებია გამოყენებული." : "";
         // A4: the default answer stays short. Provenance, caveats and technical detail
         // move behind one expander instead of being repeated under every message.
-        if (r.history === "unsaved" || r.history === "reply_unsaved") {
-          bb.appendChild(el("div", "cv", r.history === "unsaved"
-            ? "ეს კითხვა ისტორიაში ვერ შეინახა — პასუხი ნამდვილია, მაგრამ სხვა მოწყობილობაზე არ გამოჩნდება."
-            : "პასუხი ისტორიაში ვერ შეინახა — ეკრანზე ჩანს, სერვერის ისტორიაში ჯერ არა."));
+        // D8: a reply that could not be stored now says WHICH failure it was
+        // and carries a correlation ref an engineer can search for. The ref
+        // contains no secret value; the server sanitizes what it records.
+        // reply_unsaved is kept for a reply produced by an older Edge build.
+        if (r.history === "unsaved" || r.history === "reply_unsaved"
+            || r.history === "reply_failed" || r.history === "reply_unconfigured") {
+          var hmsg;
+          if (r.history === "unsaved") {
+            hmsg = "ეს კითხვა ისტორიაში ვერ შეინახა — პასუხი ნამდვილია, მაგრამ სხვა მოწყობილობაზე არ გამოჩნდება.";
+          } else if (r.history === "reply_unconfigured") {
+            hmsg = "პასუხი ისტორიაში ვერ შეინახა — სერვერის პარამეტრი აკლია. პასუხი ნამდვილია; "
+                 + "თუ დახმარება გჭირდება, შეატყობინე მენეჯერს.";
+          } else {
+            hmsg = "პასუხი ისტორიაში ვერ შეინახა — ეკრანზე ჩანს, სერვერის ისტორიაში ჯერ არა. "
+                 + "თუ დახმარება გჭირდება, შეატყობინე მენეჯერს.";
+          }
+          if (r.reply_error_ref) hmsg += " (" + r.reply_error_ref + ")";
+          bb.appendChild(el("div", "cv", hmsg));
         }
         var det = [prov].concat(Array.isArray(r.caveats) ? r.caveats : []).filter(Boolean);
         if (Array.isArray(r.details)) det = det.concat(r.details.filter(Boolean));
