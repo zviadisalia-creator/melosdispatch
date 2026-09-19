@@ -1752,7 +1752,7 @@ function rBoard(){
       "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და იმ დღეს ჯერ კიდევ გზაშია</b> — ტვირთი არ მოეთხოვება. თავისუფლდება იმ დღეს, როცა აბარებს: SD-ის ჩაბარების თარიღით, ან თუ არ წერია — აღების დღეს + "+transitMi_()+" მილი დღეში (მაგ. 1 400 მილი 4 რიცხვში აღებული → 6 რიცხვში აბარებს, ე.ი. იმ დღეს ტვირთი <b>სჭირდება</b>). "+
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
-      "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონებზე — <b>Copart, Manheim, ADESA</b> — ზარი არასდროს მოეთხოვება, იქ appointment ინიშნება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
+      "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონის გამო ზარის გამონაკლისი მოქმედებს მხოლოდ <b>Copart-ის ფიქაფზე</b>. <b>Manheim-სა და ADESA-ზე ავტომატური გამონაკლისი არ მოქმედებს</b>; დელივერის მოთხოვნები ცალკე მოწმდება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
       "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
 }
 var SCLOSE=null;
@@ -5550,6 +5550,11 @@ try{
   #aiChat .m .nt.bad{color:#9a2b2b}
   #aiChat .m .cv{font-size:12px;color:#506877;margin-top:8px}
   #aiChat .m .rt{margin-top:6px;border:1px solid #d9e3e9;background:#fff;border-radius:8px;padding:6px 12px;min-height:40px;cursor:pointer;font:inherit;font-size:13px}
+  /* MONDAY-003: a failed attempt and an unsaved answer are their own states. */
+  #aiChat .st.fail{background:#fdecec;color:#7a1414;border:1px solid #e0adad}
+  #aiChat .st.unsaved{background:#fff4e0;color:#7a5010;margin-left:6px}
+  #aiChat .m .cv.warn{color:#9a2b2b}
+  #aiChat .m .rt[disabled]{opacity:.55;cursor:default}
   #aiChat .ft{border-top:1px solid #d9e3e9;padding:10px 14px 14px}
   #aiChatCtx{display:none;font-size:12px;background:#f3f6f8;border:1px solid #d9e3e9;border-radius:8px;padding:6px 8px;margin-bottom:8px}
   #aiChatCtx.on{display:block}
@@ -5671,6 +5676,19 @@ try{
     return !!(s && s.user && s.user.id === sc.user && alive(sc));
   }
   function skey(sc) { return KEY_PREFIX + sc.user + ":" + sc.company; }
+  // MONDAY-003 · a COMPANY switch by the SAME dispatcher must not throw away an
+  // unsent draft. Their accepted questions come back from the server thread, but
+  // a draft exists only here. Account isolation is unchanged: every key that
+  // belongs to another account is still removed, and a logout still wipes all.
+  function wipeOtherUsers(userId) {
+    try {
+      var pfx = KEY_PREFIX + userId + ":";
+      for (var i = sessionStorage.length - 1; i >= 0; i--) {
+        var k = sessionStorage.key(i);
+        if (k && k.indexOf(KEY_PREFIX) === 0 && k.indexOf(pfx) !== 0) sessionStorage.removeItem(k);
+      }
+    } catch (e) {}
+  }
   function wipeAll(exceptKey) {
     try {
       for (var i = sessionStorage.length - 1; i >= 0; i--) {
@@ -5700,8 +5718,9 @@ try{
     if (!co || co !== coId()) return false;   // app still loading / switching its company: do not use
     var next = { user: s.user.id, company: co };
     if (!scope || scope.user !== next.user || scope.company !== next.company) {
-      // user change or company switch: nothing from another scope survives
-      wipeAll(skey(next));
+      // Another ACCOUNT's transcript never survives. This account's other
+      // company keeps its own draft, so switching back restores it.
+      wipeOtherUsers(next.user);
       setScope(next); load(scope); pendingCtx = null; box.value = state.draft; renderAll();
     }
     return true;
@@ -5733,15 +5752,122 @@ try{
     var k = m.kind || "answer";
     return (k === "answer" || k === "recheck") && !!m.outcome;
   }
+  // =========================================================================
+  // MONDAY-003 (D17) - ONE classification of a server body, used by every
+  // renderer and every transition.
+  //
+  // The defect this replaces: `final === false` was tested BEFORE the error
+  // outcome in both run() and outcomeBadge(), so a FAILED ATTEMPT - which the
+  // Edge returns as {outcome:"error", final:false} - was drawn as
+  // "processing" and driven into the polling path. The spinner never ended.
+  //
+  // CORRECTION (MONDAY-003 A1): an earlier note here claimed the analysis
+  // handler never emits outcome "error". That was WRONG. handler.ts's own catch
+  // returns fail("error", ..., "backend_error"), which is a real Help RESULT.
+  // The wrapper then stores it like any other answer, and from that moment
+  // ai_support_post_message finds it as the latest FINAL reply and REPLAYS it
+  // instead of claiming a new run. So there are two different things behind one
+  // outcome, and they need different recovery - see failureClass() below.
+  //
+  // system_issue stays an ANSWER and keeps its own badge: a business/technical
+  // finding is not a failure of the request, and a failure is never relabelled
+  // as a finding. Finality is not weakened anywhere: a stored error still
+  // closes the question on the server, and the UI says so.
+  // =========================================================================
+  function resKind(j) {
+    if (!j || typeof j !== "object") return "progress";
+    if (j.outcome === "error") return "failed";
+    if (j.outcome === "refused") return "refused";
+    if (j.outcome === "pending") return "pending";
+    if (j.outcome === "progress" || j.final === false) return "progress";
+    return "answer";
+  }
+  // MONDAY-003 A1 · WHICH failure this is. The distinction is not cosmetic: it
+  // decides whether a plain retry does any work at all.
+  //
+  //   "stored"  - a final reply row exists (the handler's own backend_error, or
+  //               an error already saved and now replayed). ai_support_post_message
+  //               selects the latest final reply and claims a run ONLY when there
+  //               is none, so a plain resend here returns the SAME old text with
+  //               no fresh Help run. The permitted fresh path is a bounded
+  //               recheck attempt, which ai_support_recheck_claim really claims.
+  //   "attempt" - the attempt itself did not finish and nothing was stored
+  //               (helpFailureResult / EDGE_UNHANDLED). A plain resend under the
+  //               same request_key DOES claim a new run once the lease expires.
+  //
+  // The response alone decides this in-session; after a reload the thread read
+  // is authoritative, because it shows whether a final reply actually exists.
+  function failureClass(j) {
+    if (resKind(j) !== "failed") return null;
+    return (j.final === true && persistedState(j) === "yes") ? "stored" : "attempt";
+  }
+  // The server states persistence POSITIVELY. Absent is not false and not true:
+  // an older build says nothing, and silence is never rendered as "saved".
+  function persistedState(j) {
+    if (!j || typeof j !== "object") return "unknown";
+    if (j.persisted === false) return "no";
+    if (j.persisted === true) return "yes";
+    if (j.history === "saved") return "yes";
+    if (j.history === "unsaved" || j.history === "reply_unsaved"
+        || j.history === "reply_failed" || j.history === "reply_unconfigured") return "no";
+    return "unknown";
+  }
+  function failRef(j) { return (j && typeof j.reply_error_ref === "string" && j.reply_error_ref) || null; }
+  function failCode(j) { return (j && typeof j.error_code === "string" && j.error_code) || null; }
+
+  // FALLBACK ONLY. The real lease and cap live in the server functions:
+  // ai_support_post_message re-claims a run on
+  //   claimed_at < now() - interval '120 seconds' AND attempts < 3
+  // and ai_support_recheck_claim re-claims attempt n on the same 120 seconds.
+  // When the recovery view is available the UI uses ITS claimed_at and its
+  // server clock; these two are only used when it is not, and a wait computed
+  // from them is labelled approximate rather than presented as the lease.
+  var LEASE_MS = 120000;
+  var ATTEMPT_CAP = 3;
+  // A restored question older than this, with no answer and no live lease, is
+  // history rather than active work: never polled, never retried automatically.
+  var FRESH_MS = 600000;
+  // How often the per-message failure/lease state is read while polling.
+  var STATE_EVERY = 3;
   var PHASE = {
     sending:   ["იგზავნება…", false],
     checking:  ["მიღებულია — ვამოწმებ", false],
     done:      ["", false],
     failed:    ["არ გაიგზავნა. ტექსტი შენახულია.", true],
-    uncertain: ["მიღება ვერ დადასტურდა. ტექსტი შენახულია.", true]
+    uncertain: ["მიღება ვერ დადასტურდა. ტექსტი შენახულია.", true],
+    // MONDAY-003 · the five states this release makes explicit are: sending,
+    // genuinely running (checking), answered (done, with a separate saved /
+    // not-saved marker on the answer itself), and the two below.
+    //
+    // The question WAS accepted and the CHECK failed. Calling this "not sent"
+    // would be false - the server holds the message - and so would "processing".
+    help_failed:  ["კითხვა მიღებულია — შემოწმება ვერ დასრულდა.", true],
+    // The attempt failed AND the question itself was not stored.
+    help_unsaved: ["შემოწმება ვერ დასრულდა და კითხვა ისტორიაში ვერ შეინახა.", true],
+    // Accepted, no answer, and no live lease: nobody is working on it now.
+    stalled:      ["შემოწმება შეჩერდა პასუხის გარეშე.", true],
+    // MONDAY-003 A1 · the check RAN and its result is a technical error, and
+    // that error is the question's stored final reply. This is not the same as
+    // help_failed: the server holds an answer here, so a plain resend would
+    // only replay it. Finality is preserved and stated.
+    error_stored: ["შემოწმება დასრულდა ტექნიკური შეცდომით — პასუხი სერვერზეა შენახული.", true]
   };
+  function isFailPhase(p) { return p === "help_failed" || p === "help_unsaved" || p === "stalled" || p === "error_stored"; }
+  function isRetryPhase(p) { return p === "failed" || p === "uncertain" || isFailPhase(p); }
+  // What the transcript records about a failure, in one place.
+  function failInfo(j, prev, stored) {
+    var n = Number(j && j.refresh || 0);
+    return { ref: failRef(j), code: failCode(j),
+             requestId: (j && j.request_id) || null,
+             at: Date.now(), stored: !!stored,
+             replyKind: n ? "recheck" : "answer", attempt: n || null,
+             attempts: Number((prev && prev.attempts) || 0) + 1 };
+  }
   function outcomeBadge(j) {
     var o = j && j.outcome;
+    // MONDAY-003 · the failed attempt is decided FIRST. The `j.final === false`
+    // test one line below used to match it and drew it as "მუშავდება".
+    if (o === "error") return ["fail", "ვერ შესრულდა — ტექნიკური შეცდომა"];
     if (o === "dispatcher_action") return ["act", "საჭიროა შენი მოქმედება"];
     if (o === "waiting") return ["wait", "ანალიზი მიმდინარეობს — ხელახლა დარეკვა არ სჭირდება"];
     if (o === "progress" || j.final === false) return ["wait", "მუშავდება — შედეგი აქვე გამოჩნდება"];
@@ -5755,19 +5881,268 @@ try{
   }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
+  // =========================================================================
+  // MONDAY-003 · failure state that survives a reload.
+  //
+  // ai_support_thread_read carries MESSAGES. A reply that could not be written
+  // leaves no message, so a failed attempt is invisible there - which is why a
+  // reloaded page showed a permanently "checking" question with no way out.
+  //
+  // ai_support_message_state is the existing per-message view. It applies the
+  // caller/company predicates itself (in_my_companies AND (is_management OR the
+  // caller's own email)), and it is called here with this scope's company only.
+  // It also returns last_failure_ref for a message it calls 'answered', which is
+  // exactly what lets a failed NEWER attempt stay visible under an older final
+  // answer instead of being hidden by the aggregate state.
+  //
+  // It is OPTIONAL. If the grant is not there, this returns null once, remembers
+  // that, and the UI falls back to bounded polling and an honest end state. It
+  // never fabricates a failure it could not read.
+  // =========================================================================
+  var stateRpcOk = null;                      // null = not tried yet, false = unavailable
+  async function messageState(sc) {
+    if (stateRpcOk === false) return null;
+    try {
+      var cl = client(); if (!cl || typeof cl.rpc !== "function") return null;
+      var r = await cl.rpc("ai_support_message_state", { p_company_id: sc.company });
+      if (r.error || !Array.isArray(r.data)) { stateRpcOk = false; return null; }
+      stateRpcOk = true;
+      var by = {};
+      r.data.forEach(function (x) { if (x && x.message_id) by[x.message_id] = x; });
+      return by;
+    } catch (e) { stateRpcOk = false; return null; }
+  }
+
+  // =========================================================================
+  // MONDAY-003 A1 · the recovery view.
+  //
+  // ai_support_message_state cannot say WHICH attempt failed: it exposes the
+  // failure ref and failure_kind, but not the failed reply_key, so a failed
+  // recheck:n is indistinguishable from a failed initial answer after a reload.
+  // Re-running the wrong one either replays old text or burns an extra attempt.
+  //
+  // ai_support_message_recovery (D18, read-only, caller-scoped, shipped as its
+  // own package) returns exactly the missing facts: whether a final reply
+  // exists, the open failure's reply kind and recheck attempt number, the run
+  // and recheck claimed_at, the highest recheck attempt, the lease length the
+  // server actually uses, and now() so the wait is measured against the SERVER
+  // clock rather than the browser's.
+  //
+  // It is OPTIONAL, exactly like the state view. Without it: a question with no
+  // final reply still retries correctly (that path needs no attempt number),
+  // and a question that already HAS a final reply is given the honest
+  // management action instead of a retry that would only replay old text.
+  // =========================================================================
+  var recoveryRpcOk = null;          // null = not tried, false = unavailable
+  var serverSkew = 0;                // serverNow() - Date.now(), from the view
+  var serverSkewKnown = false;
+  function serverNow() { return Date.now() + serverSkew; }
+  async function messageRecovery(sc) {
+    if (recoveryRpcOk === false) return null;
+    try {
+      var cl = client(); if (!cl || typeof cl.rpc !== "function") return null;
+      var r = await cl.rpc("ai_support_message_recovery", { p_company_id: sc.company });
+      if (r.error || !Array.isArray(r.data)) { recoveryRpcOk = false; return null; }
+      recoveryRpcOk = true;
+      var by = {};
+      r.data.forEach(function (x) {
+        if (!x || !x.message_id) return;
+        by[x.message_id] = x;
+        var t = Date.parse(x.server_now || "");
+        if (t) { serverSkew = t - Date.now(); serverSkewKnown = true; }
+      });
+      return by;
+    } catch (e) { recoveryRpcOk = false; return null; }
+  }
+  // One row of that view, reduced to what the transcript needs. No unresolved
+  // failure row means no failure: nothing is inferred from the aggregate state.
+  function stateFail(s) {
+    if (!s || !s.last_failure_ref) return null;
+    return { ref: String(s.last_failure_ref), kind: s.last_failure_kind || null,
+             at: Date.parse(s.occurred_at || "") || 0, attempts: Number(s.attempts || 0) };
+  }
+  // The newest FINAL REPLY already on screen for a question - INCLUDING a
+  // stored error, which is still the server's final reply and is exactly what
+  // ai_support_post_message would replay. Finality is not weakened here.
+  // Local answers are keyed by the question's local id (its request_key);
+  // restored answers by the server message_id. Both conventions are in use.
+  function finalReplyAt(q) {
+    var at = 0;
+    state.items.forEach(function (y) {
+      if (y.role !== "a" || !y.forId) return;
+      if (y.forId !== q.id && y.forId !== q.serverId) return;
+      if (!isFinalRes(y.res)) return;
+      if ((y.at || 0) > at) at = y.at || 0;
+    });
+    return at;
+  }
+  // Add a stored server answer to the transcript once, by its stable id.
+  function pushStoredAnswer(item, m) {
+    for (var i = 0; i < state.items.length; i++) if (state.items[i].id === m.message_id) return;
+    state.items.push({ id: m.message_id, role: "a", historical: !!item.historical,
+      res: { outcome: m.outcome, message: m.body, case_id: m.case_id,
+             request_id: m.request_id, kind: m.kind, final: true, persisted: true },
+      forId: item.id, at: Date.parse(m.created_at) || Date.now() });
+  }
+
+  // =========================================================================
+  // MONDAY-003 A1 · THE RECOVERY CONTRACT.
+  //
+  // Rewritten after A1. The earlier version offered one retry for every failure
+  // and always dropped refresh, which on a question that already had a final
+  // reply made ai_support_post_message replay the OLD answer with no fresh Help
+  // run at all - and the UI then marked that question done, or restarted an old
+  // waiting cycle. Keeping the same request_key is not sufficient.
+  //
+  // Which path is permitted depends on ONE server fact: does a final reply
+  // already exist for this question?
+  //
+  //   NO final reply, failure on the INITIAL answer
+  //       -> plain resend. ai_support_post_message re-claims the run once
+  //          claimed_at is older than the lease AND attempts < 3.
+  //   NO final reply, failure on recheck:n
+  //       -> resend with refresh:n, the SAME n. ai_support_recheck_claim
+  //          re-claims that very attempt once its own lease expires. The number
+  //          is never incremented to escape a bound.
+  //   A final reply EXISTS (a stored backend_error, or any earlier answer)
+  //       -> a plain resend would only replay it, so it is never offered. The
+  //          permitted fresh path is the next bounded recheck attempt, which
+  //          the recheck claim genuinely runs. If the highest attempt so far is
+  //          not knowable (reloaded, recovery view unavailable), NOTHING is
+  //          offered: guessing n either replays or burns an attempt, so the
+  //          management action is shown instead.
+  //
+  // Waiting time comes from the server's own claimed_at and now() when the
+  // recovery view is there. A browser-local failure timestamp is never
+  // presented as the server lease: that wait is shown as an approximation.
+  // =========================================================================
+  var countdowns = [];
+  var MSG_EXHAUSTED = "ავტომატური ცდები ამოიწურა.";
+  var MSG_UNKNOWN   = "ამ კითხვაზე ახალი შემოწმება აქედან ვერ დაიწყება.";
+  function leaseGate(path, attempt, claimedAt, localAt, leaseMs) {
+    var lease = Number(leaseMs || 0) > 0 ? Number(leaseMs) : LEASE_MS;
+    var base = claimedAt ? Date.parse(claimedAt) : 0;
+    if (base && serverSkewKnown) {
+      var left = base + lease - serverNow();
+      return left > 0
+        ? { can: false, wait: left, exact: true, path: path, attempt: attempt }
+        : { can: true, wait: 0, exact: true, path: path, attempt: attempt };
+    }
+    // No server lease information for this attempt. A browser clock is NOT the
+    // server lease, so any wait derived from it is marked approximate.
+    var l2 = Number(localAt || 0) ? Number(localAt) + lease - Date.now() : 0;
+    return l2 > 0
+      ? { can: false, wait: l2, exact: false, path: path, attempt: attempt }
+      : { can: true, wait: 0, exact: false, path: path, attempt: attempt };
+  }
+  function recoveryFor(it) {
+    if (!isFailPhase(it.phase)) return { can: true, wait: 0, path: "initial", attempt: null, exact: true };
+    var f = it.fail || {}, srv = it.srv || null;
+    // the lease the SERVER uses, when it tells us; otherwise the matching constant
+    var leaseMs = srv && Number(srv.lease_secs || 0) > 0 ? Number(srv.lease_secs) * 1000 : LEASE_MS;
+    // an UNSTORED failure whose attempt was a numbered recheck: that attempt is
+    // the one holding a claim, and ai_support_recheck_claim re-claims exactly it.
+    var openRecheck = !f.stored && f.replyKind === "recheck";
+    function sameRecheck() {
+      var n = f.attempt || (srv ? Number(srv.open_failure_attempt || 0) : 0);
+      if (!n) return { can: false, unknown: true };          // cannot identify it
+      return leaseGate("recheck", n, srv ? srv.recheck_open_claimed_at : null, f.at, leaseMs);
+    }
+
+    // The decisive server fact FIRST: does a final reply exist?
+    if (!it.serverFinal) {
+      // No final reply, so ai_support_post_message really re-claims the run.
+      if (openRecheck) return sameRecheck();
+      var att = srv ? Number(srv.run_attempts || 0) : Number(f.attempts || 0);
+      if (att >= ATTEMPT_CAP) return { can: false, exhausted: true };
+      return leaseGate("initial", null, srv ? srv.run_claimed_at : null, f.at, leaseMs);
+    }
+    // A final reply EXISTS. A plain resend would replay it.
+    // A failed recheck keeps its own number; anything else needs the next one.
+    if (openRecheck) return sameRecheck();
+    var known = srv ? true : !!it.maxRecheckKnown;
+    if (!known) return { can: false, unknown: true };
+    var maxA = Math.max(Number((srv ? srv.recheck_max_attempt : 0) || 0),
+                        it.maxRecheckKnown ? Number(it.maxRecheck || 0) : 0);
+    var next = maxA + 1;
+    if (next > RECHECK_MAX) return { can: false, exhausted: true };
+    return { can: true, wait: 0, exact: true, path: "recheck", attempt: next, fresh: true };
+  }
+  function retryLabel(it) {
+    var r = recoveryFor(it);
+    // An old stored question is retried EXPLICITLY, by the dispatcher, one at a
+    // time. Nothing here ever replays the stored history on its own.
+    if (it.historical) return "ხელახლა შემოწმება (ისტორიული კითხვა)";
+    return r.path === "recheck" && r.fresh ? "ახალი შემოწმება" : "ხელახლა გაგზავნა";
+  }
+  function renderRetry(row, it) {
+    var st = recoveryFor(it);
+    if (st.exhausted || st.unknown) {
+      row.appendChild(el("p", "nt bad",
+        (st.exhausted ? MSG_EXHAUSTED : MSG_UNKNOWN)
+        + " გადაეცი მენეჯერს"
+        + (it.fail && it.fail.ref ? " ტექნიკური მიმართვა " + it.fail.ref : "")
+        + ((it.fail && it.fail.requestId) ? " მოთხოვნის ნომერი " + it.fail.requestId : "")
+        + " და ეს კითხვა."));
+      return;
+    }
+    var rb = el("button", "rt", retryLabel(it));
+    rb.type = "button";
+    if (st.wait > 0) {
+      rb.disabled = true;
+      rb.textContent = retryLabel(it) + " — " + (st.exact ? "" : "≈") + Math.ceil(st.wait / 1000) + " წმ";
+      countdowns.push({ btn: rb, until: Date.now() + st.wait, item: it, exact: st.exact });
+    }
+    rb.addEventListener("click", function () { resend(it.id); });
+    row.appendChild(rb);
+  }
+  // The countdown is updated in place. A re-render here would scroll the
+  // transcript to the bottom and fight the dispatcher's own scrolling.
+  setInterval(function () {
+    for (var i = countdowns.length - 1; i >= 0; i--) {
+      var c = countdowns[i], left = c.until - Date.now();
+      if (!c.btn.isConnected) { countdowns.splice(i, 1); continue; }
+      if (left <= 0) { c.btn.disabled = false; c.btn.textContent = retryLabel(c.item); countdowns.splice(i, 1); }
+      else c.btn.textContent = retryLabel(c.item) + " — " + (c.exact ? "" : "≈") + Math.ceil(left / 1000) + " წმ";
+    }
+  }, 1000);
+
   function renderAll() {
     var frag = document.createDocumentFragment();
+    countdowns = [];                      // MONDAY-003: rebuilt with the rows
     state.items.forEach(function (it) {
       var row = el("div", "m " + (it.role === "u" ? "u" : "a"));
       row.appendChild(el("p", "sp", it.role === "u" ? ("შენ" + (it.ctx ? " · " + ctxLabel(it.ctx) : "")) : "AI ასისტენტი"));
       var bb = el("div", "bb");
       if (it.role === "a") {
         var b = outcomeBadge(it.res || {});
-        bb.appendChild(el("span", "st " + b[0], b[1])); bb.appendChild(document.createElement("br"));
+        bb.appendChild(el("span", "st " + b[0], b[1]));
+        // MONDAY-003 · persisted:false stays VISIBLE next to the badge, not only
+        // inside the details text. An answer shown once is not stored acceptance.
+        if (resKind(it.res || {}) === "answer" && persistedState(it.res || {}) === "no") {
+          bb.appendChild(el("span", "st unsaved", "არ შენახულა"));
+        }
+        bb.appendChild(document.createElement("br"));
         bb.appendChild(document.createTextNode(String((it.res && it.res.message) || "")));
         var r = it.res || {};
         if (r.case_id && String(r.message || "").indexOf(r.case_id) < 0) bb.appendChild(el("div", "cv", "საინჟინრო ქეისი: " + r.case_id));
         if (r.request_id && !r.case_id && (r.outcome === "error" || r.outcome === "system_issue")) bb.appendChild(el("div", "cv", "მოთხოვნის ნომერი: " + r.request_id));
+        // MONDAY-003 · the safe correlation reference for a failed attempt. The
+        // server usually appends it to the message; this only adds it when it is
+        // not already there, so it is never printed twice.
+        if (resKind(r) === "failed" && r.reply_error_ref
+            && String(r.message || "").indexOf(r.reply_error_ref) < 0) {
+          bb.appendChild(el("div", "cv warn", "ტექნიკური მიმართვა: " + r.reply_error_ref));
+        }
+        // MONDAY-003 · ai_support_post_reply answers saved:true for an idempotent
+        // duplicate too, so a racing writer's EXISTING row can be the stored
+        // winner while different, newly generated text was what we displayed.
+        // When the confirming read found different stored text, the stored row is
+        // what is on screen now and it says so.
+        if (it.storedDiffers) bb.appendChild(el("div", "cv", "ეს არის სერვერზე შენახული პასუხი — ადრე ნაჩვენები ტექსტი ჩანაცვლდა."));
+        // MONDAY-003 · an answer to an old stored question uses TODAY's evidence.
+        // It must not read as the reply that was due at the time.
+        if (it.historical) bb.appendChild(el("div", "cv", "ეს პასუხი დღევანდელ მონაცემებზეა დამზადებული — ის არ არის იმ დროის პასუხი."));
         var prov = r.semantic_review === "verified" ? "ზარი მოსმენილია და შემოწმებულია."
                  : r.semantic_review === "unavailable" ? "ზარი არ მოსმენილა — მხოლოდ ჩანაწერებია გამოყენებული."
                  : r.semantic_review === "attempted_failed" ? "ზარის შემოწმება ვერ დასრულდა — მხოლოდ ჩანაწერებია გამოყენებული." : "";
@@ -5808,13 +6183,11 @@ try{
       if (it.role === "u" && it.phase && it.phase !== "done") {
         var ph = PHASE[it.phase] || ["", false];
         if (ph[0]) row.appendChild(el("p", "nt" + (ph[1] ? " bad" : ""), ph[0]));
-        if (it.progress) row.appendChild(el("p", "nt", it.progress));
-        if (it.phase === "failed" || it.phase === "uncertain") {
-          var rb = el("button", "rt", "ხელახლა გაგზავნა");
-          rb.type = "button";
-          rb.addEventListener("click", function () { resend(it.id); });
-          row.appendChild(rb);
-        }
+        // MONDAY-003 · a progress line belongs to work in progress only. A failed
+        // attempt must not keep showing the last "still working" note under it.
+        if (it.progress && !isFailPhase(it.phase)) row.appendChild(el("p", "nt", it.progress));
+        if (it.fail && it.fail.ref) row.appendChild(el("p", "nt bad", "ტექნიკური მიმართვა: " + it.fail.ref));
+        if (isRetryPhase(it.phase)) renderRetry(row, it);
       }
       frag.appendChild(row);
     });
@@ -5951,23 +6324,74 @@ try{
     // was in flight, it is dropped: it must never enter another scope's chat.
     if (!(await aliveAfterAwait(sc))) { if (sc && sc.gen === scopeGen) busy = false; return; }
     busy = false;
-    if (r.kind === "ok" && r.json.outcome === "pending" && r.json.message_id) {
-      item.phase = "checking"; item.serverId = r.json.message_id;
-      setStatus("შეტყობინება მიღებულია — პასუხს ველოდები.");
-      pollReply(item, sc, 1);
-    } else if (r.kind === "ok" && (r.json.outcome === "progress" || r.json.final === false)) {
-      // R2: the server has progress, not a result. Keep the question open and
-      // keep polling; a progress note must never look like the final answer.
-      item.phase = "checking"; if (r.json.message_id) item.serverId = r.json.message_id;
-      item.progress = String(r.json.message || "");
-      setStatus("მუშავდება — პასუხს ველოდები.");
-      pollReply(item, sc, 1);
-    } else if (r.kind === "ok") {
-      item.phase = "done"; if (r.json.message_id) item.serverId = r.json.message_id;
-      var a = { id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now() };
-      state.items.push(a);
-      setStatus(r.json.outcome === "waiting" ? "ანალიზის შედეგს ავტომატურად ხელახლა შევამოწმებ." : "");
-      if (r.json.outcome === "waiting") scheduleRecheck(item, a, 1);
+    if (r.kind === "ok") {
+      // MONDAY-003 · ONE classification decides the transition, and the failed
+      // attempt is tested FIRST. The old order put `final === false` ahead of
+      // the error outcome, so {outcome:"error", final:false} entered the generic
+      // progress branch, set phase "checking" and started polling for a reply
+      // that no longer exists. Nothing below forges final:true to escape that
+      // branch: the response is rendered for what it actually is.
+      var k = resKind(r.json);
+      if (r.json.message_id) item.serverId = r.json.message_id;
+      if (k === "failed") {
+        // A failed attempt is NOT active work. The active path stops here, the
+        // Georgian explanation and its safe reference are shown, and the
+        // permitted recovery appears. message_id present means the question IS
+        // accepted and stored - it is never relabelled "not sent".
+        //
+        // MONDAY-003 A1 · the two classes are kept apart. A STORED error is the
+        // question's final reply: the check ran, its result is an error, and
+        // the server will replay it to a plain resend. An open attempt failure
+        // stored nothing, so the same request_key can still claim a run.
+        var cls = failureClass(r.json);
+        item.progress = "";
+        if (cls === "stored") {
+          item.phase = "error_stored";
+          item.serverFinal = true;
+          if (Number(r.json.refresh || 0)) {
+            item.maxRecheck = Math.max(Number(item.maxRecheck || 0), Number(r.json.refresh));
+            item.maxRecheckKnown = true;
+          }
+          item.fail = failInfo(r.json, item.fail, true);
+          setStatus("შემოწმებამ ტექნიკური შეცდომა დააბრუნა — პასუხი შენახულია, ქვემოთ ნახე რა შეგიძლია.", true);
+        } else {
+          item.phase = r.json.message_id ? "help_failed" : "help_unsaved";
+          item.fail = failInfo(r.json, item.fail, false);
+          setStatus("შემოწმება ვერ დასრულდა — ახსნა და ხელახლა ცდა ქვემოთაა.", true);
+        }
+        state.items.push({ id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now(),
+                           historical: !!item.historical });
+      } else if (k === "pending") {
+        item.phase = "checking"; item.fail = null;
+        setStatus("შეტყობინება მიღებულია — პასუხს ველოდები.");
+        pollReply(item, sc, 1);
+      } else if (k === "progress") {
+        // R2: the server has progress, not a result. Keep the question open and
+        // keep polling; a progress note must never look like the final answer.
+        item.phase = "checking"; item.fail = null;
+        item.progress = String(r.json.message || "");
+        setStatus("მუშავდება — პასუხს ველოდები.");
+        pollReply(item, sc, 1);
+      } else {
+        item.phase = "done"; item.fail = null; item.progress = "";
+        // a successful recheck consumes its attempt number; record it so a
+        // later recovery asks for the NEXT one rather than replaying this.
+        if (Number(r.json.refresh || 0)) {
+          item.maxRecheck = Math.max(Number(item.maxRecheck || 0), Number(r.json.refresh));
+          item.maxRecheckKnown = true;
+        }
+        if (persistedState(r.json) === "yes") item.serverFinal = true;
+        var a = { id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now(),
+                  historical: !!item.historical };
+        state.items.push(a);
+        setStatus(r.json.outcome === "waiting" ? "ანალიზის შედეგს ავტომატურად ხელახლა შევამოწმებ." : "");
+        if (r.json.outcome === "waiting") scheduleRecheck(item, a, 1);
+        // MONDAY-003 · the reply writer reports saved:true for an idempotent
+        // DUPLICATE as well, so a racing writer's existing row may be the stored
+        // winner while this newly generated text is what was displayed. One
+        // confirming read replays whatever is actually stored.
+        if (persistedState(r.json) === "yes") confirmStored(item, a, sc);
+      }
     } else if (r.kind === "auth") {
       item.phase = "failed"; setStatus("სესია დასრულდა — შედი ხელახლა. ტექსტი შენახულია.", true);
     } else if (r.kind === "scope") {
@@ -5987,18 +6411,88 @@ try{
       return r.data;
     } catch (e) { return null; }
   }
+  // MONDAY-003 · one confirming read, once, shortly after a final answer the
+  // server called stored. It proves the row is really there, and it replaces the
+  // displayed text with the STORED winner when a duplicate write means they
+  // differ. It never invents an answer: if nothing is stored, the claim that it
+  // was saved is withdrawn rather than repeated.
+  function confirmStored(item, a, sc) {
+    var shown = String((a.res && a.res.message) || "");
+    setTimeout(async function () {
+      if (!alive(sc) || state.items.indexOf(a) < 0) return;
+      var t = await threadRead(sc);
+      if (!t || !(await aliveAfterAwait(sc)) || state.items.indexOf(a) < 0) return;
+      var stored = null;
+      t.messages.forEach(function (m) {
+        if (m.role === "assistant" && m.reply_to === item.serverId && isFinalRes(m)) stored = m;
+      });
+      if (!stored) {
+        a.res = Object.assign({}, a.res, { persisted: false, history: "unsaved" });
+        save(); renderAll(); return;
+      }
+      if (String(stored.body || "") !== shown) {
+        a.id = stored.message_id;
+        a.res = { outcome: stored.outcome, message: stored.body, case_id: stored.case_id,
+                  request_id: stored.request_id, kind: stored.kind, final: true, persisted: true };
+        a.storedDiffers = true;
+        save(); renderAll();
+      }
+    }, 1500);
+  }
+
   function pollReply(item, sc, n) {
     setTimeout(async function () {
       if (!alive(sc) || state.items.indexOf(item) < 0 || item.phase !== "checking") return;
       var t = await threadRead(sc);
       if (!(await aliveAfterAwait(sc))) return;
+      if (state.items.indexOf(item) < 0 || item.phase !== "checking") return;
       var reps = (t && t.messages.filter(function (m) { return m.role === "assistant" && m.reply_to === item.serverId; })) || [];
       var fin = null;
       for (var i = reps.length - 1; i >= 0; i--) { if (isFinalRes(reps[i])) { fin = reps[i]; break; } }
+      var finAt = fin ? (Date.parse(fin.created_at) || 0) : 0;
+      // MONDAY-003 · a reply that could not be WRITTEN leaves no message row, so
+      // the thread alone can never end this loop - that is how a failed attempt
+      // stayed on screen as live work. The per-message state view is consulted
+      // every few polls. A failure NEWER than the newest final reply ends the
+      // active path; an older final answer is kept and stays visible.
+      if (n === 1 || n % STATE_EVERY === 0) {
+        var st = await messageState(sc);
+        if (!(await aliveAfterAwait(sc))) return;
+        if (state.items.indexOf(item) < 0 || item.phase !== "checking") return;
+        var srow = st && item.serverId ? st[item.serverId] : null;
+        var f = stateFail(srow);
+        if (f && (!fin || f.at > finAt)) {
+          if (fin) pushStoredAnswer(item, fin);
+          item.phase = "help_failed"; item.progress = ""; item.fail = f;
+          setStatus("შემოწმება ვერ დასრულდა — ხელახლა ცდის ღილაკი ქვემოთაა.", true);
+          save(); renderAll(); return;
+        }
+        if (!fin && srow && srow.state === "stalled") {
+          item.phase = "stalled"; item.progress = "";
+          item.fail = { ref: f ? f.ref : null, at: Date.parse(srow.occurred_at || "") || 0,
+                        attempts: Number(srow.attempts || 0) };
+          setStatus("შემოწმება შეჩერდა პასუხის გარეშე — შეგიძლია ხელახლა სცადო.", true);
+          save(); renderAll(); return;
+        }
+      }
       if (fin) {
-        item.phase = "done"; item.progress = "";
-        state.items.push({ id: fin.message_id, role: "a", res: { outcome: fin.outcome, message: fin.body, case_id: fin.case_id, request_id: fin.request_id, kind: fin.kind, final: true }, forId: item.id, at: Date.now() });
-        setStatus(""); save(); renderAll(); return;
+        // MONDAY-003 A1 · a stored ERROR reply is still the question's final
+        // reply. Finality is preserved - but it is not "done", because the
+        // dispatcher got no usable answer and a plain resend would replay it.
+        item.progress = "";
+        pushStoredAnswer(item, fin);
+        item.serverFinal = true;
+        if (resKind({ outcome: fin.outcome, kind: fin.kind, final: true }) === "failed") {
+          item.phase = "error_stored";
+          item.fail = { ref: null, code: null, requestId: fin.request_id || null,
+                        at: Date.parse(fin.created_at) || Date.now(), stored: true,
+                        replyKind: fin.kind === "recheck" ? "recheck" : "answer", attempt: null,
+                        attempts: Number((item.fail && item.fail.attempts) || 0) };
+          setStatus("შემოწმებამ ტექნიკური შეცდომა დააბრუნა — ქვემოთ ნახე რა შეგიძლია.", true);
+        } else {
+          item.phase = "done"; item.fail = null; setStatus("");
+        }
+        save(); renderAll(); return;
       }
       // R2: a progress row is shown as progress and polling continues. The
       // question is NOT closed and no outcome is invented for it.
@@ -6006,22 +6500,64 @@ try{
       if (last && String(last.body || "") !== item.progress) {
         item.progress = String(last.body || ""); save(); renderAll();
       }
-      if (n >= PENDING_POLL_MAX) { item.phase = "uncertain"; setStatus("პასუხი ჯერ არ მივიდა. „ხელახლა გაგზავნა“ იგივე შეტყობინებას გაგზავნის, ორჯერ არ დაფიქსირდება.", true); save(); renderAll(); return; }
+      if (n >= PENDING_POLL_MAX) {
+        // MONDAY-003 · an honest end to the ACTIVE path. This is neither an
+        // answer nor a claim that the work failed: nobody answered inside the
+        // window. The same request_key may be retried, which is why this is
+        // "stalled" and not "uncertain" (that state means the send itself was
+        // never confirmed, and it is still used for exactly that).
+        item.phase = "stalled"; item.progress = "";
+        setStatus("პასუხი ჯერ არ მივიდა. „ხელახლა გაგზავნა“ იგივე შეტყობინებას გაგზავნის, ორჯერ არ დაფიქსირდება.", true);
+        save(); renderAll(); return;
+      }
       pollReply(item, sc, n + 1);
     }, PENDING_POLL_MS);
   }
   // Server history is the record: saved messages from other devices/tabs appear; local
   // unsent/failed items (not on the server yet) are kept after it.
+  // MONDAY-003 · applied when the transcript is NOT rebuilt. A reply-failure row
+  // is not a message and carries no seq, so a snapshot that is "not newer" can
+  // still be the moment a question became a failed attempt.
+  function applyFailState(st) {
+    if (!st) return false;
+    var changed = false;
+    state.items.forEach(function (x) {
+      if (x.role !== "u" || !x.serverId || x.phase === "sending") return;
+      var f = stateFail(st[x.serverId]);
+      if (!f) return;
+      var at = finalReplyAt(x);
+      if (at && f.at <= at) return;                       // the stored reply is the newer fact
+      if (x.phase === "help_failed" && x.fail && x.fail.ref === f.ref) return;
+      x.phase = "help_failed"; x.progress = ""; changed = true;
+      x.fail = { ref: f.ref, code: null, requestId: null, at: f.at, stored: false,
+                 // the state view cannot say which attempt this was; the
+                 // recovery view can, and mergeServer fills it in from there.
+                 replyKind: null, attempt: null, attempts: f.attempts };
+    });
+    return changed;
+  }
+
   async function mergeServer(sc) {
     if (!SERVER_THREAD) return;
     var t = await threadRead(sc);
     if (!t || !(await aliveAfterAwait(sc))) return;
+    var st = await messageState(sc);
+    if (!(await aliveAfterAwait(sc))) return;
+    var rec = await messageRecovery(sc);
+    if (!(await aliveAfterAwait(sc))) return;
     // CP3-REVIEW-01 fix: a read that is not newer than what has already been applied
     // is dropped. Previously a late/empty snapshot replaced the transcript and a
     // completed local question + answer disappeared from the screen (2 items -> 0).
     var maxSeq = 0;
     t.messages.forEach(function (m) { var q = Number(m.seq) || 0; if (q > maxSeq) maxSeq = q; });
-    if (maxSeq <= seenSeq && seenSeq > 0) return;
+    if (maxSeq <= seenSeq && seenSeq > 0) {
+      var ch = applyFailState(st);
+      if (rec) { state.items.forEach(function (x) {
+        if (x.role === "u" && x.serverId && rec[x.serverId]) { x.srv = rec[x.serverId]; ch = true; }
+      }); }
+      if (ch) { save(); renderAll(); }
+      return;
+    }
     var items = [];
     t.messages.forEach(function (m) {
       if (m.role === "dispatcher") {
@@ -6059,11 +6595,83 @@ try{
       var sq = qById[x.forId];                             // its question is on the server
       return !!sq && !answeredOnServer[sq.serverId];       // but its answer is not
     });
-    // A saved question with no answer on either side stays "checking" and is polled.
+    // =====================================================================
+    // MONDAY-003 · reload recovery. Each restored question is put into the state
+    // it is ACTUALLY in, read from the server, not from an in-memory response
+    // that the reload destroyed:
+    //
+    //   unresolved failure newer than its newest final reply -> failed attempt,
+    //       with its safe reference and the permitted retry. An older final
+    //       answer is NOT removed: it stays visible ABOVE the failed newer
+    //       attempt, and it does not hide it.
+    //   a final answer and no newer failure                  -> done.
+    //   no answer, a live lease, and recent                  -> checking, polled.
+    //   no answer and no live lease                          -> stalled, NOT polled.
+    //   anything older than FRESH_MS with no answer          -> history: never
+    //       polled and never retried automatically. The 41 stored questions are
+    //       not replayed; each keeps ONE explicit dispatcher-initiated retry in
+    //       its own stored scope.
+    //
+    // answeredOnServer is true for ANY assistant row, including a progress note,
+    // so it cannot decide this: only a FINAL answer closes a question.
+    // =====================================================================
+    // The newest FINAL reply per question, INCLUDING a stored error: that is
+    // exactly what ai_support_post_message replays, so it is what decides
+    // whether a plain resend can do any work.
+    var finByParent = {};
     items.forEach(function (x) {
-      if (x.role !== "u" || answeredOnServer[x.serverId]) return;
-      for (var i = 0; i < localA.length; i++) if (localA[i].forId === x.id) return;
-      x.phase = "checking";
+      if (x.role !== "a" || !x.forId || !isFinalRes(x.res)) return;
+      var at = x.at || 0;
+      if (!finByParent[x.forId] || at > finByParent[x.forId].at) finByParent[x.forId] = { at: at, res: x.res };
+    });
+    items.forEach(function (x) {
+      if (x.role !== "u") return;
+      var s2 = st ? st[x.serverId] : null;
+      var rv = rec ? rec[x.serverId] : null;
+      var f = stateFail(s2);
+      var fin = finByParent[x.serverId] || finByParent[x.id] || null;
+      var finAt = fin ? fin.at : 0;
+      x.historical = (Date.now() - (x.at || 0)) > FRESH_MS;
+      x.srv = rv || null;
+      // MONDAY-003 A1 · the recovery view carries the two facts the state view
+      // cannot: whether a final reply exists, and WHICH attempt failed.
+      x.serverFinal = rv ? (rv.has_final_reply === true) : !!fin;
+      if (rv) { x.maxRecheck = Number(rv.recheck_max_attempt || 0); x.maxRecheckKnown = true; }
+      else { x.maxRecheckKnown = false; }
+
+      if (f && (!finAt || f.at > finAt)) {
+        x.phase = "help_failed"; x.progress = "";
+        x.fail = { ref: f.ref, code: null, requestId: null, at: f.at, stored: false,
+                   replyKind: rv && rv.open_failure_reply_kind ? rv.open_failure_reply_kind : null,
+                   attempt: rv && rv.open_failure_attempt ? Number(rv.open_failure_attempt) : null,
+                   attempts: f.attempts };
+        return;
+      }
+      if (fin) {
+        if (resKind(fin.res) === "failed") {
+          // the stored final reply IS a technical error
+          x.phase = "error_stored"; x.progress = "";
+          x.fail = { ref: null, code: null, requestId: fin.res.request_id || null,
+                     at: finAt, stored: true,
+                     replyKind: fin.res.kind === "recheck" ? "recheck" : "answer",
+                     attempt: null, attempts: 0 };
+        } else { x.phase = "done"; x.fail = null; }
+        return;
+      }
+      for (var i = 0; i < localA.length; i++) {
+        if (localA[i].forId === x.id && isFinalRes(localA[i].res)) { x.phase = "done"; return; }
+      }
+      if (s2 && s2.state === "stalled") {
+        x.phase = "stalled"; x.progress = "";
+        x.fail = { ref: f ? f.ref : null, code: null, requestId: null,
+                   at: Date.parse(s2.occurred_at || "") || 0, stored: false,
+                   replyKind: rv && rv.open_failure_reply_kind ? rv.open_failure_reply_kind : null,
+                   attempt: rv && rv.open_failure_attempt ? Number(rv.open_failure_attempt) : null,
+                   attempts: Number(s2.attempts || 0) };
+        return;
+      }
+      if (x.historical) { x.phase = "stalled"; return; }   // history is never polled
+      x.phase = "checking";                                // recent, or state view unavailable
     });
     state.items = items.concat(localQ, localA);
     if (maxSeq > seenSeq) seenSeq = maxSeq;
@@ -6079,7 +6687,12 @@ try{
     var wd = workDay();
     if (!wd) { setStatus("სამუშაო დღე ვერ დადგინდა — განაახლე გვერდი. ტექსტი შენახულია.", true); return; }
     if (busy || !box.value.trim()) return;
-    var item = { id: uid(), role: "u", text: text, ctx: state.draftCtx, workDay: wd, rem: remNow(), at: Date.now() };
+    // MONDAY-003 A1 · a question created here has its whole recheck history in
+    // this tab, so the next permitted attempt number is known exactly. A
+    // question rebuilt from the server does NOT carry that, and says so
+    // (maxRecheckKnown stays false unless the recovery view supplies it).
+    var item = { id: uid(), role: "u", text: text, ctx: state.draftCtx, workDay: wd, rem: remNow(),
+                 at: Date.now(), serverFinal: false, maxRecheck: 0, maxRecheckKnown: true };
     state.items.push(item);
     state.draft = ""; state.draftCtx = pendingCtx || null; pendingCtx = null; box.value = "";
     await run(item);
@@ -6089,7 +6702,22 @@ try{
     var sc = scope;
     if (!(await syncScope())) { setStatus("შედი აპში შენი ანგარიშით.", true); return; }
     if (!sc || scope.gen !== sc.gen) return;           // scope changed during the check
+    // A1 publisher review: refresh server attempt/lease metadata before a manual
+    // retry. Cached metadata from before the last attempt must not replay it.
+    await mergeServer(sc);
+    if (!(await aliveAfterAwait(sc))) return;
     var it = findItem(id); if (!it || it.phase === "done") return;
+    // MONDAY-003 A1 · never perform - or advise - a retry that cannot claim,
+    // never one that would only replay a stored reply, and never go past the
+    // attempt count the server itself enforces.
+    var rs = recoveryFor(it);
+    if (!rs.can) {
+      setStatus(rs.exhausted ? MSG_EXHAUSTED + " გადაეცი მენეჯერს."
+        : rs.unknown ? MSG_UNKNOWN + " გადაეცი მენეჯერს."
+        : "წინა ცდა ჯერ კიდევ მიმდინარეობს — დაელოდე " + (rs.exact ? "" : "დაახლოებით ")
+          + Math.ceil(rs.wait / 1000) + " წამს.", true);
+      renderAll(); return;
+    }
     // The request scope is immutable: a retry re-sends the ORIGINAL work_day (from the
     // server row for a restored message). Only a message that never reached the server
     // may take the current work day.
@@ -6098,7 +6726,22 @@ try{
       if (!wd2) { setStatus("სამუშაო დღე ვერ დადგინდა — განაახლე გვერდი.", true); return; }
       it.workDay = wd2;
     }
-    await run(it);
+    // MONDAY-003 A1 · the scope is always the ORIGINAL one - same request_key,
+    // company, work_day, gate and order set. What changes is only WHICH server
+    // path is asked, and recoveryFor() already decided that:
+    //
+    //   initial  -> no refresh. Only offered when no final reply exists, so
+    //               ai_support_post_message really re-claims the run; an
+    //               initial retry is never turned into a numbered recheck to
+    //               get past its attempt cap.
+    //   recheck  -> refresh:n. For a FAILED recheck this is its OWN n, re-run
+    //               under the attempt it already holds, not an incremented one.
+    //               For a question that already has a stored final reply it is
+    //               the next bounded attempt, which is the only path that does
+    //               fresh work instead of replaying old text.
+    if (rs.path === "recheck" && rs.attempt) it.refresh = rs.attempt;
+    else if (it.refresh) delete it.refresh;
+    try { await run(it); } finally { if (it.refresh) delete it.refresh; }
   }
 
   // ---- bounded re-read while call analysis is pending ----------------------
@@ -6116,13 +6759,49 @@ try{
       if (!(await aliveAfterAwait(sc))) return;                // late answer for an old scope: dropped
       if (state.items.indexOf(answer) < 0) return;             // transcript was replaced
       if (r.kind !== "ok") { answer.recheck = "ავტომატური შემოწმება ვერ მოხერხდა (" + n + "/" + RECHECK_MAX + ")."; save(); renderAll(); scheduleRecheck(item, answer, n + 1); return; }
-      if (r.json.outcome === "waiting" && r.json.message === (answer.res && answer.res.message)) {
+      var rk = resKind(r.json);
+      if (rk === "failed") {
+        // MONDAY-003 · a FAILED recheck is not "an updated result". The older
+        // answer stays exactly where it is and is not overwritten, the failure
+        // is shown as its own note with its safe reference, and the question
+        // gets the permitted retry. Automatic rechecking stops here rather than
+        // running the remaining attempts into the same failure.
+        answer.recheck = "ხელახლა შემოწმება ვერ დასრულდა (" + n + "/" + RECHECK_MAX + ")"
+          + (failRef(r.json) ? " — ტექნიკური მიმართვა: " + failRef(r.json) : "") + ".";
+        item.progress = "";
+        item.maxRecheck = Math.max(Number(item.maxRecheck || 0), n);
+        item.maxRecheckKnown = true;
+        // MONDAY-003 A1 · record WHICH attempt failed. A failed recheck is
+        // re-run under its own number once its lease expires; without this the
+        // offered retry fell through to a plain resend, which the server
+        // answers with the OLD stored reply and no fresh Help run at all.
+        var failed = failureClass(r.json) === "stored";
+        item.fail = { ref: failRef(r.json), code: failCode(r.json),
+                      requestId: r.json.request_id || null, at: Date.now(),
+                      stored: failed, replyKind: "recheck", attempt: n,
+                      attempts: Number((item.fail && item.fail.attempts) || 0) + 1 };
+        item.phase = failed ? "error_stored" : "help_failed";
+        if (failed) item.serverFinal = true;
+        save(); renderAll(); return;
+      }
+      if (rk === "refused") {
+        // The server refused BEFORE doing any work - a changed day, gate or
+        // order set. It is reported as a refusal, never as a new result.
+        answer.recheck = "ხელახლა შემოწმება უარყოფილია: " + String(r.json.message || "");
+        save(); renderAll(); return;
+      }
+      if (rk === "progress"
+          || (r.json.outcome === "waiting" && r.json.message === (answer.res && answer.res.message))) {
         // still processing: no new history row is expected for an unchanged waiting answer
         answer.recheck = "ხელახლა შემოწმდა " + new Date().toLocaleTimeString("ka-GE", { hour: "2-digit", minute: "2-digit" }) + " — ჯერ მუშავდება (" + n + "/" + RECHECK_MAX + ").";
         save(); renderAll(); scheduleRecheck(item, answer, n + 1); return;
       }
       answer.recheck = "ეს პასუხი ჩანაცვლდა ახალი შედეგით ქვემოთ.";
-      var a2 = { id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now(), recheck: "ავტომატურად განახლებული შედეგი." };
+      item.maxRecheck = Math.max(Number(item.maxRecheck || 0), n);
+      item.maxRecheckKnown = true;
+      if (persistedState(r.json) === "yes") item.serverFinal = true;
+      var a2 = { id: uid(), role: "a", res: r.json, forId: item.id, at: Date.now(),
+                 historical: !!item.historical, recheck: "ავტომატურად განახლებული შედეგი." };
       state.items.push(a2); save(); renderAll();
       if (r.json.outcome === "waiting") scheduleRecheck(item, a2, n + 1);
     }, RECHECK_MS);
