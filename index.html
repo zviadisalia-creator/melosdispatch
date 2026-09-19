@@ -6812,6 +6812,47 @@ try{
     return changed;
   }
 
+  /* VANO-CHAT-001 · the transcript is ordered by TIME, one exchange at a time.
+     It used to be "everything the server carries, then whatever was left over
+     locally" - and what is left over locally is exactly the replies the server
+     never stored. A stale unsaved answer from an earlier attempt was therefore
+     pinned BELOW the newest stored exchange, which is where this panel scrolls
+     on every render. After a reload the dispatcher saw the old unsaved replies
+     and not the answer the server had just stored.
+
+     Nothing is dropped and nothing is restyled here: an unsaved reply keeps its
+     „არ შენახულა" badge and simply stands in its own chronological place, where
+     it can no longer be read as the latest history. An answer whose question is
+     missing keeps its own position rather than disappearing. */
+  function orderTranscript(list) {
+    var groups = [], byKey = {};
+    list.forEach(function (x) {
+      if (x.role !== "u") return;
+      var g = { at: x.at || 0, seq: x.seq || 0, q: x, reps: [] };
+      groups.push(g);
+      if (x.id) byKey[x.id] = g;
+      if (x.serverId) byKey[x.serverId] = g;
+    });
+    list.forEach(function (x) {
+      if (x.role === "u") return;
+      var g = x.forId ? byKey[x.forId] : null;
+      if (g) { if (g.reps.indexOf(x) < 0) g.reps.push(x); return; }
+      groups.push({ at: x.at || 0, seq: x.seq || 0, q: null, reps: [x] });
+    });
+    var cmp = function (a, b) {
+      var d = (a.at || 0) - (b.at || 0);
+      return d !== 0 ? d : ((a.seq || 0) - (b.seq || 0));
+    };
+    groups.sort(cmp);
+    var out = [];
+    groups.forEach(function (g) {
+      if (g.q) out.push(g.q);
+      g.reps.sort(cmp);
+      g.reps.forEach(function (r) { out.push(r); });
+    });
+    return out;
+  }
+
   async function mergeServer(sc) {
     if (!SERVER_THREAD) return;
     var t = await threadRead(sc);
@@ -6948,7 +6989,7 @@ try{
       if (x.historical) { x.phase = "stalled"; return; }   // history is never polled
       x.phase = "checking";                                // recent, or state view unavailable
     });
-    state.items = items.concat(localQ, localA);
+    state.items = orderTranscript(items.concat(localQ, localA));
     if (maxSeq > seenSeq) seenSeq = maxSeq;
     save(); renderAll();
     items.forEach(function (x) { if (x.role === "u" && x.phase === "checking") pollReply(x, sc, 1); });
