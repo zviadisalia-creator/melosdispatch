@@ -1058,9 +1058,21 @@ async function loadHealth_(){
       sb.from('call_logs').select('quo_call_id,created_at,status,duration_seconds,quo_user_id,quo_phone_id,dispatcher_name').gte('created_at',d24).order('created_at',{ascending:false}).limit(2000),
       sb.from('call_analysis').select('analyzed_at').eq('transcript_status','Completed').not('analyzed_at','is',null).order('analyzed_at',{ascending:false}).limit(1),
       sb.from('call_analysis').select('quo_call_id',{count:'exact',head:true}).gte('analyzed_at',d1),
-      sb.from('quo_phone_numbers').select('phone_number_id,updated_at').limit(5000)
+      sb.from('quo_phone_numbers').select('phone_number_id,updated_at').limit(5000),
+      /* MONDAY-003 D · the two things this screen could not see. Both are
+         OPTIONAL: a missing grant or a missing migration shows as "unavailable"
+         and nothing else on the screen is affected. */
+      sb.rpc('ai_support_message_state', { p_company_id: COID() }),
+      sb.rpc('ai_source_queue_health',  { p_company_id: COID() }),
+      /* MONDAY-003 B3 · ai_support_message_state calls a message `answered`
+         whenever ANY final reply exists, so an unresolved failure that happened
+         AFTER that reply is invisible in it. D18's per-message recovery view
+         carries both timestamps, which is the only way to compare them. */
+      sb.rpc('ai_support_message_recovery', { p_company_id: COID() })
     ]);
-    for(var i=0;i<q.length;i++){ if(q[i].error) throw new Error('#'+(i+1)+': '+(q[i].error.message||q[i].error.code)); }
+    // the two MONDAY-003 D reads are optional and must never break this screen
+    for(var i=0;i<9;i++){ if(q[i].error) throw new Error('#'+(i+1)+': '+(q[i].error.message||q[i].error.code)); }
+    // q[9], q[10] and q[11] are the MONDAY-003 additions and are optional
     var calls=q[5].data||[];
     /* ანალიზის მოლოდინი: ბოლო 24 სთ-ის დასრულებული ≥10 წმ ზარი, რომელსაც call_analysis-ში ჩანაწერი ჯერ არ აქვს */
     var elig=calls.filter(function(c){ return c.quo_call_id && c.status==='completed' && (c.duration_seconds||0)>=10; });
@@ -1078,7 +1090,55 @@ async function loadHealth_(){
       if(!c.dispatcher_name){ var u=c.quo_user_id||'(ცარიელი)'; unU[u]=(unU[u]||0)+1; }
       if(c.quo_phone_id && !cat[c.quo_phone_id]) unP[c.quo_phone_id]=(unP[c.quo_phone_id]||0)+1;
     });
+    /* MONDAY-003 D · dispatcher chat.
+       The 41 questions that predate the reviewed v10 deployment are historical
+       DEBT, not new incidents, and are counted separately. Nothing here is a
+       worker heartbeat: every number below is an actual stored outcome. */
+    var SUPPORT_DEBT_BEFORE = Date.parse('2026-09-19T17:54:34Z');
+    /* D18 per-message recovery rows, by message_id. Optional: without it the
+       comparison below simply cannot be made and the count falls back to what
+       message_state says, which is stated in the row's own text. */
+    var rec = {};
+    var recOk = (!q[11].error && Array.isArray(q[11].data));
+    if(recOk) q[11].data.forEach(function(x){ if(x && x.message_id) rec[x.message_id] = x; });
+    var sup = null;
+    if(!q[9].error && Array.isArray(q[9].data)){
+      sup = { newOpen:0, newOldest:null, oldOpen:0, failed:0, failedRef:null, failedAt:null,
+              answered:0, hiddenFailures:0, recOk:recOk };
+      q[9].data.forEach(function(x){
+        var at = Date.parse(x.occurred_at||'')||0;
+        var isNew = at >= SUPPORT_DEBT_BEFORE;
+        if(x.state==='reply_failed'){
+          sup.failed++;
+          if(!sup.failedAt || at > sup.failedAt){ sup.failedAt = at; sup.failedRef = x.last_failure_ref||null; }
+          return;
+        }
+        if(x.state==='answered'){
+          /* THE CORRECTION: an open failure that is NEWER than the newest final
+             reply is a live incident, however old the answer under it is. */
+          var r = rec[x.message_id];
+          if(r && r.open_failure_ref){
+            var fAt = Date.parse(r.open_failure_at||'')||0;
+            var aAt = Date.parse(r.last_final_reply_at||'')||0;
+            if(fAt && (!aAt || fAt > aAt)){
+              sup.failed++; sup.hiddenFailures++;
+              if(!sup.failedAt || fAt > sup.failedAt){ sup.failedAt = fAt; sup.failedRef = r.open_failure_ref; }
+              return;
+            }
+          }
+          sup.answered++; return;
+        }
+        // checking or stalled: still open
+        if(isNew){ sup.newOpen++; if(!sup.newOldest || at < sup.newOldest) sup.newOldest = at; }
+        else { sup.oldOpen++; }
+      });
+    }
+    var srcq = (!q[10].error && Array.isArray(q[10].data) && q[10].data[0]) ? q[10].data[0] : null;
+    if(srcq && srcq.authorized !== true) srcq = null;
+
     HEALTH.m={
+      sup: sup, supErr: q[9].error ? String(q[9].error.message||q[9].error.code) : null,
+      srcq: srcq, srcqErr: q[10].error ? String(q[10].error.message||q[10].error.code) : null,
       whLatest:(q[0].data[0]||{}).received_at||null, whUnproc:q[1].count||0, whOldestUnproc:(q[2].data[0]||{}).received_at||null,
       clLatest:(q[3].data[0]||{}).created_at||null, cl1h:q[4].count||0, cl24h:calls.length, clCapped:calls.length>=2000,
       pend:pend.length, pendOldest:oldestPend, elig:elig.length,
@@ -1089,6 +1149,63 @@ async function loadHealth_(){
   }catch(e){ console.error(e); HEALTH.err=String(e&&e.message||e); }
   HEALTH.loading=false;
   if(MTAB==='health') rHealth();
+}
+/* MONDAY-003 D · the added indicators.
+   Every one of them is an actual stored outcome. There is no heartbeat row,
+   because no unattended process is known to be running: a heartbeat is shown
+   only for something that has actually run, and "the last requested check that
+   completed" below is exactly that — a result, not a promise. A quiet queue is
+   rendered green, not as an outage, and a red business gate is still not a
+   system failure. Escalation here is MANUAL: nothing on this screen sends an
+   email or a message. */
+function hSupportRows_(m){
+  var row=function(lab,val,raw,st){ return "<tr><td><b>"+lab+"</b></td><td class='num'>"+val+"</td><td class='muted' style='font-size:12px'>"+raw+"</td><td>"+hChip_(st)+"</td></tr>"; };
+  if(!m.sup){
+    return [row('დისპეჩერის ჩატი', '—',
+      'ვერ წაიკითხა'+(m.supErr?(': '+esc(m.supErr)):'')+' · ai_support_message_state მიუწვდომელია ამ ანგარიშისთვის', 'n')];
+  }
+  var s=m.sup, newAge = s.newOldest ? Math.round((Date.now()-s.newOldest)/60000) : null;
+  var sNew = s.newOpen===0 ? 'g' : (newAge!=null && newAge<=15 ? 'y' : 'r');
+  var sFail = s.failed===0 ? 'g' : 'r';
+  return [
+    row('ახალი უპასუხო შეკითხვა', s.newOpen,
+      (s.newOldest? ('უძველესი: '+hTs_(new Date(s.newOldest).toISOString())+' · '+hAgeTxt_(newAge)+' წინ') : '—')
+      + ' · ამ გამოშვების შემდეგ მიღებული · 0 ნორმა, ≤15 წთ ყურადღება', sNew),
+    row('პასუხი ვერ შეინახა', s.failed,
+      (s.failedRef ? ('ბოლო მიმართვა: '+esc(s.failedRef)) : '—')
+      + (s.hiddenFailures ? (' · აქედან '+s.hiddenFailures+' ძველი პასუხის ქვეშ იმალებოდა') : '')
+      + (s.recOk ? '' : ' · ai_support_message_recovery ვერ წაიკითხა — ძველი პასუხის ქვეშ დამალული ხარვეზი ვერ ჩანს')
+      + ' · დამუშავება: გადაეცი ეს მიმართვა ინჟინერს; ავტომატური შეტყობინება არ იგზავნება', sFail),
+    row('ძველი დაუხურავი შეკითხვა (v10-მდე)', s.oldOpen,
+      'ისტორიული ვალი — ეს ახალი ავარია არ არის და ავტომატურად არ სრულდება', 'n')
+  ];
+}
+function hSourceRows_(m){
+  var row=function(lab,val,raw,st){ return "<tr><td><b>"+lab+"</b></td><td class='num'>"+val+"</td><td class='muted' style='font-size:12px'>"+raw+"</td><td>"+hChip_(st)+"</td></tr>"; };
+  if(!m.srcq){
+    return [row('წყაროს მოთხოვნილი შემოწმება', '—',
+      'ვერ წაიკითხა'+(m.srcqErr?(': '+esc(m.srcqErr)):'')+' · ai_source_queue_health ჯერ არ არის დაყენებული', 'n')];
+  }
+  var s=m.srcq;
+  var expAge = s.oldest_expired_at ? hAge_(s.oldest_expired_at) : null;
+  var sExp = (s.claimed_expired||0)===0 ? 'g' : 'r';
+  var okAge = s.latest_ok_at ? hAge_(s.latest_ok_at) : null;
+  return [
+    row('ვადაგასული წყაროს იჯარა', s.claimed_expired||0,
+      (s.oldest_expired_at? ('უძველესი: '+hTs_(s.oldest_expired_at)+' · '+hAgeTxt_(expAge)+' წინ') : '—')
+      + ' · მოთხოვნილი შემოწმება, რომელსაც არავინ დაასრულა · 0 ნორმა', sExp),
+    /* MONDAY-003 B3 · a held lease says a check was CLAIMED, not that anything
+       is executing it. The 33 abandoned rows were all claimed once, too. */
+    row('მიმდინარე წყაროს შემოწმება', s.claimed_live||0,
+      'იჯარა აღებულია — ეს არ ნიშნავს, რომ შემსრულებელი ახლა მუშაობს; '
+      + 'შესრულება მხოლოდ დასრულებული შემოწმებით ჩანს (ქვემოთ) · რიგი ცარიელი = ნორმა, ავარია არ არის', 'n'),
+    row('ბოლო დასრულებული წყაროს შემოწმება',
+      (s.latest_ok_at? (hAgeTxt_(okAge)+' წინ') : 'არასდროს'),
+      (s.latest_ok_at? (hTs_(s.latest_ok_at)+' · ') : '')
+      + '24 სთ: '+(s.ok_24h||0)+' წარმატებული, '+(s.failed_24h||0)+' წარუმატებელი, '+(s.abandoned_24h||0)+' მიტოვებული'
+      + ' · ეს შედეგია და არა პულსი: შემსრულებლის „ცოცხლობის სიგნალი" ამ ხედს არ აქვს',
+      s.latest_ok_at ? 'n' : 'y')
+  ];
 }
 function rHealth(){
   if(!isMgmtView()){ $('view').innerHTML=ph('სისტემის ჯანმრთელობა','მხოლოდ მენეჯმენტისთვის'); return; }
@@ -1120,7 +1237,7 @@ function rHealth(){
     row('კატალოგში უცნობი Quo ნომერი (24 სთ)', nP, list(m.unP), sP),
     row('ნომრების კატალოგის ბოლო განახლება', hAgeTxt_(hAge_(m.catMax))+' წინ', hTs_(m.catMax)+' · '+m.catN+' ნომერი · ზღვარი არ აქვს — მნიშვნელოვანია მხოლოდ მაშინ, როცა ზემოთ უცნობი ნომერი ჩანს', 'n'),
     row('ფრონტენდის ჰოსტი', esc(location.host), 'ჰოსტებს შორის ვერსიის შედარება ამ ხედში არ იზომება', 'n')
-  ].join('');
+  ].concat(hSupportRows_(m)).concat(hSourceRows_(m)).join('');
   $('view').innerHTML=head+(HEALTH.err?"<div class='card p' style='margin-bottom:12px'><b style='color:var(--crit)'>ბოლო განახლება ვერ მოხერხდა:</b> "+esc(HEALTH.err)+" — ქვემოთ წინა მნიშვნელობებია.</div>":"")+
     "<div class='card'><div class='tablewrap'><table style='min-width:720px'><thead><tr><th>მაჩვენებელი</th><th>მნიშვნელობა</th><th>ნედლი მონაცემი / ზღვარი</th><th>სტატუსი</th></tr></thead><tbody>"+rows+"</tbody></table></div></div>";
 }
@@ -4466,24 +4583,52 @@ bootstrap();
   DTABS.length = 1;
   try{ if(typeof buildTabs==='function' && document.getElementById('tabsDisp')) buildTabs(); }catch(e){}
 
-/* content gate: შინაარსობრივი შემოწმება (contact_content_orders) */
+/* content gate: შინაარსობრივი შემოწმება (contact_content_orders)
+
+   MONDAY-003 C · the failure path used to be `if(res.error) return;`, and an
+   order the RPC answered nothing for was skipped with `if(!c) return;`. In both
+   cases pu_verified/del_verified kept the value the CONTACT-only check had set,
+   so a row whose content was never examined stayed on screen as fully verified.
+   A technical failure is not a verification. Unknown is now shown as unknown:
+   the row stops counting as content-verified and says WHY, so it can never be
+   mistaken for "the call was checked and was fine" — nor for the voicemail
+   verdict, because wrapper v3.1 below renders a row WITH a reason as a content
+   problem and only a row WITHOUT one as an auto-answer.
+   An SMS reply is separate evidence and is deliberately left untouched.
+   The server still decides whether a shift may close; this is the display. */
 try{
   var __origLPC = loadPlanContacts;
+  var CG_UNKNOWN = 'შინაარსი ვერ შემოწმდა';
+  var cgMarkUnknown_ = function(r){
+    if(r.pu_verified){ r.pu_verified = false; r.pu_content_unknown = true; r.pu_reason = CG_UNKNOWN; }
+    if(r.del_verified){ r.del_verified = false; r.del_content_unknown = true; r.del_reason = CG_UNKNOWN; }
+  };
   loadPlanContacts = async function(){
     await __origLPC.apply(this, arguments);
     try{
       if(!Array.isArray(PCONT) || !PCONT.length) return;
       var ons = PCONT.map(function(r){ return r.order_number; });
       var res = await sb.rpc('contact_content_orders', { p_orders: ons, p_company_id: COID() });
-      if(res.error) return;
+      // one bounded retry: a transient failure should not paint the whole board
+      if(res.error){ res = await sb.rpc('contact_content_orders', { p_orders: ons, p_company_id: COID() }); }
+      if(res.error){
+        console.error('content gate', res.error);
+        PCONT.forEach(cgMarkUnknown_);      // NOT verified, and it says so
+        return;
+      }
       var m = {}; (res.data||[]).forEach(function(x){ m[x.order_number] = x; });
       PCONT.forEach(function(r){
-        var c = m[r.order_number]; if(!c) return;
+        r.pu_content_unknown = false; r.del_content_unknown = false;
+        var c = m[r.order_number];
+        if(!c){ cgMarkUnknown_(r); return; }   // asked about, not answered for
         r.pu_reason = ''; r.del_reason = '';
         if(c.pu_content_ok === false){ r.pu_verified = false; r.pu_reason = c.pu_reason || ''; }
         if(c.del_content_ok === false){ r.del_verified = false; r.del_reason = c.del_reason || ''; }
       });
-    }catch(e){ console.error('content gate', e); }
+    }catch(e){
+      console.error('content gate', e);
+      try{ if(Array.isArray(PCONT)) PCONT.forEach(cgMarkUnknown_); }catch(e2){}
+    }
   };
 }catch(e){ console.error('content gate init', e); }
 
@@ -4496,6 +4641,11 @@ try{
   /* 0. ინვოისის ჭეშმარიტება მხოლოდ SD-დან (დოკ. 122) */
   try { if (typeof window.docsSent_ === 'function') { window.docsSent_ = function (ld) { try { return !!(ld && ld.invoice_sent_at); } catch (e) { return false; } }; } } catch (e) {}
   var RF_EP = null, RF_BUSY = {};
+  /* MONDAY-003 B3 · EVERY per-order cache key carries the company.
+     RF_BUSY and SD_TRUTH used to be keyed by order number alone, so the same
+     number in two companies shared one entry: a slow reply for company A could
+     unlock the button for, and paint its verdict onto, company B's row. */
+  function rfKey_(co, ord){ return String(co||'') + '|' + String(ord||''); }
   function rfToken_() { try { for (var i=0;i<localStorage.length;i++){ var k=localStorage.key(i);
     if (/^sb-.*-auth-token$/.test(k)) { var v=JSON.parse(localStorage.getItem(k)||'null');
       if (v&&v.access_token) return v.access_token; if (v&&v.currentSession&&v.currentSession.access_token) return v.currentSession.access_token; } } } catch(e){} return null; }
@@ -4507,11 +4657,42 @@ try{
     pickup_scheduled:'აღების თარიღი', delivery_scheduled:'ჩაბარების თარიღი',
     pickup_location:'აღების მისამართი', delivery_location:'ჩაბარების მისამართი',
     status:'სტატუსი', customer:'ბროკერი', price:'ფასი', invoice_sent_at:'ინვოისი', driver_name:'მძღოლი' };
+  /* MONDAY-003 B1 · the invoice branch used to read `if (j.invoice_sent)` and
+     tell the dispatcher to SEND the invoice for everything else - including a
+     coalesced check, a response with no invoice field at all, and a failed
+     settle. "not confirmed sent" and "confirmed not sent" are different facts,
+     and only the second one is an instruction. The consumer now states which,
+     in invoice_state, taken from ai_source_check_state's invoice_truth. */
+  function rfInvoiceState_(j) {
+    if (!j) return 'unavailable';
+    var s = j.invoice_state;
+    if (s === 'confirmed_sent' || s === 'confirmed_absent' || s === 'pending'
+        || s === 'unavailable' || s === 'conflict') return s;
+    // an older consumer that only ever said invoice_sent: a positive is still
+    // a positive, but its silence is UNKNOWN and must not become an instruction
+    if (j.invoice_sent === true) return 'confirmed_sent';
+    return 'unavailable';
+  }
+  function rfInvoiceMsg_(st) {
+    if (st === 'confirmed_sent')   return 'ინვოისი დადასტურდა SD-ში ✓';
+    if (st === 'confirmed_absent') return 'SD-ში ინვოისი ჯერ არ ჩანს — გააგზავნე Super Dispatch-ში და დააჭირე ხელახლა';
+    /* MONDAY-003 B3 · the source says there is none and the app already holds a
+       date. Two pieces of evidence disagree; a second send is NOT the answer. */
+    if (st === 'conflict')         return 'აპში ინვოისის თარიღი წერია, SD-ში კი არ ჩანს — ხელახლა ნუ გააგზავნი. შეატყობინე მენეჯმენტს.';
+    /* MONDAY-003 B3 · no promise that a result will appear by itself. Nothing
+       on this page polls for it, so saying "in a few seconds" would be a
+       promise the code does not keep. The dispatcher is told to press again. */
+    if (st === 'pending')          return 'შემოწმება ჯერ მიმდინარეობს — შედეგი ჯერ არ არის. ინვოისი ჯერ არ გააგზავნო; ცოტა ხანში დააჭირე ხელახლა.';
+    return 'ინვოისის მდგომარეობა SD-დან ვერ დადასტურდა — ჯერ არ გააგზავნო. სცადე ხელახლა, ან შეატყობინე მენეჯმენტს.';
+  }
   function rfMsg_(j, wantInvoice) {
     if (!j) return 'ვერ განახლდა';
     if (j.ok) {
-      if (wantInvoice) { if (j.invoice_sent) return 'ინვოისი დადასტურდა SD-ში ✓';
-        return 'SD-ში ინვოისი ჯერ არ ჩანს — გააგზავნე Super Dispatch-ში და დააჭირე ხელახლა'; }
+      if (wantInvoice) return rfInvoiceMsg_(rfInvoiceState_(j));
+      /* MONDAY-003 B3 · a COALESCED check read nothing: another request already
+         owns this one. Reporting "no change - SD has the same data" would
+         present someone else's unfinished work as a completed comparison. */
+      if (j.coalesced) return 'ეს ტვირთი უკვე მოწმდება — შედეგი ჯერ არ არის. ცოტა ხანში დააჭირე ხელახლა.';
       var d=j.changed||j.detail||{}; var keys=Array.isArray(d)?d:Object.keys(d).filter(function(k){return d[k];});
       if (j.any_change && keys.length) return 'განახლდა: '+keys.map(function(k){return RF_LABEL[k]||k;}).join(' · ');
       if (j.any_change) return 'განახლდა';
@@ -4519,6 +4700,12 @@ try{
       if (Array.isArray(j.delivery_phones)&&!j.delivery_phones.length) miss.push('ჩაბარების');
       if (miss.length) return 'SD-ში '+miss.join(' და ')+' ნომერი არ წერია — შეიყვანე Super Dispatch-ში';
       return 'ცვლილება არ არის — SD-ში იგივე მონაცემია';
+    }
+    // A FAILED refresh establishes nothing about the invoice either, so when
+    // the dispatcher pressed the invoice button the honest answer is the
+    // unknown one, with the technical reason after it.
+    if (wantInvoice && j.reason !== 'cooldown') {
+      return rfInvoiceMsg_('unavailable') + (j.reason ? ' ('+j.reason+')' : '');
     }
     switch (j.reason) {
       case 'cooldown': return 'ცოტა ხნის წინ განახლდა — სცადე '+(j.retry_after_sec||30)+' წამში';
@@ -4529,6 +4716,9 @@ try{
       case 'no_user': case 'claim_failed': return 'სესია ამოიწურა — გადატვირთე გვერდი';
       case 'apply_failed': return 'ჩაწერა ვერ მოხერხდა — შეატყობინე მენეჯმენტს';
       case 'not_allowed': return 'ამ ტვირთის განახლების უფლება არ გაქვს';
+      case 'no_sd_credential_for_company': return 'ამ კომპანიის წყაროსთან წვდომა არ არის მითითებული — შეატყობინე მენეჯმენტს';
+      case 'provider_not_configured': return 'წყაროს კავშირი ჯერ არ არის დაყენებული — შეატყობინე მენეჯმენტს';
+      case 'no_sd_token': return 'წყაროსთან დაკავშირება ვერ მოხერხდა — შეატყობინე მენეჯმენტს';
       default: return 'ვერ განახლდა'+(j.reason?' ('+j.reason+')':'');
     }
   }
@@ -4542,17 +4732,102 @@ try{
   }
   window.sdRefresh = function (ord, btn, wantInvoice) {
     ord=String(ord||''); if (ord.indexOf('%')>=0){ try{ ord=decodeURIComponent(ord);}catch(e){} }
-    if (!ord||RF_BUSY[ord]) return false; RF_BUSY[ord]=1;
+    /* MONDAY-003 B3 · the company is captured HERE, when the dispatcher presses
+       the button, and it travels with the request. Everything downstream is
+       judged against this value, never against whatever company happens to be
+       selected when the reply lands. */
+    var co0 = (function(){ try{ return COID(); }catch(e){ return null; } })();
+    if (!ord || !co0) return false;
+    // Publisher review: the canary uses the same signed-in UI and request
+    // contract, but reaches the staged route before global activation.
+    var rfAction = 'refreshOrder';
+    try { if (new URLSearchParams(location.search).get('sc_canary') === '1') rfAction = 'refreshOrderCo'; } catch(e){}
+    var k = rfKey_(co0, ord);
+    if (RF_BUSY[k]) return false; RF_BUSY[k]=1;
     var old = btn?btn.textContent:''; if (btn){ btn.textContent='⏳'; btn.disabled=true; }
     rfEndpoint_().then(function(ep){ var tk=rfToken_(); if(!ep) throw new Error('no_endpoint'); if(!tk) throw new Error('no_token');
-      return fetch(ep+'?action=refreshOrder',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({order:ord,token:tk})}); })
+      return fetch(ep+'?action='+rfAction,{method:'POST',headers:{'Content-Type':'text/plain'},
+        /* the captured company goes through the authorized path; the server
+           still re-derives and re-checks it, this does not grant anything */
+        body:JSON.stringify({order:ord,token:tk,company_id:co0})}); })
       .then(function(r){ return r.json(); })
-      .then(function(j){ rfToast_(rfMsg_(j,wantInvoice), !j||!j.ok||(wantInvoice&&!j.invoice_sent));
-        if (j&&j.ok&&typeof refreshLive_==='function'){ try{ refreshLive_(true); }catch(e){} } })
-      .catch(function(e){ rfToast_(String(e&&e.message)==='no_token'?'სესია ვერ მოიძებნა — გადატვირთე გვერდი':'განახლება ვერ მოხერხდა — სცადე ხელახლა', true); })
-      .then(function(){ if (btn){ btn.disabled=false; btn.textContent=old; } delete RF_BUSY[ord]; });
+      .then(function(j){
+        // Do not display an old company's toast or refresh another company's
+        // view if the user switched companies while the request was in flight.
+        try { if (String(COID() || '') !== String(co0)) return; } catch(e){ return; }
+        /* A reply that is not for the company this request was made under is
+           DISCARDED. It is never toasted and never painted: that is how one
+           company's answer used to land on another company's identical order
+           number. A reply that names no company is accepted only for the
+           captured one, because that is the only scope it could have had. */
+        var jco = j && (j.company_id || null);
+        if (jco && String(jco) !== String(co0)) {
+          rfToast_('პასუხი სხვა კომპანიას ეხებოდა — არ ჩაიწერა. სცადე ხელახლა.', true);
+          return;
+        }
+        var ist = rfInvoiceState_(j);
+        // red only when something is actually wrong or the invoice is genuinely
+        // missing; "pending" and "unavailable" are honest, not alarming.
+        rfToast_(rfMsg_(j,wantInvoice),
+                 !j||!j.ok||(wantInvoice&&(ist==='confirmed_absent'||ist==='conflict')));
+        // MONDAY-003 B1/B3 · the company-scoped SOURCE verdict for this order.
+        // ai_source_apply_facts writes sd_source_fact, and ai_source_field_truth
+        // (D5b/D6b) joins loads to it - so the fact IS consumed, and
+        // projection_lag is a designed state rather than a defect. This paints
+        // that verdict on the row; it ANNOTATES and does not judge. What
+        // satisfies a requirement is still decided by the existing rule.
+        try { if (j && j.order) { SD_TRUTH[rfKey_(co0, j.order)] = { state: ist, at: Date.now(),
+              company_id: co0, company: j.company_code || null,
+              truth: j.invoice_truth || null }; rfPaintTruth_(); } } catch(e){}
+        if (j&&j.ok&&!j.coalesced&&typeof refreshLive_==='function'){ try{ refreshLive_(true); }catch(e){} } })
+      .catch(function(e){ try { if (String(COID() || '') !== String(co0)) return; } catch(scopeErr){ return; } rfToast_(String(e&&e.message)==='no_token'?'სესია ვერ მოიძებნა — გადატვირთე გვერდი':'განახლება ვერ მოხერხდა — სცადე ხელახლა', true); })
+      .then(function(){ if (btn){ btn.disabled=false; btn.textContent=old; } delete RF_BUSY[k]; });
     return false;
   };
+  /* MONDAY-003 B1/B3 · the visible end of the requested-source path.
+     ai_source_apply_facts writes sd_source_fact, and ai_source_field_truth
+     (D5b, refined by D6b) joins loads to sd_source_fact - so the stored fact IS
+     consumed, and `projection_lag` (source says sent, local column behind) is a
+     DESIGNED state, not a defect. The verdict is shown on that order's row as
+     an explicit annotation. Green is never invented and no gate is flipped:
+     what satisfies a requirement is still decided by the existing rule.
+
+     Every entry is keyed by COMPANY + order and is in memory only, so a reload
+     starts empty: stale or missing evidence can never come back as a positive
+     or as a resend instruction. */
+  var SD_TRUTH = {};
+  window.sdSourceTruth = SD_TRUTH;
+  var SD_TRUTH_TEXT = {
+    confirmed_sent:   ['SD: ინვოისი დადასტურებულია', '#1f6a36'],
+    confirmed_absent: ['SD: ინვოისი არ ჩანს', '#9a2b2b'],
+    pending:          ['SD: მოწმდება…', '#7a5010'],
+    unavailable:      ['SD: ვერ დადასტურდა', '#506877'],
+    conflict:         ['SD: შეუსაბამობა — არ გააგზავნო', '#7a5010']
+  };
+  function rfPaintTruth_(){
+    try{
+      /* The company on screen RIGHT NOW. A verdict stored under any other
+         company is simply not found here, so it cannot be painted. */
+      var coNow = (function(){ try{ return COID(); }catch(e){ return null; } })();
+      var btns = document.querySelectorAll('.rfbtn[data-ord]');
+      for (var i=0;i<btns.length;i++){
+        var b = btns[i], ord = b.getAttribute('data-ord');
+        var t = coNow ? SD_TRUTH[rfKey_(coNow, ord)] : null;
+        if (t && String(t.company_id) !== String(coNow)) t = null;   // belt
+        var row = b.parentNode; if (!row) continue;
+        var tag = row.querySelector('.sdtruth');
+        if (!t){ if (tag) tag.parentNode.removeChild(tag); continue; }
+        if (!tag){ tag = document.createElement('span'); tag.className='sdtruth';
+          tag.style.cssText='margin-left:6px;font-size:11px;white-space:nowrap'; row.appendChild(tag); }
+        var d = SD_TRUTH_TEXT[t.state] || SD_TRUTH_TEXT.unavailable;
+        tag.textContent = d[0]; tag.style.color = d[1];
+        tag.title = 'წყაროს პასუხი' + (t.company ? ' ('+t.company+')' : '')
+          + '. მოთხოვნა ამ ტვირთსა და ამ კომპანიაზე იყო.';
+      }
+    }catch(e){}
+  }
+  setInterval(rfPaintTruth_, 2000);
+
   function rfMkBtn_(ord,label,title,wantInvoice){
     var b=document.createElement('button'); b.className='fixbtn rfbtn'; b.type='button'; b.textContent=label; b.title=title;
     b.style.cssText='margin-left:6px;padding:1px 7px;font-size:11px;line-height:17px;cursor:pointer';
