@@ -7202,3 +7202,341 @@ try{
   syncScope();   // on reload a still-valid session resumes this tab's conversation; no session wipes it
 })();
 </script>
+
+<!-- DISPATCHER-STATUS-001 -->
+<script>
+/* DISPATCHER-STATUS-001. Management UI for the existing access_allowlist.active.
+   No schema, gate, payroll, booking-owner, driver, or history writes.
+   Rollback: restore the previous index.html; retain deliberate status choices. */
+(function () {
+  'use strict';
+  if (window.__dispatcherStatus001) return;
+  window.__dispatcherStatus001 = true;
+  var rows = [], loaded = false, loadError = '', pending = null, filter = 'active';
+  var generation = 0, loading = null, loadedAt = 0, obligations = null, obligationsError = '';
+  var obligationsCompany = null, obligationsLoading = null, obligationsGeneration = 0, statusNotice = '';
+  function manager_() { return !!(USER && USER.role === 'mgmt' && ROLE === 'mgmt' && !VIEWAS); }
+  function sameUser_(email) { return !!(USER && USER.email === email && USER.role === 'mgmt'); }
+  function inCompany_(row) {
+    return row.company_codes == null || row.company_codes.some(function (code) {
+      return CO && String(code).trim().toUpperCase() === String(CO.code).trim().toUpperCase();
+    });
+  }
+  function names_() {
+    if (!loaded || loadError) return [];
+    return Array.from(new Set(rows.filter(function (r) {
+      return r.active === true && inCompany_(r);
+    }).map(function (r) { return r.dispatcher_name; }).filter(Boolean)))
+      .sort(function (a, b) { return a.localeCompare(b, 'ka'); });
+  }
+  function syncNames_() { DISPLIST = names_(); buildViewAs(); }
+  function paint_() {
+    if (!manager_()) return;
+    if (MTAB === 'dispatchers') renderDispatchers_();
+    else if (MTAB === 'closes') rCloses();
+  }
+  async function load_() {
+    if (!USER || USER.role !== 'mgmt') return;
+    if (loading) return loading;
+    var email = USER.email, token = ++generation;
+    loading = (async function () {
+      try {
+        var result = await sb.from('access_allowlist')
+          .select('email,dispatcher_name,role,active,company_codes')
+          .eq('role', 'dispatcher').order('dispatcher_name');
+        if (result.error) throw result.error;
+        if (!Array.isArray(result.data)) throw new Error('Missing dispatcher roster');
+        if (!sameUser_(email) || token !== generation) return;
+        rows = result.data; loaded = true; loadedAt = Date.now(); loadError = '';
+      } catch (e) {
+        if (sameUser_(email) && token === generation) {
+          loadError = 'დისპეჩერების სტატუსები ვერ ჩაიტვირთა. ხელახლა სცადე.';
+        }
+        console.error('Dispatcher roster read failed', e);
+      } finally {
+        if (sameUser_(email)) syncNames_();
+      }
+    })();
+    try { await loading; } finally { loading = null; }
+  }
+  loadDispatchers = load_;
+
+  function button_(label, action, selected) {
+    var b = document.createElement('button'); b.type = 'button';
+    b.className = selected ? 'chip g' : 'chip'; b.textContent = label;
+    b.style.cursor = 'pointer'; b.onclick = action; return b;
+  }
+  function textCell_(tr, text) {
+    var td = document.createElement('td'); td.textContent = text; tr.appendChild(td); return td;
+  }
+  async function save_(row, value) {
+    if (!manager_() || pending || !loaded || loadError) { paint_(); return; }
+    var email = USER.email, previous = row.active;
+    if (value === previous) return;
+    pending = row.email; statusNotice = ''; paint_();
+    try {
+      if (loading) await loading;
+      if (!sameUser_(email)) return;
+      // Compare-and-set: a stale panel cannot silently replace another manager's edit.
+      // Exact role/email/name predicates prevent a stale row affecting a manager or rename.
+      var result = await sb.from('access_allowlist').update({ active: value })
+        .eq('email', row.email).eq('role', 'dispatcher')
+        .eq('dispatcher_name', row.dispatcher_name).eq('active', previous)
+        .select('email,dispatcher_name,role,active,company_codes');
+      if (result.error) throw result.error;
+      if (!result.data || result.data.length !== 1 || result.data[0].active !== value) {
+        throw new Error('Status changed elsewhere or access denied');
+      }
+      if (!sameUser_(email)) return;
+      rows = rows.map(function (r) { return r.email === row.email ? result.data[0] : r; });
+      syncNames_();
+      statusNotice = row.dispatcher_name + (value ? ' — გააქტიურებულია ✓' : ' — დეაქტივირებულია ✓');
+      obligations = null; obligationsGeneration++;
+      // Re-read after the committed write; do not report a successful save on a failed write.
+      await load_();
+    } catch (e) {
+      console.error('Dispatcher status save failed', e);
+      if (sameUser_(email)) {
+        statusNotice = 'ცვლილება ვერ დადასტურდა — გადაამოწმე სტატუსი და ხელახლა სცადე.';
+        await load_();
+      }
+    } finally {
+      pending = null;
+      if (sameUser_(email)) { paint_(); loadObligations_(); }
+    }
+  }
+  async function loadObligations_() {
+    if (!manager_() || MTAB !== 'dispatchers' || obligationsLoading) return;
+    var company = COID(), email = USER.email, token = obligationsGeneration;
+    if (obligationsCompany === company && obligations !== null) return;
+    obligationsLoading = company; obligationsError = '';
+    try {
+      var result = await sb.rpc('mgmt_doc_obligations_review', { p_company_id: company });
+      if (result.error) throw result.error;
+      if (!Array.isArray(result.data)) throw new Error('Missing document obligations');
+      if (!sameUser_(email) || COID() !== company || token !== obligationsGeneration) return;
+      obligations = result.data.filter(function (r) { return r.review === 'departed_booker'; });
+      obligationsCompany = company;
+    } catch (e) {
+      console.error('Departed dispatcher obligations read failed', e);
+      if (sameUser_(email) && COID() === company && token === obligationsGeneration) {
+        obligationsError = 'დარჩენილი საქმეები ვერ ჩაიტვირთა — ხელახლა სცადე.';
+      }
+    } finally {
+      obligationsLoading = null;
+      if (sameUser_(email) && COID() === company && manager_() && MTAB === 'dispatchers') renderDispatchers_();
+      if (sameUser_(email) && manager_() && MTAB === 'dispatchers' && (COID() !== company || token !== obligationsGeneration)) loadObligations_();
+    }
+  }
+  function renderDispatchers_() {
+    if (!manager_()) return;
+    var view = $('view');
+    view.innerHTML = ph('დისპეჩერები', '„აქტიური“ მართავს აპში წვდომასა და მიმდინარე ცვლის სიას. სტატუსი მოქმედებს ყველა კომპანიაში.');
+    var card = document.createElement('div'); card.className = 'card p'; view.appendChild(card);
+    var bar = document.createElement('div'); bar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px';
+    card.appendChild(bar);
+    ['active', 'inactive', 'all'].forEach(function (key) {
+      var count = rows.filter(function (r) { return key === 'all' || r.active === (key === 'active'); }).length;
+      var label = { active: 'აქტიური', inactive: 'არააქტიური', all: 'ყველა' }[key];
+      bar.appendChild(button_(label + (loaded && !loadError ? ' (' + count + ')' : ''), function () {
+        filter = key; renderDispatchers_();
+      }, filter === key));
+    });
+    var refresh = button_('განახლება', async function () {
+      if (pending) return;
+      obligations = null; obligationsGeneration++; await load_(); paint_(); loadObligations_();
+    });
+    refresh.disabled = !!pending || !!loading; bar.appendChild(refresh);
+    var note = document.createElement('div'); note.className = 'muted';
+    note.style.cssText = 'font-size:12px;margin-bottom:14px';
+    note.textContent = 'მონიშვნის მოხსნა თიშავს დისპეჩერს. ხელახლა მონიშვნა ააქტიურებს. ძველი ტვირთები, ხელფასები და ცვლები ინახება; მძღოლების მიმაგრება არ იცვლება.';
+    card.appendChild(note);
+    if (statusNotice) {
+      var notice = document.createElement('div'); notice.setAttribute('role', 'status');
+      notice.style.cssText = 'margin:0 0 12px;font-weight:600'; notice.textContent = statusNotice; card.appendChild(notice);
+    }
+    if (!loaded || loadError) {
+      var err = document.createElement('p'); err.setAttribute('role', 'status');
+      err.textContent = loadError || 'დისპეჩერები იტვირთება…'; card.appendChild(err); return;
+    }
+    var wrap = document.createElement('div'); wrap.className = 'tablewrap';
+    var table = document.createElement('table'); table.style.minWidth = '560px';
+    table.innerHTML = '<thead><tr><th>დისპეჩერი</th><th>აქტიური</th><th>ელფოსტა</th></tr></thead><tbody></tbody>';
+    wrap.appendChild(table); card.appendChild(wrap);
+    var shown = rows.filter(function (r) { return filter === 'all' || r.active === (filter === 'active'); });
+    shown.forEach(function (row) {
+      var tr = document.createElement('tr'); if (!row.active) tr.style.opacity = '.65';
+      var name = textCell_(tr, row.dispatcher_name); name.style.fontWeight = '650';
+      var cell = document.createElement('td'); var input = document.createElement('input');
+      input.type = 'checkbox'; input.checked = row.active; input.disabled = !!pending;
+      input.style.cssText = 'width:17px;height:17px;cursor:pointer';
+      input.setAttribute('aria-label', row.dispatcher_name + ' — აქტიური');
+      input.setAttribute('data-dispatcher-email', row.email);
+      input.addEventListener('change', function () { save_(row, input.checked); });
+      cell.appendChild(input); tr.appendChild(cell); textCell_(tr, row.email); table.tBodies[0].appendChild(tr);
+    });
+    if (!shown.length) { var empty = document.createElement('tr'); textCell_(empty, 'ამ სიაში დისპეჩერი არ არის.').colSpan = 3; table.tBodies[0].appendChild(empty); }
+    var work = document.createElement('div'); work.className = 'card p'; work.style.marginTop = '16px'; view.appendChild(work);
+    var title = document.createElement('h4'); title.textContent = 'არააქტიურების დარჩენილი საქმეები · ' + (CO ? CO.legal_name : ''); work.appendChild(title);
+    var help = document.createElement('p'); help.className = 'muted'; help.style.fontSize = '12px';
+    help.textContent = 'დარჩენილი ინვოისები და ჩეკები მენეჯმენტთან რჩება. ტვირთის თავდაპირველი პასუხისმგებელი არ იცვლება.'; work.appendChild(help);
+    if (obligationsError || obligations === null || obligationsCompany !== COID()) {
+      var message = document.createElement('p'); message.textContent = obligationsError || 'დარჩენილი საქმეები იტვირთება…'; work.appendChild(message);
+    } else if (!obligations.length) {
+      var none = document.createElement('p'); none.className = 'muted'; none.textContent = 'დარჩენილი ინვოისი ან ჩეკი არ არის.'; work.appendChild(none);
+    } else {
+      var ow = document.createElement('div'); ow.className = 'tablewrap';
+      var ot = document.createElement('table'); ot.style.minWidth = '560px';
+      ot.innerHTML = '<thead><tr><th>დისპეჩერი</th><th>ტვირთი</th><th>დარჩენილია</th><th>თარიღი</th></tr></thead><tbody></tbody>';
+      obligations.forEach(function (o) {
+        var tr = document.createElement('tr'); textCell_(tr, o.booking_dispatcher || '—'); textCell_(tr, o.order_number);
+        textCell_(tr, o.kind === 'check' ? 'ჩეკი' : 'ინვოისი / BOL'); textCell_(tr, gd(o.due_or_delivered)); ot.tBodies[0].appendChild(tr);
+      }); ow.appendChild(ot); work.appendChild(ow);
+    }
+  }
+
+  var oldRender = render;
+  render = function () {
+    if (ROLE === 'mgmt' && MTAB === 'dispatchers') {
+      renderDispatchers_();
+      if (manager_()) {
+        if (!loaded && !loading && !loadError) load_().then(function () { paint_(); loadObligations_(); });
+        else loadObligations_();
+      }
+      return;
+    }
+    return oldRender.apply(this, arguments);
+  };
+  var position = MTABS.findIndex(function (t) { return t[0] === 'drivers'; });
+  MTABS.splice(position + 1, 0, ['dispatchers', 'დისპეჩერები']);
+
+  // The original close renderer is replaced below only to use the authoritative
+  // active roster and matching counters; waiver and historical records stay intact.
+  rCloses = function () {
+  if (!manager_()) return;
+  var tday=ymd_(nextWorkDay_());
+  var W=Object.keys(WAIV).map(function(k){ return WAIV[k]; });
+  var pend=W.filter(function(w){ return w.status==='pending'; }).sort(function(a,b){ return String(b.requested_at).localeCompare(String(a.requested_at)); });
+  var done=W.filter(function(w){ return w.status!=='pending'; }).sort(function(a,b){ return String(b.decided_at||'').localeCompare(String(a.decided_at||'')); });
+  var KIND={standard:'ტვირთის სტანდარტი', calls:'ზარი', calls_all:'ზარები (ყველა)', bol:'BOL', invoice:'ინვოისი', check:'ჩეკი'};
+  var dn=names_();
+  var closedToday=SCLOSES.filter(function(c){ return c.work_day===tday && dn.indexOf(c.dispatcher_name)>=0; });
+  var closedBy={}; closedToday.forEach(function(c){ closedBy[c.dispatcher_name]=c; });
+  var openList=dn.filter(function(d){ return !closedBy[d]; });
+
+  var wrow=function(w,withAct){
+    var age=Math.round((Date.now()-Date.parse(w.requested_at))/36e5);
+    return "<tr><td>"+gd(w.work_day)+"</td><td><b>"+esc(w.dispatcher_name)+"</b></td>"+
+      "<td><span class='chip "+(w.kind==='standard'?'y':'')+"'>"+(KIND[w.kind]||w.kind)+"</span></td>"+
+      "<td>"+esc(w.order_number||'—')+"</td>"+
+      "<td style='max-width:380px'>"+esc(w.reason)+
+        (w.decision_note?("<div class='muted' style='font-size:11.5px;color:var(--crit)'>პასუხი: "+esc(w.decision_note)+"</div>"):"")+"</td>"+
+      "<td class='muted' style='font-size:12px'>"+(age<24?(age+' სთ წინ'):(Math.round(age/24)+' დღის წინ'))+"<br>"+esc(String(w.requested_by||'').split('@')[0])+"</td>"+
+      (withAct
+        ? ("<td style='white-space:nowrap'><button class='fixbtn' style='background:var(--good);color:#fff;border-color:var(--good)' onclick=\"waivDecide('"+w.id+"','approved')\">დადასტურება</button> "+
+           "<button class='fixbtn' onclick=\"waivDecide('"+w.id+"','rejected')\">დაბრუნება</button></td>")
+        : ("<td>"+(w.status==='approved'?"<span class='chip g'><span class='dot'></span>დადასტურებული</span>":"<span class='chip r'><span class='dot'></span>დაბრუნებული</span>")+
+           "<div class='muted' style='font-size:11.5px'>"+esc(String(w.decided_by||'').split('@')[0])+"</div></td>"))+
+      "</tr>";
+  };
+  var crow=function(d){
+    var c=closedBy[d];
+    return "<tr><td><b>"+esc(d)+"</b></td>"+
+      (c? ("<td><span class='chip g'><span class='dot'></span>დახურულია</span></td><td>"+new Date(c.closed_at).toLocaleString('ka-GE')+"</td>")
+        : ("<td><span class='chip r'><span class='dot'></span>ღიაა</span></td><td class='muted'>—</td>"))+
+      "<td class='num'>"+W.filter(function(w){ return w.dispatcher_name===d && w.work_day===tday; }).length+"</td></tr>";
+  };
+  var chip=function(k,l,n){ return "<span class='chip"+(CLF===k?' g':'')+"' style='cursor:pointer' onclick=\"setClF('"+k+"')\">"+l+" ("+n+")</span>"; };
+  var body = (CLF==='pending')
+    ? "<div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დღე</th><th>დისპეტჩერი</th><th>ველი</th><th>ობიექტი</th><th>ახსნა</th><th>გაგზავნილი</th><th>გადაწყვეტილება</th></tr></thead><tbody>"+
+        (pend.map(function(w){ return wrow(w,true); }).join('')||"<tr><td colspan='7' class='muted'>პასუხის მოლოდინში მოთხოვნა არ არის ✓</td></tr>")+"</tbody></table></div>"
+    : (CLF==='closes')
+    ? "<div class='tablewrap'><table style='min-width:640px'><thead><tr><th>დისპეტჩერი</th><th>სტატუსი</th><th>დახურვის დრო</th><th class='num'>მოთხოვნა</th></tr></thead><tbody>"+
+        (dn.map(crow).join('')||"<tr><td colspan='4' class='muted'>დისპეტჩერი არ არის</td></tr>")+"</tbody></table></div>"
+    : "<div class='tablewrap'><table style='min-width:1000px'><thead><tr><th>დღე</th><th>დისპეტჩერი</th><th>ველი</th><th>ობიექტი</th><th>ახსნა</th><th>გაგზავნილი</th><th>სტატუსი</th></tr></thead><tbody>"+
+        (done.slice(0,200).map(function(w){ return wrow(w,false); }).join('')||"<tr><td colspan='7' class='muted'>ისტორია ცარიელია</td></tr>")+"</tbody></table></div>";
+
+  if (CLF==='shift-history') body=closeHistory_();
+  if (CLF==='closes' && (!loaded || loadError)) body='<p role="status">'+esc(loadError || 'დისპეჩერების სტატუსები იტვირთება…')+'</p>';
+
+  $('view').innerHTML=ph('დახურვები და მოთხოვნები','დისპეტჩერების ცვლის დახურვა და სტანდარტიდან გადახვევის ახსნები — '+gdFull(tday))+
+    "<div class='kpis'>"+
+      kpi('პასუხის მოლოდინში',pend.length,pend.length?'r':'g','მოთხოვნა შენს დადასტურებას ელოდება','')+
+      kpi('ცვლა დახურა',closedToday.length,'',dn.length+' დისპეტჩერიდან')+
+      kpi('ჯერ ღიაა',openList.length,openList.length?'w':'g',openList.slice(0,3).join(', ')+(openList.length>3?' და სხვ.':''))+
+      kpi('დადასტურებული (21 დღე)',done.filter(function(w){ return w.status==='approved'; }).length,'g',done.filter(function(w){ return w.status==='rejected'; }).length+' დაბრუნებული')+
+    "</div>"+
+    "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>"+
+      chip('pending','პასუხის მოლოდინში',pend.length)+chip('closes','ცვლის დახურვა',(!loaded || loadError)?'—':closedToday.length+'/'+dn.length)+chip('history','ისტორია',done.length)+"</div>"+
+    body+
+    "<div class='muted' style='font-size:12px;margin-top:10px'>დისპეჩერი ცვლას ვერ ხურავს, სანამ ყველა gate მწვანე არ არის. თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება, ის აგზავნის ახსნას — შენი <b>დადასტურების</b> შემდეგ ველი მწვანდება. „დაბრუნება“ მოითხოვს მიზეზს და დისპეჩერი მას თავის ეკრანზე ხედავს.</div></div>";
+  decorateCloses_();
+};
+
+  function closeHistory_() {
+    var records = (SCLOSES || []).slice().sort(function (a, b) { return String(b.closed_at || '').localeCompare(String(a.closed_at || '')); });
+    return "<div class='tablewrap'><table style='min-width:640px'><thead><tr><th>დღე</th><th>დისპეჩერი</th><th>დახურვის დრო</th></tr></thead><tbody>" +
+      (records.map(function (c) {
+        return '<tr><td>' + esc(gd(c.work_day)) + '</td><td>' + esc(c.dispatcher_name) + '</td><td>' + esc(new Date(c.closed_at).toLocaleString('ka-GE')) + '</td></tr>';
+      }).join('') || "<tr><td colspan='3' class='muted'>ბოლო 21 დღეში დახურული ცვლა არ არის.</td></tr>") + '</tbody></table></div>';
+  }
+  function decorateCloses_() {
+    var view = $('view'), tools = document.createElement('div');
+    tools.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px';
+    tools.appendChild(button_('დისპეჩერების მართვა', function () { goM('dispatchers'); }));
+    tools.appendChild(button_('დახურული ცვლები (21 დღე)', function () { CLF = 'shift-history'; rCloses(); }, CLF === 'shift-history'));
+    tools.appendChild(button_('განახლება', async function () {
+      await Promise.all([load_(), loadCloses()]); paint_();
+    }));
+    view.insertBefore(tools, view.children[1] || null);
+    if (!loaded || loadError) {
+      // An unavailable roster is never represented as zero open shifts / all green.
+      var kpis = view.querySelector('.kpis');
+      if (kpis) kpis.innerHTML = '<div class="card p" role="status">' + esc(loadError || 'დისპეჩერების სტატუსები იტვირთება…') + '</div>';
+    }
+  }
+  // Use the existing refresh lifecycle so other open management tabs observe edits.
+  // This does not change the authority of RLS or any close gate.
+  var previousRefresh = refreshLive_;
+  refreshLive_ = async function () {
+    if (!(await verifyAccess_())) return;
+    if (USER && USER.role === 'mgmt' && !pending) await load_();
+    return previousRefresh.apply(this, arguments);
+  };
+  var lastAccessCheck = 0, checkingAccess = null;
+  async function verifyAccess_() {
+    if (!USER) return false;
+    if (checkingAccess) return checkingAccess;
+    var email = USER.email;
+    checkingAccess = (async function () {
+      try {
+        var r = await sb.from('access_allowlist').select('email,active,role').eq('email', email).maybeSingle();
+        if (r.error) throw r.error;
+        if (!USER || USER.email !== email) return false;
+        lastAccessCheck = Date.now();
+        if (!r.data || r.data.active !== true) {
+          USER = null; VIEWAS = null; rows = []; loaded = false; DISPLIST = []; generation++;
+          showLogin('ამ ანგარიშს წვდომა გამორთული აქვს. მიმართე მენეჯმენტს.');
+          try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { console.error(e); }
+          return false;
+        }
+        return true;
+      } catch (e) {
+        console.error('Access status check failed', e);
+        toast('წვდომის სტატუსი ვერ შემოწმდა — ხელახლა სცადე.');
+        return false;
+      }
+    })();
+    try { return await checkingAccess; } finally { checkingAccess = null; }
+  }
+  async function onReturn_() {
+    if (!USER || document.hidden || pending || loading) return;
+    if (Date.now() - lastAccessCheck >= 30000 && !(await verifyAccess_())) return;
+    if (!manager_() || Date.now() - loadedAt < 30000) return;
+    await load_(); paint_();
+  }
+  window.addEventListener('focus', onReturn_);
+  document.addEventListener('visibilitychange', onReturn_);
+})();
+
+</script>
