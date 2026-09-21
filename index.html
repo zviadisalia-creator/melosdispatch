@@ -484,11 +484,18 @@ function puAuctionKind_(l){
   return null;
 }
 /* side: 'pu' ან 'del'. აბრუნებს null-ს (ზარი საჭიროა) ან მიზეზს. */
+/* OWNER-CARMAX-20260921: Business Name exempts its own leg; no source facts are changed. */
+function isCarmaxBusiness_(name){
+  return /(^|[^a-z0-9])car\s*max([^a-z0-9]|$)/i.test(String(name==null?'':name));
+}
 function callSkip_(l, side){
   if(!l) return null;
+  var carmaxVenue=side==='pu'? l.pu_venue : l.del_venue;
+  if(isCarmaxBusiness_(carmaxVenue)) return {why:'business', kind:'carmax', src:'venue', venue:carmaxVenue,
+    text:'CarMax — '+(side==='pu'?'ფიქაფის':'დელივერის')+' გადამოწმების ზარი არ მოეთხოვება'};
   if(side==='pu'){
     var a=puAuctionKind_(l);
-    if(a) return {why:'auction', kind:a.kind, src:a.src, venue:a.ref,
+    if(a && a.kind==='copart') return {why:'auction', kind:a.kind, src:a.src, venue:a.ref,
       text:venueLabel_(a.kind)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'
         +(a.src==='shipper'? ' (shipper: '+a.ref+')':'')};
   } else {
@@ -1478,9 +1485,11 @@ async function waivSend(kind, encSubj){
            decided_at:null, decided_by:null, decision_note:null};
   try{
     var ex=waivOf_(kind,subj,day);
-    var res = ex ? await sb.from('load_waivers').update({reason:row.reason,status:'pending',requested_at:row.requested_at,requested_by:row.requested_by,decided_at:null,decided_by:null}).eq('id',ex.id)
-                 : await sb.from('load_waivers').insert(row);
+    // WAIVER-RESUBMIT-20260921: require an actual saved row; RLS may silently affect zero rows.
+    var res = ex ? await sb.from('load_waivers').update({reason:row.reason,status:'pending',requested_at:row.requested_at,requested_by:row.requested_by,decided_at:null,decided_by:null,decision_note:null}).eq('id',ex.id).eq('company_id',row.company_id).eq('dispatcher_name',row.dispatcher_name).eq('status',ex.status).select('id,status').single()
+                 : await sb.from('load_waivers').insert(row).select('id,status').single();
     if(res.error) throw res.error;
+    if(!res.data || !res.data.id || res.data.status!=='pending') throw new Error('Waiver was not saved');
     await loadWaivers();
     var b=document.getElementById('_waiv'); if(b) b.remove();
     toast('მოთხოვნა გაგზავნილია ✓'); render();
@@ -1490,8 +1499,9 @@ async function waivDecide(id, status){
   var note='';
   if(status==='rejected'){ note=prompt('რატომ არ დასტურდება? (დისპეჩერი ამას დაინახავს)')||''; if(!note.trim()){ toast('მიზეზი საჭიროა'); return; } }
   try{
-    var res=await sb.from('load_waivers').update({status:status, decided_at:new Date().toISOString(), decided_by:USER.email, decision_note:note||null}).eq('id',id);
+    var res=await sb.from('load_waivers').update({status:status, decided_at:new Date().toISOString(), decided_by:USER.email, decision_note:note||null}).eq('id',id).eq('company_id',COID()).select('id,status').single();
     if(res.error) throw res.error;
+    if(!res.data || res.data.id!==id || res.data.status!==status) throw new Error('Waiver decision was not saved');
     await loadWaivers(); toast(status==='approved'?'დადასტურდა ✓':'დაბრუნდა'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
