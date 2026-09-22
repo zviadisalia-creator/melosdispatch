@@ -451,10 +451,15 @@ function orgKey_(s){
     .replace(/\b(inc|llc|ltd|lc|corp|corporation|company|co)\b/g,' ')
     .replace(/\s+/g,' ').trim();
 }
+/* OWNER-IAA-SHIPPER-20260922: explicit normalized aliases, shared by both implementations. */
+function sameKnownOrg_(x,y){
+  return (x==='oem auto recyclers'||x==='oem autorecyclers')
+    && (y==='oem auto recyclers'||y==='oem autorecyclers');
+}
 function sameOrg_(a,b){
   var x=orgKey_(a), y=orgKey_(b);
   if(!x || !y) return false;
-  if(x===y) return true;
+  if(x===y || sameKnownOrg_(x,y)) return true;
   /* პრეფიქსი სიტყვის საზღვარზე — „Johnson Auto Sales" vs „Johnson Auto Sales Detroit".
      8 სიმბოლოზე მოკლე გასაღები არ ითვლება, რომ ზოგადი სახელები არ აირიოს. */
   var pre=function(s,l){ return l.length>=8 && s.indexOf(l+' ')===0; };
@@ -494,6 +499,10 @@ function callSkip_(l, side){
   if(isCarmaxBusiness_(carmaxVenue)) return {why:'business', kind:'carmax', src:'venue', venue:carmaxVenue,
     text:'CarMax — '+(side==='pu'?'ფიქაფის':'დელივერის')+' გადამოწმების ზარი არ მოეთხოვება'};
   if(side==='pu'){
+    /* OWNER-IAA-SHIPPER-20260922: explicit pickup Business Name only. */
+    if(/(^|[^a-z0-9])iaai?([^a-z0-9]|$)/i.test(String(l.pu_venue==null?'':l.pu_venue)))
+      return {why:'auction', kind:'iaa', src:'venue', venue:l.pu_venue,
+        text:'IAA/IAAI — ფიქაფის გადამოწმების ზარი არ მოეთხოვება'};
     var a=puAuctionKind_(l);
     if(a && a.kind==='copart') return {why:'auction', kind:a.kind, src:a.src, venue:a.ref,
       text:venueLabel_(a.kind)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'
@@ -1879,7 +1888,7 @@ function rBoard(){
       "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და იმ დღეს ჯერ კიდევ გზაშია</b> — ტვირთი არ მოეთხოვება. თავისუფლდება იმ დღეს, როცა აბარებს: SD-ის ჩაბარების თარიღით, ან თუ არ წერია — აღების დღეს + "+transitMi_()+" მილი დღეში (მაგ. 1 400 მილი 4 რიცხვში აღებული → 6 რიცხვში აბარებს, ე.ი. იმ დღეს ტვირთი <b>სჭირდება</b>). "+
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
-      "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონის გამო ზარის გამონაკლისი მოქმედებს მხოლოდ <b>Copart-ის ფიქაფზე</b>. <b>Manheim-სა და ADESA-ზე ავტომატური გამონაკლისი არ მოქმედებს</b>; დელივერის მოთხოვნები ცალკე მოწმდება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
+      "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონის გამო ზარის გამონაკლისი მოქმედებს <b>Copart-ისა და IAA/IAAI-ის ფიქაფზე</b>. <b>Manheim-სა და ADESA-ზე ავტომატური გამონაკლისი არ მოქმედებს</b>; დელივერის მოთხოვნები ცალკე მოწმდება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
       "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
 }
 var SCLOSE=null;
@@ -5315,7 +5324,7 @@ try{
     window.sameOrg_ = function (a, b) {
       var x = orgKey_(a), y = orgKey_(b);
       if (!x || !y) return false;
-      if (x === y) return true;
+      if (x === y || sameKnownOrg_(x,y)) return true;
       var pre = function (s, l) { return l.length >= 8 && s.indexOf(l + ' ') === 0; };
       if (pre(x, y) || pre(y, x)) return true;
       return inside(x, y) || inside(y, x);
