@@ -5009,6 +5009,13 @@ loadPlanContacts = async function(){
            painter behaves exactly as before. */
         if(typeof callSkip_==='function' && typeof loadOf_==='function'
            && callSkip_(loadOf_(ccOrd_(rows[r])), pre)) continue;
+        /* GT-20260922-R2: this legacy painter reads raw content. A current,
+           server-validated relief in PCONT already resolved that verdict. */
+        var current=(typeof PCONT!=='undefined' && Array.isArray(PCONT))
+          ? PCONT.find(function(x){return x.order_number===ccOrd_(rows[r]);}) : null;
+        if(current && current[pre+'_technical_exception']!=null
+           && current[pre+'_verified']===true && !current[pre+'_pending']
+           && !current[pre+'_content_unknown']) continue;
         td.setAttribute('data-cc','1');
         var cell=td.querySelector('.ccell');
         if(cell) cell.className=(cell.className||'').replace(/\bok\b/,'no');
