@@ -393,16 +393,19 @@ function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ?
 async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: COID() }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
 /* გამოცხადებულ სიაზე — ზარები ზუსტად იმ ტვირთებზე მოწმდება, რაც დისპეტჩერმა აირჩია */
 let PCONT = [];
-let PCONT_ERR = false;   /* SCCEV-001: the contact RPC failed -> calls gate is UNKNOWN, never green */
+let PCONT_ERR = false;
+let PCONT_GEN = 0;
 async function loadPlanContacts(){
-  PCONT_ERR = false;
+  const gen=++PCONT_GEN, company=COID(), dispatcher=MYD();
+  const current=()=>gen===PCONT_GEN && company===COID() && dispatcher===MYD();
+  PCONT_ERR=false;
   try{
     var ons=planLoads_(ymd_(nextWorkDay_())).map(function(l){ return l.order_number; });
-    if(!ons.length){ PCONT=[]; return; }
-    const { data, error } = await sb.rpc('contact_check_orders', { p_orders: ons, p_company_id: COID() });
+    if(!ons.length){ if(current()) PCONT=[]; return; }
+    const {data,error}=await sb.rpc('contact_check_orders',{p_orders:ons,p_company_id:company});
     if(error) throw error;
-    PCONT = data || [];
-  }catch(e){ console.error(e); PCONT = []; PCONT_ERR = true; }
+    if(current()) PCONT=data||[];
+  }catch(e){ console.error(e); if(current()){PCONT=[];PCONT_ERR=true;} }
 }
 var BFALL={};   // broker_flags — ყველა ჩანაწერი, customer-ის მიხედვით
 async function loadBrokerFlags(){
@@ -508,6 +511,10 @@ function callSkip_(l, side){
       text:venueLabel_(a.kind)+' — appointment-ით მუშაობს, ზარი არ მოეთხოვება'
         +(a.src==='shipper'? ' (shipper: '+a.ref+')':'')};
   } else {
+    /* Owner 2026-09-22: Auction in the delivery Business Name exempts delivery only. */
+    if(/(^|[^a-z0-9])auction([^a-z0-9]|$)/i.test(String(l.del_venue||'')))
+      return {why:'auction',kind:'auction',src:'venue',venue:l.del_venue,
+        text:'Auction — დელივერის ზარი და საათების დაზუსტება არ მოეთხოვება'};
     /* ვენიუ ყოველთვის არ არის დასინქრებული — აუქციონს მისამართის ტექსტშიც ვეძებთ. */
     var kd=venueKind_(l.del_venue) || venueKind_(l.delivery_location);
     if(kd) return {why:'auction', kind:kd, src:'venue', venue:l.del_venue||l.delivery_location,
@@ -860,7 +867,7 @@ async function loadData(){
     await Promise.all([
       loadLiveLoads(), loadActions(), loadRates(), loadExpenses(), loadContacts(),
       loadAttempts(), loadWaivers(), loadCloses(), loadBrokerFlags(), loadPlan(),
-      loadAssign(), loadPlanContacts(), loadLedger(), loadWeekRoster(), loadDispatchers()
+      loadAssign(), loadLedger(), loadWeekRoster(), loadDispatchers()
     ]);
   } else {
     const { data:drv } = await sb.from('drivers').select('*').eq('company_id', COID());   // RLS: only my drivers
@@ -868,9 +875,11 @@ async function loadData(){
     await Promise.all([
       loadLiveLoads(),   // RLS scopes loads to this dispatcher only
       loadActions(), loadContacts(), loadSettingsOnly(), loadBrokerFlags(), loadPlan(),
-      loadAttempts(), loadWaivers(), loadAssign(), loadPlanContacts(), loadWeekRoster(), loadClose()
+      loadAttempts(), loadWaivers(), loadAssign(), loadWeekRoster(), loadClose()
     ]);
   }
+  /* GT-20260922: contacts depend on loaded orders, plan and assignments. */
+  await loadPlanContacts();
 }
 async function loadDispatchers(){
   try{ var r=await sb.from('access_allowlist').select('dispatcher_name,role,active').eq('active',true);
@@ -1804,6 +1813,8 @@ function rBoard(){
          }).join('')+"</tbody></table></div>")
       : (exemptAll
           ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px;color:var(--good)'>ხვალინდელ სიაშია <b>"+contactN+"</b> ტვირთი და ყველა მათგანზე ზარი <b>არ მოეთხოვება</b> — ბროკერის წესი, აუქციონი ან shipper = ვენიუ. შესამოწმებელი არაფერია ✓</div>"
+          : unknownOns.length
+          ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>სია შეიცავს ტვირთებს, მაგრამ ზარების მონაცემი ვერ ჩაიტვირთა — დააჭირე ზედა ⟳ ღილაკს.</div>"
           : "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>ხვალინდელ სიაში ჯერ ტვირთი არ არის — შესამოწმებელი ზარიც არ არის</div>"));
 
   /* ---- აუქციონები: Copart-ს appointment სჭირდება, Manheim-ს Gate Pass ---- */
@@ -4623,13 +4634,17 @@ try{
     if(r.del_verified){ r.del_verified = false; r.del_content_unknown = true; r.del_reason = CG_UNKNOWN; }
   };
   loadPlanContacts = async function(){
+    var company=COID(), dispatcher=MYD(), gen=PCONT_GEN+1;
     await __origLPC.apply(this, arguments);
+    if(gen!==PCONT_GEN || company!==COID() || dispatcher!==MYD()) return;
+    var contentRows=PCONT;
     try{
       if(!Array.isArray(PCONT) || !PCONT.length) return;
       var ons = PCONT.map(function(r){ return r.order_number; });
       var res = await sb.rpc('contact_content_orders', { p_orders: ons, p_company_id: COID() });
       // one bounded retry: a transient failure should not paint the whole board
       if(res.error){ res = await sb.rpc('contact_content_orders', { p_orders: ons, p_company_id: COID() }); }
+      if(gen!==PCONT_GEN || contentRows!==PCONT || company!==COID() || dispatcher!==MYD()) return;
       if(res.error){
         console.error('content gate', res.error);
         PCONT.forEach(cgMarkUnknown_);      // NOT verified, and it says so
@@ -4646,10 +4661,36 @@ try{
       });
     }catch(e){
       console.error('content gate', e);
-      try{ if(Array.isArray(PCONT)) PCONT.forEach(cgMarkUnknown_); }catch(e2){}
+      try{ if(gen===PCONT_GEN && contentRows===PCONT && company===COID() && dispatcher===MYD() && Array.isArray(PCONT)) PCONT.forEach(cgMarkUnknown_); }catch(e2){}
     }
   };
 }catch(e){ console.error('content gate init', e); }
+/* GT-20260922: an accepted, currently valid criterion review must also reach the UI.
+   No local inference: require BOTH server flags, and do not clear pending calls. */
+var __contentWithRelief = loadPlanContacts;
+loadPlanContacts = async function(){
+  await __contentWithRelief.apply(this,arguments);
+  var rows=PCONT, company=COID(), dispatcher=MYD(), day=ymd_(nextWorkDay_());
+  if(!rows.length) return;
+  try{
+    var res=await sb.rpc('ai_technical_exception_list',{
+      p_company_id:company,p_work_day:day,p_orders:rows.map(function(r){return r.order_number;})});
+    if(res.error || rows!==PCONT || company!==COID() || dispatcher!==MYD()) return;
+    if(!res.data || res.data.company_id!==company || res.data.work_day!==day) return;
+    (res.data.exceptions||[]).forEach(function(e){
+      if(e.state!=='active' || e.evidence_still_holds!==true || e.obligation_relieved!==true) return;
+      var row=rows.find(function(r){return r.order_number===e.order_number;});
+      if(!row) return;
+      if(e.obligation==='calls.pickup' && !row.pu_pending){
+        row.pu_verified=true; row.pu_reason=''; row.pu_content_unknown=false; row.pu_technical_exception=e.exception_id;
+      }
+      if(e.obligation==='calls.delivery' && !row.del_pending){
+        row.del_verified=true; row.del_reason=''; row.del_content_unknown=false; row.del_technical_exception=e.exception_id;
+      }
+    });
+  }catch(e){console.error('technical relief read',e);}
+};
+
 
 </script>
 
@@ -7559,3 +7600,4 @@ try{
 })();
 
 </script>
+
