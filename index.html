@@ -388,6 +388,13 @@ function chkOpen_(l){
 }
 /* დოკუმენტი გაგზავნილია — SD-ის ინვოისი ან ჩვენი „გავაგზავნე" მონიშვნა */
 function docsSent_(l){ return !!(l && (l.invoice_sent_at || actOf_(l.order_number).bol_sent_at)); }
+/* SC-COMPLETE-001 stage 4 (P0-R4): the shift-close invoice/BOL gate evaluates exactly what
+   close_gates_co evaluates. doc_evidence_mode unset or anything but 'split' = legacy: the SD
+   invoice send OR the app mark clears the order (owner rule 2026-09-16, A2/F). 'split': both.
+   Wrapper v2's invoice-only docsSent_ stays for the management debt list only. */
+function docMode_(){ try{ return (typeof SETTX!=='undefined' && SETTX && SETTX.doc_evidence_mode==='split')?'split':'legacy'; }catch(e){ return 'legacy'; } }
+function docsGate_(l){ if(!l) return false; var a=actOf_(l.order_number)||{}, inv=!!l.invoice_sent_at, bol=!!a.bol_sent_at;
+  return docMode_()==='split' ? (inv && bol) : (inv || bol); }
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
 async function loadContacts(){ return auxLoad_('contacts', async function(co){ return auxRes_(await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: co })); },
@@ -835,8 +842,9 @@ function critCommit_(name, v, seq, co){
   else if(name==='assign'){ DASG=v.dasg||[]; DIR=v.dir||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
   else if(name==='drivers'){ var dr={}; (v||[]).forEach(function(d){ dr[d.name]=d; }); DRIVERS_BY_NAME=dr; }
   else if(name==='roster'){ var ro={}; (v||[]).forEach(function(x){ ro[x.dispatcher_name]=x; }); WROS=ro; }
-  else if(name==='settings'){ var st={}; (v||[]).forEach(function(x){ if(x.num_value!=null) st[x.key]=Number(x.num_value); });
-    SETT=st; if(SETT.usd_gel) USDGEL=SETT.usd_gel; }
+  else if(name==='settings'){ var st={}, sx={}; (v||[]).forEach(function(x){ if(x.num_value!=null) st[x.key]=Number(x.num_value);
+      if(x.txt_value!=null) sx[x.key]=String(x.txt_value); });
+    SETT=st; SETTX=sx; if(SETT.usd_gel) USDGEL=SETT.usd_gel; }
   else if(name==='flags'){ BFLAG={}; BFALL={}; NCCACHE=null;
     (v||[]).forEach(function(b){ BFALL[b.customer]=b; if(b.inspection_in_broker_app) BFLAG[b.customer]=b; }); }
 }
@@ -1900,7 +1908,7 @@ function rBoard(){
   /* SD-დან ინვოისის სტატუსი საათში ერთხელ მოდის — დისპეტჩერს იმდენ ხანს
      ოფისში ჯდომა არ უნდა უწევდეს. „გავაგზავნე“ მონიშვნა gate-ს მაშინვე ხურავს,
      SD მერე ადასტურებს (მენეჯმენტს დაუდასტურებელი მონიშვნა გამონაკლისებში უჩანს). */
-  var docsDone_=docsSent_;
+  var docsDone_=docsGate_;   /* P0-R4: same rule as the server */
   var byNew=function(a,b){ return String(b.delivery_completed||'').localeCompare(String(a.delivery_completed||'')); };
   var invP=delivered.filter(function(l){
     if(l.is_canceled || l.deleted_at) return false;
@@ -4606,7 +4614,7 @@ function rCloses(){
     "<div class='muted' style='font-size:12px;margin-top:10px'>დისპეჩერი ცვლას ვერ ხურავს, სანამ ყველა gate მწვანე არ არის. თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება, ის აგზავნის ახსნას — შენი <b>დადასტურების</b> შემდეგ ველი მწვანდება. „დაბრუნება“ მოითხოვს მიზეზს და დისპეჩერი მას თავის ეკრანზე ხედავს.</div></div>";
 }
 /* ---- ხარჯები — ყოველთვიური ფიქსირებული ხარჯები (company_expenses) ---- */
-var EXP=[], USDGEL=2.6266, SETT={};
+var EXP=[], USDGEL=2.6266, SETT={}; var SETTX=SETTX||{};
 var EXPCATS=['ხელფასი','იჯარა','კომუნალური','ინტერნეტი','ლოადბორდი','დაზღვევა','პროგრამები','სხვა'];
 var EXPREG={GE:'საქართველო',US:'ამერიკა'};
 function sett_(k,d){ var v=SETT[k]; return (v==null||!isFinite(v))?d:Number(v); }
