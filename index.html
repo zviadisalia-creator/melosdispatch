@@ -390,7 +390,8 @@ function chkOpen_(l){
 function docsSent_(l){ return !!(l && (l.invoice_sent_at || actOf_(l.order_number).bol_sent_at)); }
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
-async function loadContacts(){ try{ const { data } = await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: COID() }); CONTACTS = data || []; }catch(e){ console.error(e); CONTACTS = []; } }
+async function loadContacts(){ return auxLoad_('contacts', async function(co){ return auxRes_(await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: co })); },
+  function(data){ CONTACTS = data || []; }, function(){ CONTACTS = []; }, true); }   /* P0-R3 */
 /* გამოცხადებულ სიაზე — ზარები ზუსტად იმ ტვირთებზე მოწმდება, რაც დისპეტჩერმა აირჩია */
 let PCONT = [];
 let PCONT_ERR = false;
@@ -799,7 +800,7 @@ function actReapply_(m, seq, co){
   ACT_WRITES=ACT_WRITES.filter(function(w){ return w.co===co && w.seq>=seq; });
   ACT_WRITES.forEach(function(w){ m[w.on]=Object.assign(m[w.on]||{company_id:co, order_number:w.on}, w.fields); });
 }
-var CRIT_BASE=['drivers','roster','flags'];
+var CRIT_BASE=['drivers','roster','flags','settings'];   /* P0-R3: settings decide the work day */
 var CRIT_CYCLE=['assign','plan','waivers','actions','loads'];   /* commit order: loads last (normalises with fresh roster) */
 var LOAD_COLS_='order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin,booking_dispatcher';
 function critFetch_(name, co){
@@ -820,6 +821,8 @@ function critFetch_(name, co){
         if(r.error) throw r.error; return r.data||[]; })();
     case 'flags':   return (async function(){ var r=await sb.from('broker_flags').select('*');
         if(r.error) throw r.error; return r.data||[]; })();
+    case 'settings': return (async function(){ var r=await sb.from('app_settings').select('*');
+        if(r.error) throw r.error; return r.data||[]; })();
   }
   return Promise.reject(new Error('unknown dataset '+name));
 }
@@ -832,6 +835,8 @@ function critCommit_(name, v, seq, co){
   else if(name==='assign'){ DASG=v.dasg||[]; DIR=v.dir||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
   else if(name==='drivers'){ var dr={}; (v||[]).forEach(function(d){ dr[d.name]=d; }); DRIVERS_BY_NAME=dr; }
   else if(name==='roster'){ var ro={}; (v||[]).forEach(function(x){ ro[x.dispatcher_name]=x; }); WROS=ro; }
+  else if(name==='settings'){ var st={}; (v||[]).forEach(function(x){ if(x.num_value!=null) st[x.key]=Number(x.num_value); });
+    SETT=st; if(SETT.usd_gel) USDGEL=SETT.usd_gel; }
   else if(name==='flags'){ BFLAG={}; BFALL={}; NCCACHE=null;
     (v||[]).forEach(function(b){ BFALL[b.customer]=b; if(b.inspection_in_broker_app) BFLAG[b.customer]=b; }); }
 }
@@ -912,12 +917,40 @@ function critRefresh_(fresh, opts){
   SYNC_RUN=run;
   return run.p;
 }
+/* ---- P0-R3 (SC-COMPLETE-001 5C): auxiliary (non-close) datasets ----
+   A failed read no longer turns into an empty list shown as real data. The last
+   complete copy is kept when it belongs to the company on screen; otherwise the
+   dataset is emptied AND marked unavailable. The screen names what failed, and
+   the manual refresh retries it. */
+var AUXERR={}, AUXCO={}, AUXLOAD={};
+var AUX_LBL={rates:'დისპეტჩერის განაკვეთები', expenses:'ხარჯები', contacts:'ხვალინდელი კონტაქტები', attempts:'ზარის ცდები',
+  ledger:'მძღოლის ანგარიშსწორება', payout:'მძღოლის გადახდები', closes:'ცვლის დახურვების ისტორია', dispatchers:'დისპეჩერების სია'};
+async function auxLoad_(name, fetchFn, commitFn, clearFn, scoped){
+  var co=COID(); AUXLOAD[name]=function(){ return auxLoad_(name, fetchFn, commitFn, clearFn, scoped); };
+  try{
+    var v=await fetchFn(co);
+    if(scoped && co!==COID()) return false;                 /* the user left this company */
+    commitFn(v); AUXCO[name]=co; delete AUXERR[name]; return true;
+  }catch(e){
+    console.error(e);
+    if(scoped && co!==COID()) return false;
+    if(scoped && AUXCO[name]!==co){ clearFn(); AUXCO[name]=null; }   /* never show another company's copy */
+    AUXERR[name]={at:new Date(), msg:String((e&&e.message)||e).slice(0,160)};
+    return false;
+  }
+}
+async function auxRetry_(){
+  var ks=Object.keys(AUXERR); if(!ks.length) return;
+  await Promise.all(ks.map(function(k){ return AUXLOAD[k] ? AUXLOAD[k]() : null; }));
+}
+function auxRes_(r){ if(r && r.error) throw r.error; return r ? r.data : null; }
 function syncState_(){
   if(!SYNC.have || SYNC.co!==COID()) return SYNC.failAt ? 'unavailable' : 'loading';
   if(SYNC.failAt || SYNC.contactsErr) return 'stale';
   return 'ok';
 }
-async function loadRates(){ try{ const { data } = await sb.from('dispatcher_rates').select('*'); DRATES={}; (data||[]).forEach(function(r){ DRATES[r.dispatcher_name]=r; }); }catch(e){ console.error(e); DRATES={}; } }
+async function loadRates(){ return auxLoad_('rates', async function(){ return auxRes_(await sb.from('dispatcher_rates').select('*')); },
+  function(data){ var m={}; (data||[]).forEach(function(r){ m[r.dispatcher_name]=r; }); DRATES=m; }, function(){ DRATES={}; }, false); }   /* P0-R3 */
 async function loadActions(){ return critLoad_('actions'); }   /* SC-STABILIZE-001-P0: staged, keeps the last complete set on failure */
 
 /* ---------- auth + data bootstrap ---------- */
@@ -1043,8 +1076,8 @@ async function loadData_(){
     ]);
   } else {
     await Promise.all([
-      crit,              // RLS scopes loads/drivers to this dispatcher only
-      loadContacts(), loadSettingsOnly(), loadAttempts(), loadClose()
+      crit,              // RLS scopes loads/drivers to this dispatcher only; settings are in the staged base
+      loadContacts(), loadAttempts(), loadClose()
     ]);
   }
   /* GT-20260922: contacts depend on loaded orders, plan and assignments. */
@@ -1054,12 +1087,11 @@ async function loadData_(){
   return fin;
 }
 async function loadDispatchers(){
-  try{ var r=await sb.from('access_allowlist').select('dispatcher_name,role,active').eq('active',true);
-    DISPLIST=(r.data||[]).filter(function(x){ return x.role==='dispatcher'; })
+  await auxLoad_('dispatchers', async function(){ return auxRes_(await sb.from('access_allowlist').select('dispatcher_name,role,active').eq('active',true)); },
+    function(data){ DISPLIST=(data||[]).filter(function(x){ return x.role==='dispatcher'; })
       .map(function(x){ return x.dispatcher_name; })
       .filter(function(v,i,a){ return v && a.indexOf(v)===i; })
-      .sort(function(a,b){ return a.localeCompare(b,'ka'); });
-  }catch(e){ console.error(e); DISPLIST=[]; }
+      .sort(function(a,b){ return a.localeCompare(b,'ka'); }); }, function(){ DISPLIST=[]; }, false);   /* P0-R3 */
   buildViewAs();
 }
 function buildViewAs(){
@@ -1091,12 +1123,7 @@ async function enterViewAs(name){
   buildViewAs();
   setRole(VIEWAS?'disp':'mgmt');
 }
-async function loadSettingsOnly(){
-  try{ var s=await sb.from('app_settings').select('*');
-    SETT={}; (s.data||[]).forEach(function(x){ if(x.num_value!=null) SETT[x.key]=Number(x.num_value); });
-    if(SETT.usd_gel) USDGEL=SETT.usd_gel;
-  }catch(e){ console.error(e); }
-}
+async function loadSettingsOnly(){ return critLoad_('settings'); }   /* P0-R3: staged; keeps the last complete settings on failure */
 function startApp(){
   hideSplash();
   document.getElementById('login').classList.add('hidden');
@@ -1164,6 +1191,7 @@ async function refreshLive_(manual){
   REFRESHING=true; paintSyncAge_();
   try{ out.cycle=await critRefresh_(!!manual, wrapped?{finalize:false}:null); }
   catch(e){ console.error(e); out.cycle={ok:false}; }
+  if(manual){ try{ await auxRetry_(); }catch(e){ console.error(e); } }
   if(!wrapped) refreshFinish_(out);
   return out;
 }
@@ -1518,11 +1546,8 @@ function cars_(l){ return Number(l.vehicle_count)||1; }
 var ATT={};    // contact_attempts by order_number
 var WAIV={};   // waivers
 function wkey_(disp,day,kind,subj){ return (disp||'')+'|'+day+'|'+kind+'|'+(subj||''); }
-async function loadAttempts(){
-  try{ var r=await sb.rpc('contact_attempts',{p_day:ymd_(nextWorkDay_()), p_company_id: COID()}); ATT={};
-    (r.data||[]).forEach(function(a){ ATT[a.order_number]=a; });
-  }catch(e){ console.error(e); ATT={}; }
-}
+async function loadAttempts(){ return auxLoad_('attempts', async function(co){ return auxRes_(await sb.rpc('contact_attempts',{p_day:ymd_(nextWorkDay_()), p_company_id: co})); },
+  function(data){ var m={}; (data||[]).forEach(function(a){ m[a.order_number]=a; }); ATT=m; }, function(){ ATT={}; }, true); }   /* P0-R3 */
 var WROS={}, WRSEL=null;
 function weekMon_(){ return mondayOf(workToday_())||workToday_(); }
 async function loadWeekRoster(){ return critLoad_('roster'); }   /* SC-STABILIZE-001-P0: an error no longer reads as "roster not confirmed" */
@@ -4058,9 +4083,13 @@ function driverRate_(reg){
 }
 /* ---- მძღოლის ხელფასის კორექტირებები და გადარიცხვა ---- */
 var DLED=[], DPAY={};
-async function loadLedger(){
-  try{ DLED=await selAll_(function(){ return sb.from('driver_ledger').select('*').eq('company_id', COID()); },'id'); }catch(e){ console.error(e); DLED=[]; }
-  try{ var p=await selAll_(function(){ return sb.from('driver_payout').select('*').eq('company_id', COID()); },['driver_name','week']); DPAY={}; (p||[]).forEach(function(x){ DPAY[x.driver_name+'|'+x.week]=x; }); }catch(e){ console.error(e); DPAY={}; }
+async function loadLedger(){   /* P0-R3: a failed read keeps this company's last copy or is marked unavailable */
+  await Promise.all([
+    auxLoad_('ledger', function(co){ return selAll_(function(){ return sb.from('driver_ledger').select('*').eq('company_id', co); },'id'); },
+      function(v){ DLED=v||[]; }, function(){ DLED=[]; }, true),
+    auxLoad_('payout', function(co){ return selAll_(function(){ return sb.from('driver_payout').select('*').eq('company_id', co); },['driver_name','week']); },
+      function(p){ var m={}; (p||[]).forEach(function(x){ m[x.driver_name+'|'+x.week]=x; }); DPAY=m; }, function(){ DPAY={}; }, true)
+  ]);
 }
 var LKIND={advance:{l:'ავანსი / სესხი',s:-1},deduction:{l:'დაქვითვა',s:-1},
   carry:{l:'წინა კვირის ნაშთი',s:-1},tip_dispatcher:{l:'დისპეტჩერს აჩუქა',s:-1}};
@@ -4515,11 +4544,8 @@ function rPlan(){
 }
 /* ---- დახურვები და მოთხოვნები (მენეჯმენტი) ---- */
 var SCLOSES=[];
-async function loadCloses(){
-  try{ SCLOSES=await selAll_(function(){ return sb.from('shift_close').select('*').eq('company_id', COID()).gte('work_day', addDays_(ymd_(new Date()),-21)); },['work_day','dispatcher_name']);
-    SCLOSES.sort(function(a,b){ return String(b.closed_at||'').localeCompare(String(a.closed_at||'')); });
-  }catch(e){ console.error(e); SCLOSES=[]; }
-}
+async function loadCloses(){ return auxLoad_('closes', function(co){ return selAll_(function(){ return sb.from('shift_close').select('*').eq('company_id', co).gte('work_day', addDays_(ymd_(new Date()),-21)); },['work_day','dispatcher_name']); },
+  function(v){ SCLOSES=(v||[]).slice().sort(function(a,b){ return String(b.closed_at||'').localeCompare(String(a.closed_at||'')); }); }, function(){ SCLOSES=[]; }, true); }   /* P0-R3 */
 var CLF='pending';
 function setClF(v){ CLF=v; rCloses(); }
 function rCloses(){
@@ -4599,14 +4625,12 @@ async function saveSett(key, value, div){
     toast('შენახულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
-async function loadExpenses(){
-  try{
-    var r=await sb.from('company_expenses').select('*').eq('active',true).order('sort');
-    EXP=r.data||[];
-    var s=await sb.from('app_settings').select('*');
-    SETT={}; (s.data||[]).forEach(function(x){ if(x.num_value!=null) SETT[x.key]=Number(x.num_value); });
-    if(SETT.usd_gel) USDGEL=SETT.usd_gel;
-  }catch(e){ console.error(e); EXP=[]; }
+async function loadExpenses(){   /* P0-R3: expenses as an auxiliary dataset; settings through the staged read */
+  await Promise.all([
+    auxLoad_('expenses', async function(){ return auxRes_(await sb.from('company_expenses').select('*').eq('active',true).order('sort')); },
+      function(v){ EXP=v||[]; }, function(){ EXP=[]; }, false),
+    critLoad_('settings')
+  ]);
 }
 function expUSD_(e){
   var t=(Number(e.amount_cash)||0)+(Number(e.amount_transfer)||0);
@@ -8054,22 +8078,44 @@ loadPlanContacts = async function(){
       (failed ? "<button class='bigbtn' style='margin-top:12px;padding:9px 18px;font-size:13px' onclick='refreshLive_(true)'>ხელახლა ცდა</button>" : '') +
       "</div>";
   }
+  /* P0-R3: banners are ensured idempotently (same text → untouched), and a
+     MutationObserver re-adds them when another module repaints #view directly. */
+  function ensureBanner_(v, id, text, border, attr){
+    var el = document.getElementById(id);
+    if (!text) { if (el && el.parentNode) el.parentNode.removeChild(el); return; }
+    if (el && el.getAttribute('data-t') === text && el.parentNode === v) return;
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+    el = document.createElement('div'); el.id = id; el.setAttribute('role', 'status'); el.setAttribute('data-t', text);
+    if (attr) el.setAttribute(attr[0], attr[1]);
+    el.style.cssText = 'margin:0 0 12px;padding:9px 12px;border:1.5px solid ' + border + ';border-radius:10px;font-size:12.5px;font-weight:600';
+    el.appendChild(document.createTextNode(text + ' '));
+    var btn = document.createElement('button'); btn.className = 'fixbtn'; btn.textContent = '⟳ ხელახლა';
+    btn.onclick = function(){ refreshLive_(true); };
+    el.appendChild(btn);
+    v.insertBefore(el, v.firstChild);
+  }
+  function banners_(){
+    var v = document.getElementById('view'); if (!v || !USER) return;
+    if (v.querySelector('#syncUnavail')) { ensureBanner_(v, 'syncBanner', ''); ensureBanner_(v, 'auxBanner', ''); return; }
+    var stale = (syncState_() === 'stale' && needsCritical_())
+      ? ('⚠ ბოლო განახლება ვერ დასრულდა' + (SYNC.contactsErr ? ' (ზარების მონაცემი)' : '') +
+         '. ნაჩვენებია ბოლო სრული მონაცემი' + (LAST_SYNC ? (' — ' + syncAgeTxt_()) : '') + '.') : '';
+    ensureBanner_(v, 'syncBanner', stale, 'var(--crit)', ['data-sync', 'stale']);
+    var ax = Object.keys(AUXERR || {});
+    var aux = ax.length ? ('⚠ ვერ ჩაიტვირთა: ' + ax.map(function (k) { return AUX_LBL[k] || k; }).join(', ') +
+        '. ეს ნაწილი შეიძლება ცარიელი ან ძველი იყოს — ეს არ ნიშნავს, რომ მონაცემი არ არსებობს.') : '';
+    ensureBanner_(v, 'auxBanner', aux, 'var(--warn)', ['data-aux', ax.join(',')]);
+  }
   function decorate_(){
-    var v = document.getElementById('view'); if (!v) return;
-    var old = document.getElementById('syncBanner'); if (old && old.parentNode) old.parentNode.removeChild(old);
-    if (syncState_() === 'stale' && needsCritical_()) {
-      var b = document.createElement('div'); b.id = 'syncBanner'; b.setAttribute('role', 'status'); b.setAttribute('data-sync', 'stale');
-      b.style.cssText = 'margin:0 0 12px;padding:9px 12px;border:1.5px solid var(--crit);border-radius:10px;font-size:12.5px;font-weight:600';
-      b.textContent = '⚠ ბოლო განახლება ვერ დასრულდა' + (SYNC.contactsErr ? ' (ზარების მონაცემი)' : '') +
-        '. ნაჩვენებია ბოლო სრული მონაცემი' + (LAST_SYNC ? (' — ' + syncAgeTxt_()) : '') + '. ';
-      var btn = document.createElement('button'); btn.className = 'fixbtn'; btn.textContent = '⟳ ხელახლა';
-      btn.onclick = function(){ refreshLive_(true); };
-      b.appendChild(btn);
-      v.insertBefore(b, v.firstChild);
-    }
+    banners_();
     if (CLOSE_INFLIGHT) { var lb = document.getElementById('logoutBtn');
       if (lb) { lb.disabled = true; lb.textContent = 'მოწმდება სერვერზე…'; } }
   }
+  try {
+    var mo = new MutationObserver(function(){ try { banners_(); } catch (e) {} });
+    var hook = function(){ var v = document.getElementById('view'); if (v) mo.observe(v, { childList: true }); else setTimeout(hook, 500); };
+    hook();
+  } catch (e) {}
   var prev = render;
   render = function(){
     if (USER && needsCritical_() && (!SYNC.have || SYNC.co !== COID())) {
