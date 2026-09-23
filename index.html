@@ -396,24 +396,21 @@ let PCONT = [];
 let PCONT_ERR = false;
 let PCONT_GEN = 0;
 async function loadPlanContacts(){
-  const gen=++PCONT_GEN, company=COID(), dispatcher=MYD();
-  const current=()=>gen===PCONT_GEN && company===COID() && dispatcher===MYD();
-  PCONT_ERR=false;
+  /* SC-STABILIZE-001-P0: the plan day is part of the scope too — a reply for
+     the day before a rollover is never committed for the new day. */
+  const gen=++PCONT_GEN, company=COID(), dispatcher=MYD(), day=ymd_(nextWorkDay_());
+  const current=()=>gen===PCONT_GEN && company===COID() && dispatcher===MYD() && day===ymd_(nextWorkDay_());
   try{
-    var ons=planLoads_(ymd_(nextWorkDay_())).map(function(l){ return l.order_number; });
-    if(!ons.length){ if(current()) PCONT=[]; return; }
+    var ons=planLoads_(day).map(function(l){ return l.order_number; });
+    if(!ons.length){ if(current()){ PCONT=[]; PCONT_ERR=false; SYNC.contactsErr=false; SYNC.contactsStage=''; } return; }
     const {data,error}=await sb.rpc('contact_check_orders',{p_orders:ons,p_company_id:company});
     if(error) throw error;
-    if(current()) PCONT=data||[];
-  }catch(e){ console.error(e); if(current()){PCONT=[];PCONT_ERR=true;} }
+    /* the chain starts clean here; the content and relief stages below can only mark it failed */
+    if(current()){ PCONT=data||[]; PCONT_ERR=false; SYNC.contactsErr=false; SYNC.contactsStage=''; }
+  }catch(e){ console.error(e); if(current()){ PCONT=[]; PCONT_ERR=true; SYNC.contactsErr=true; SYNC.contactsStage='contact_check_orders'; } }
 }
 var BFALL={};   // broker_flags — ყველა ჩანაწერი, customer-ის მიხედვით
-async function loadBrokerFlags(){
-  try{ const { data } = await sb.from('broker_flags').select('*');
-    BFLAG={}; BFALL={}; NCCACHE=null;
-    (data||[]).forEach(function(b){ BFALL[b.customer]=b; if(b.inspection_in_broker_app) BFLAG[b.customer]=b; });
-  }catch(e){ console.error(e); BFLAG={}; BFALL={}; }
-}
+async function loadBrokerFlags(){ return critLoad_('flags'); }   /* SC-STABILIZE-001-P0 */
 /* ბროკერი, რომელთანაც ფიქაფი/დელივერი ყოველთვის ერთი და იგივეა და შეთანხმებულია —
    ზარი არ მოეთხოვება (მაგ. Safe Way Auto Trans). */
 function bNorm_(s){ return bTokens_(s).join(''); }
@@ -565,12 +562,7 @@ function assignExpected_(l){
 }
 /* ---- მძღოლების როსტერი: მუდმივი მიმაგრება + დროებითი გადაბარება ---- */
 var DASG=[], DIR=[], DIRBY={};
-async function loadAssign(){
-  try{ DASG=await selAll_(function(){ return sb.from('driver_assignment').select('*').eq('company_id', COID()).is('canceled_at',null); },'id');
-  }catch(e){ console.error(e); DASG=[]; }
-  try{ var d=await sb.rpc('driver_directory', { p_company_id: COID() }); DIR=d.data||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
-  catch(e){ console.error(e); DIR=[]; DIRBY={}; }
-}
+async function loadAssign(){ return critLoad_('assign'); }   /* SC-STABILIZE-001-P0 */
 /* მუდმივი მიმაგრება drivers.dispatcher_name-შია (მენეჯმენტი ცვლის) */
 function permOf_(name){
   var reg=DRIVERS_BY_NAME[name]||DIRBY[name];
@@ -744,16 +736,189 @@ async function selAll_(qb, orderCols){
     var q=qb();
     cols.forEach(function(c){ q=q.order(c,{ascending:true}); });
     var r=await q.range(from, from+PAGE-1);
-    if(r.error){ console.error(r.error); break; }
+    /* SC-STABILIZE-001-P0: a failed page is a failed read. It used to `break`
+       and hand back the rows read so far, so a page-2 error became a shorter,
+       "successful" list. Now the caller gets an error and keeps what it had. */
+    if(r.error){ var pe=new Error('partial_read @'+from+': '+(r.error.message||r.error.code||'error'));
+      pe.partial=true; pe.cause=r.error; throw pe; }
     var d=r.data||[]; all=all.concat(d);
     if(d.length<PAGE) break;
     from+=PAGE;
-    if(from>200000) break;   /* უსაფრთხოების ზღვარი */
+    if(from>200000){ var le=new Error('partial_read: row limit'); le.partial=true; throw le; }   /* უსაფრთხოების ზღვარი */
   }
   return all;
 }
+/* =====================================================================
+   SC-STABILIZE-001-P0 · one staged, scope-checked path for the data the
+   close screen judges from (loads, load_actions, day_plan, waivers,
+   assignments + directory; drivers, week roster and broker flags once
+   per company). Rules:
+   * a refresh fetches every dataset for ONE company, and commits nothing
+     unless all of them arrived complete — a failed page never replaces
+     a complete list with a partial or empty one;
+   * a result that belongs to a company/cycle the user has already left is
+     dropped, never committed (out-of-order responses);
+   * the freshness time advances only after full coverage, including the
+     plan-dependent call check;
+   * with no complete dataset yet, the screen says "unavailable", never
+     "no work".
+   The business rules that read these globals are unchanged.
+   ===================================================================== */
+var SYNC={co:null, have:false, base:null, okAt:null, tryAt:0, failAt:null, failMsg:'', failWhat:[], contactsErr:false, gen:0};
+var CRIT_SEQ={}, CRIT_DONE={}, SYNC_RUN=null;   /* started / last committed read per dataset */
+/* SC-STABILIZE-001-P0-R1 (F1): an acknowledged load_actions write is kept in
+   ACT_WRITES with the number of the newest read that had STARTED when the write
+   was acknowledged. A read with that number or lower may predate the write, so
+   the write is re-applied on top of it; a read started later reflects the
+   database after the write, and the entry is dropped. A failed write is never
+   recorded, so it is never shown as saved. */
+var ACT_WRITES=[];
+function actAck_(on, fields, co){
+  co=co||COID();
+  if(co===COID()) ACT[on]=Object.assign(ACT[on]||{}, fields);
+  ACT_WRITES.push({co:co, on:on, fields:Object.assign({}, fields), seq:(CRIT_SEQ.actions||0)});
+  if(ACT_WRITES.length>500) ACT_WRITES.splice(0, ACT_WRITES.length-500);
+}
+/* P0-R2 (A3): 42501 is also used for unknown/inactive callers, inactive
+   companies and callers not authorized for the company. Only the existing
+   eligibility contract (ai_ctx_identity: known=true, pilot_authorized=false)
+   identifies the non-pilot case. Cached per signed-in user for 10 minutes. */
+var AI_IDENT=null;
+async function reliefNotPilot_(){
+  var em=USER && USER.email; if(!em) return false;
+  if(AI_IDENT && AI_IDENT.email===em && Date.now()-AI_IDENT.at<600000) return AI_IDENT.notPilot;
+  try{
+    var r=await sb.rpc('ai_ctx_identity', {});
+    if(r.error || !r.data || typeof r.data!=='object') return false;
+    var np=(r.data.known===true && r.data.pilot_authorized===false);
+    AI_IDENT={email:em, at:Date.now(), notPilot:np};
+    return np;
+  }catch(e){ return false; }
+}
+function actReapply_(m, seq, co){
+  ACT_WRITES=ACT_WRITES.filter(function(w){ return w.co===co && w.seq>=seq; });
+  ACT_WRITES.forEach(function(w){ m[w.on]=Object.assign(m[w.on]||{company_id:co, order_number:w.on}, w.fields); });
+}
+var CRIT_BASE=['drivers','roster','flags'];
+var CRIT_CYCLE=['assign','plan','waivers','actions','loads'];   /* commit order: loads last (normalises with fresh roster) */
+var LOAD_COLS_='order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin,booking_dispatcher';
+function critFetch_(name, co){
+  if(!co) return Promise.reject(new Error('no_company'));
+  switch(name){
+    case 'loads':   return selAll_(function(){ return sb.from('loads').select(LOAD_COLS_).eq('company_id', co).is('deleted_at', null); },'order_number');
+    case 'actions': return selAll_(function(){ return sb.from('load_actions').select('*').eq('company_id', co); },'order_number');
+    case 'plan':    return selAll_(function(){ return sb.from('day_plan').select('*').eq('company_id', co).gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
+    case 'waivers': return selAll_(function(){ return sb.from('load_waivers').select('*').eq('company_id', co).gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
+    case 'assign':  return (async function(){
+        var a=await selAll_(function(){ return sb.from('driver_assignment').select('*').eq('company_id', co).is('canceled_at',null); },'id');
+        var d=await sb.rpc('driver_directory', { p_company_id: co });
+        if(d.error) throw d.error;
+        return {dasg:a, dir:d.data||[]}; })();
+    case 'drivers': return (async function(){ var r=await sb.from('drivers').select('*').eq('company_id', co);
+        if(r.error) throw r.error; return r.data||[]; })();
+    case 'roster':  return (async function(){ var r=await sb.from('week_roster').select('*').eq('week_monday', weekMon_());
+        if(r.error) throw r.error; return r.data||[]; })();
+    case 'flags':   return (async function(){ var r=await sb.from('broker_flags').select('*');
+        if(r.error) throw r.error; return r.data||[]; })();
+  }
+  return Promise.reject(new Error('unknown dataset '+name));
+}
+/* the same transforms the old loaders applied, only moved behind the commit */
+function critCommit_(name, v, seq, co){
+  if(name==='loads'){ LIVE=v; normalizeDriverNames_(); dedupeLoads_(); rebuildLoadIndex_(); }
+  else if(name==='actions'){ var m={}; (v||[]).forEach(function(a){ m[a.order_number]=a; }); actReapply_(m, seq||0, co||COID()); ACT=m; }
+  else if(name==='plan'){ DPLAN=v||[]; PDRVC=null; }
+  else if(name==='waivers'){ var w={}; (v||[]).forEach(function(x){ w[wkey_(x.dispatcher_name,x.work_day,x.kind,x.order_number)]=x; }); WAIV=w; }
+  else if(name==='assign'){ DASG=v.dasg||[]; DIR=v.dir||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
+  else if(name==='drivers'){ var dr={}; (v||[]).forEach(function(d){ dr[d.name]=d; }); DRIVERS_BY_NAME=dr; }
+  else if(name==='roster'){ var ro={}; (v||[]).forEach(function(x){ ro[x.dispatcher_name]=x; }); WROS=ro; }
+  else if(name==='flags'){ BFLAG={}; BFALL={}; NCCACHE=null;
+    (v||[]).forEach(function(b){ BFALL[b.customer]=b; if(b.inspection_in_broker_app) BFLAG[b.customer]=b; }); }
+}
+function syncFail_(what, msg){
+  SYNC.failAt=new Date();
+  SYNC.failWhat=[].concat(what);
+  SYNC.failMsg=String(msg||'').slice(0,240);
+  try{ paintSyncAge_(); }catch(e){}
+}
+/* one dataset, e.g. after a write. Commits only if no read of that dataset
+   that started later has already landed, and only for the company on screen.
+   On failure the previous complete dataset stays and the screen says stale. */
+async function critLoad_(name){
+  var co=COID(), g=SYNC.gen, seq=(CRIT_SEQ[name]=(CRIT_SEQ[name]||0)+1);
+  try{
+    var v=await critFetch_(name, co);
+    if(seq<=(CRIT_DONE[name]||0) || g!==SYNC.gen || co!==COID()) return false;   /* a newer read already landed */
+    critCommit_(name, v, seq, co); CRIT_DONE[name]=seq; return true;
+  }catch(e){
+    console.error(e);
+    if(g===SYNC.gen && co===COID()) syncFail_([name], name+': '+((e&&e.message)||e));
+    return false;
+  }
+}
+/* full coverage reached: only now does the freshness time move */
+function syncFinalize_(co, g){
+  if(g!==SYNC.gen || co!==COID() || !SYNC.have || SYNC.co!==co) return {stale:true};
+  /* F2: base contact check, call-content check and technical-relief read all count */
+  if(PCONT_ERR || SYNC.contactsErr){ SYNC.contactsErr=true;
+    syncFail_(['contacts'], SYNC.contactsStage||'contact_check_orders'); return {ok:false, partial:true}; }
+  SYNC.contactsErr=false; SYNC.okAt=new Date(); LAST_SYNC=SYNC.okAt;
+  SYNC.failAt=null; SYNC.failWhat=[]; SYNC.failMsg='';
+  try{ paintSyncAge_(); }catch(e){}
+  return {ok:true};
+}
+async function critCycle_(opts){
+  opts=opts||{};
+  var co=COID(), g=SYNC.gen;
+  var names=(SYNC.base===co ? [] : CRIT_BASE.slice()).concat(CRIT_CYCLE);
+  var seqs={}; names.forEach(function(n){ seqs[n]=(CRIT_SEQ[n]=(CRIT_SEQ[n]||0)+1); });
+  SYNC.tryAt=Date.now();
+  var res=await Promise.all(names.map(function(n){
+    return critFetch_(n, co).then(function(v){ return {n:n, ok:true, v:v}; },
+                                  function(e){ console.error(e); return {n:n, ok:false, e:e}; });
+  }));
+  if(g!==SYNC.gen || co!==COID()) return {stale:true};          /* the user left this company: drop all */
+  var bad=res.filter(function(r){ return !r.ok; });
+  if(bad.length){
+    syncFail_(bad.map(function(b){ return b.n; }),
+              bad.map(function(b){ return b.n+': '+((b.e&&b.e.message)||b.e); }).join('; '));
+    return {ok:false, failed:bad.map(function(b){ return b.n; })};   /* staged: nothing committed */
+  }
+  /* never let an older-started read overwrite a newer one that already landed */
+  res.forEach(function(r){ if(seqs[r.n]>(CRIT_DONE[r.n]||0)){ critCommit_(r.n, r.v, seqs[r.n], co); CRIT_DONE[r.n]=seqs[r.n]; } });
+  if(names.indexOf('drivers')>=0) SYNC.base=co;
+  SYNC.co=co; SYNC.have=true;
+  if(opts.contacts===false) return {ok:true, committed:true, co:co, g:g};
+  await loadPlanContacts();                                   /* depends on the committed plan */
+  /* P0-R2 (A1): the refresh path reads contacts once more in its outer wrapper;
+     there the verdict is given only after that last read (refreshFinish_). */
+  if(opts.finalize===false) return {ok:true, committed:true, deferred:true, co:co, g:g};
+  return syncFinalize_(co, g);
+}
+/* at most one cycle per company generation in flight. `fresh` = the caller
+   needs data read after this moment (e.g. after a server refusal), so it
+   waits for an in-flight cycle and then runs one more. */
+function critRefresh_(fresh, opts){
+  var g=SYNC.gen;
+  if(SYNC_RUN && SYNC_RUN.g===g){
+    if(!fresh) return SYNC_RUN.p;
+    if(!SYNC_RUN.again) SYNC_RUN.again=SYNC_RUN.p.then(function(){ return critRefresh_(false, opts); });
+    return SYNC_RUN.again;
+  }
+  var run={g:g};
+  run.p=critCycle_(opts).then(function(r){ if(SYNC_RUN===run) SYNC_RUN=null; return r; },
+                              function(e){ if(SYNC_RUN===run) SYNC_RUN=null; console.error(e);
+                                           syncFail_(['cycle'], (e&&e.message)||e); return {ok:false}; });
+  SYNC_RUN=run;
+  return run.p;
+}
+function syncState_(){
+  if(!SYNC.have || SYNC.co!==COID()) return SYNC.failAt ? 'unavailable' : 'loading';
+  if(SYNC.failAt || SYNC.contactsErr) return 'stale';
+  return 'ok';
+}
 async function loadRates(){ try{ const { data } = await sb.from('dispatcher_rates').select('*'); DRATES={}; (data||[]).forEach(function(r){ DRATES[r.dispatcher_name]=r; }); }catch(e){ console.error(e); DRATES={}; } }
-async function loadActions(){ try{ const data = await selAll_(function(){ return sb.from('load_actions').select('*').eq('company_id', COID()); },'order_number'); ACT={}; (data||[]).forEach(function(a){ ACT[a.order_number]=a; }); }catch(e){ console.error(e); ACT={}; } }
+async function loadActions(){ return critLoad_('actions'); }   /* SC-STABILIZE-001-P0: staged, keeps the last complete set on failure */
 
 /* ---------- auth + data bootstrap ---------- */
 async function signIn(){
@@ -842,8 +1007,13 @@ function coSwitch(code){
   CO=next; coRemember_(); paintCompany_();
   /* every cached table in this browser belongs to the company we just left */
   LIVE=[]; ACT={}; DPLAN=[]; WAIV={}; CONTACTS=[]; PCONT=[]; SCLOSE=null;
+  /* SC-STABILIZE-001-P0: no complete data for the new company yet; any read
+     still in flight for the old one is dropped when it lands */
+  SYNC.gen++; SYNC.have=false; SYNC.co=null; SYNC.base=null; SYNC.okAt=null; LAST_SYNC=null;
+  SYNC.failAt=null; SYNC.failWhat=[]; SYNC.failMsg=''; SYNC.contactsErr=false; SC_REF=null;
+  try{ render(); }catch(e){ console.error(e); }
   toast('კომპანია: '+CO.legal_name);
-  loadData().then(function(){ render(); }).catch(function(e){ console.error(e); toast('ვერ ჩაიტვირთა'); });
+  loadData().then(function(){ render(); }).catch(function(e){ console.error(e); try{ render(); }catch(e2){} toast('ვერ ჩაიტვირთა'); });
 }
 function paintCompany_(){
   var el=document.getElementById('coswitch');
@@ -854,32 +1024,34 @@ function paintCompany_(){
   el.style.display = COLIST.length>1 ? '' : 'none';
 }
 
-async function loadData(){
+/* SC-STABILIZE-001-P0: loads run one after another, never interleaved, so an
+   older company's reads cannot land on top of a newer company's. Drivers,
+   week roster, broker flags, loads, actions, plan, waivers and assignments
+   come in ONE staged read (critRefresh_); the other loaders are unchanged. */
+var LOADDATA_Q=Promise.resolve();
+function loadData(){ var p=LOADDATA_Q.catch(function(){}).then(loadData_); LOADDATA_Q=p; return p; }
+async function loadData_(){
   await loadCompanies();
   paintCompany_();
+  var co0=COID(), g0=SYNC.gen;
+  var crit=critRefresh_(true, {contacts:false});
   if(USER.role==='mgmt'){
-    const { data:drv } = await sb.from('drivers').select('*').eq('company_id', COID());
-    DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
-    /* `payment_received` აღარ იკითხება: ეს ხელით მონიშვნა snapshot-ის ეპოქიდან დარჩა,
-       ცხრილი ცარიელია და ინტერფეისში არსად გამოიყენებოდა. ფულის შემოსვლის ერთადერთი
-       წყარო Super Dispatch-ის `paid_at`-ია. */
-    /* ერთმანეთზე არ არიან დამოკიდებული — პარალელურად ჩამოდის, გაცილებით სწრაფად */
+    /* `payment_received` აღარ იკითხება — ფულის შემოსვლის ერთადერთი წყარო SD-ის `paid_at`-ია. */
     await Promise.all([
-      loadLiveLoads(), loadActions(), loadRates(), loadExpenses(), loadContacts(),
-      loadAttempts(), loadWaivers(), loadCloses(), loadBrokerFlags(), loadPlan(),
-      loadAssign(), loadLedger(), loadWeekRoster(), loadDispatchers()
+      crit, loadRates(), loadExpenses(), loadContacts(),
+      loadAttempts(), loadCloses(), loadLedger(), loadDispatchers()
     ]);
   } else {
-    const { data:drv } = await sb.from('drivers').select('*').eq('company_id', COID());   // RLS: only my drivers
-    DRIVERS_BY_NAME={}; (drv||[]).forEach(d=>{ DRIVERS_BY_NAME[d.name]=d; });
     await Promise.all([
-      loadLiveLoads(),   // RLS scopes loads to this dispatcher only
-      loadActions(), loadContacts(), loadSettingsOnly(), loadBrokerFlags(), loadPlan(),
-      loadAttempts(), loadWaivers(), loadAssign(), loadWeekRoster(), loadClose()
+      crit,              // RLS scopes loads/drivers to this dispatcher only
+      loadContacts(), loadSettingsOnly(), loadAttempts(), loadClose()
     ]);
   }
   /* GT-20260922: contacts depend on loaded orders, plan and assignments. */
   await loadPlanContacts();
+  var fin=syncFinalize_(co0, g0);
+  if(!SYNC.have || SYNC.co!==COID()) throw new Error('critical data unavailable: '+(SYNC.failMsg||'unknown'));
+  return fin;
 }
 async function loadDispatchers(){
   try{ var r=await sb.from('access_allowlist').select('dispatcher_name,role,active').eq('active',true);
@@ -933,7 +1105,7 @@ function startApp(){
   document.getElementById('rolepill').style.display='none';   // role fixed by allowlist
   buildViewAs();
   setRole(USER.role==='mgmt'?'mgmt':'disp');
-  LAST_SYNC=new Date();
+  /* SC-STABILIZE-001-P0: LAST_SYNC is set only by a complete refresh */
   startAutoRefresh_();
 }
 /* ---- ავტომატური განახლება ----
@@ -949,30 +1121,72 @@ function syncAgeTxt_(){
 }
 function paintSyncAge_(){
   var el=document.getElementById('syncage');
-  if(el) el.textContent=REFRESHING?'ახლდება…':syncAgeTxt_();
+  if(el){
+    var st=syncState_();
+    var t=REFRESHING?'ახლდება…':
+          st==='ok'?syncAgeTxt_():
+          st==='loading'?'იტვირთება…':
+          st==='unavailable'?'⚠ მონაცემი ვერ ჩაიტვირთა':
+          ('⚠ ვერ განახლდა'+(LAST_SYNC?(' · ბოლო სრული: '+syncAgeTxt_()):''));
+    el.textContent=t;
+    el.setAttribute('data-sync', st);
+    el.style.color=(st==='ok'||st==='loading')?'':'var(--crit)';
+    el.title=(st==='stale'||st==='unavailable')?('ბოლო განახლება ვერ დასრულდა: '+SYNC.failMsg):'';
+  }
   try{ paintNotif_(); }catch(e){}
 }
+/* SC-STABILIZE-001-P0: every refresh is the staged cycle above. A background
+   refresh no longer skips the read while the dispatcher types; it reads and
+   commits, and only the repaint waits until the field loses focus. */
+var RENDER_DEFER=false;
+function isTextEntry_(el){
+  if(!el) return false;
+  if(el.tagName==='TEXTAREA') return true;
+  if(el.tagName!=='INPUT') return false;
+  var t=String(el.type||'text').toLowerCase();
+  return ['text','search','number','date','datetime-local','time','email','tel','url','month','week'].indexOf(t)>=0;
+}
+function viewTyping_(){ var a=document.activeElement, v=document.getElementById('view');
+  return !!(a && v && v.contains(a) && isTextEntry_(a)); }
+document.addEventListener('focusout', function(){
+  if(!RENDER_DEFER) return;
+  setTimeout(function(){ if(RENDER_DEFER && !viewTyping_()){ RENDER_DEFER=false; try{ render(); }catch(e){ console.error(e); } } }, 300);
+}, true);
+/* P0-R2 (A1): ONE verdict per refresh, given after every required read.
+   The existing outer wrapper (__rfRlPatched) re-reads the contact chain after
+   this function; when it is installed, this function hands its result to the
+   wrapper, which calls refreshFinish_ after that read. Without the wrapper,
+   refreshFinish_ runs here. */
 async function refreshLive_(manual){
-  if(REFRESHING) return;
-  /* ხელით შევსების შუაში გვერდი არ უნდა გადაიხატოს */
-  var ae=document.activeElement;
-  if(!manual && ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
+  if(!USER) return;
+  var wrapped=!!window.__rfRlPatched;
+  var out={p0:true, manual:!!manual, cycle:null};
   REFRESHING=true; paintSyncAge_();
+  try{ out.cycle=await critRefresh_(!!manual, wrapped?{finalize:false}:null); }
+  catch(e){ console.error(e); out.cycle={ok:false}; }
+  if(!wrapped) refreshFinish_(out);
+  return out;
+}
+function refreshFinish_(out){
   try{
-    await Promise.all([loadLiveLoads(), loadAssign(), loadActions(), loadPlan(), loadWaivers()]);
-    await loadPlanContacts();          /* გეგმაზეა დამოკიდებული — მის შემდეგ */
-    LAST_SYNC=new Date();
-    render();
-    if(manual) toast('განახლდა ✓');
-  }catch(e){ console.error(e); if(manual) toast('ვერ განახლდა'); }
+    var r=(out && out.cycle) || {ok:false};
+    if(r.stale) return;                                     /* the user left this scope */
+    var fin=r.deferred ? syncFinalize_(r.co, r.g) : r;      /* after the last contact read */
+    if(fin && fin.stale) return;
+    if(!(out && out.manual) && viewTyping_()) RENDER_DEFER=true; else render();
+    if(out && out.manual) toast(fin&&fin.ok ? 'განახლდა ✓'
+                     : (fin&&fin.partial ? 'ნაწილობრივ განახლდა — ზარების მონაცემი ვერ ჩაიტვირთა'
+                                         : 'ვერ განახლდა — ნაჩვენებია ბოლო სრული მონაცემი'));
+  }catch(e){ console.error(e); if(out && out.manual) toast('ვერ განახლდა'); }
   finally{ REFRESHING=false; paintSyncAge_(); }
 }
 function startAutoRefresh_(){
   if(AUTOREF) return;
   AUTOREF=setInterval(function(){
     paintSyncAge_();
-    if(document.hidden) return;                       /* ფონურ ტაბს არ ვწვავთ */
-    if(Date.now()-LAST_SYNC.getTime() < 170000) return;
+    if(document.hidden || !USER) return;              /* ფონურ ტაბს არ ვწვავთ */
+    var wait=(SYNC.failAt || !SYNC.have) ? 60000 : 170000;   /* after a failure, retry sooner */
+    if(Date.now()-(SYNC.tryAt||0) < wait) return;
     refreshLive_(false);
   }, 30000);
   paintSyncAge_();
@@ -1311,11 +1525,7 @@ async function loadAttempts(){
 }
 var WROS={}, WRSEL=null;
 function weekMon_(){ return mondayOf(workToday_())||workToday_(); }
-async function loadWeekRoster(){
-  try{ var r=await sb.from('week_roster').select('*').eq('week_monday', weekMon_());
-    WROS={}; (r.data||[]).forEach(function(x){ WROS[x.dispatcher_name]=x; });
-  }catch(e){ console.error(e); WROS={}; }
-}
+async function loadWeekRoster(){ return critLoad_('roster'); }   /* SC-STABILIZE-001-P0: an error no longer reads as "roster not confirmed" */
 function wrConfirmed_(){ return !!WROS[MYD()]; }
 function wrSet(encName, v){ var n=decodeURIComponent(encName); WRSEL=WRSEL||{};
   WRSEL[n]=WRSEL[n]||{st:'work',why:''}; WRSEL[n].st=v; render(); }
@@ -1370,11 +1580,7 @@ function weekBox_(all){
     (rows||"<div class='muted' style='font-size:12px;margin-top:8px'>მძღოლი არ არის</div>")+
     "<div style='margin-top:14px'><button class='bigbtn' style='padding:9px 18px;font-size:13px' onclick='wrSave()'>დადასტურება</button></div></div>";
 }
-async function loadWaivers(){
-  try{ var r=await selAll_(function(){ return sb.from('load_waivers').select('*').eq('company_id', COID()).gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
-    WAIV={}; (r||[]).forEach(function(w){ WAIV[wkey_(w.dispatcher_name,w.work_day,w.kind,w.order_number)]=w; });
-  }catch(e){ console.error(e); WAIV={}; }
-}
+async function loadWaivers(){ return critLoad_('waivers'); }   /* SC-STABILIZE-001-P0 */
 function waivOf_(kind,subj,day,disp){ return WAIV[wkey_(disp||(USER&&MYD())||'',day,kind,subj||'')]||null; }
 function marketFactor_(){ return sett_('market_factor',1); }
 function dayTarget_(driverName){
@@ -1681,6 +1887,9 @@ function rBoard(){
     return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
   var chkP=LD.filter(function(l){ return chkOpen_(l) && chkDueDay_(l)>=CHK_FROM; })
             .sort(function(a,b){ return chkDueDay_(b).localeCompare(chkDueDay_(a)); });
+  /* SC-STABILIZE-001-P0: orders the server refused on stay red until their evidence changes */
+  var scOpen=scOpen_(tday), scHas=function(g){ return scOpen.some(function(x){ return x.gate===g; }); };
+  scMerge_(invP, scOpen, 'invoice'); scMerge_(chkP, scOpen, 'check');
 
   function gate_(title, n, sub, kind, subj){
     var ok=(n===0)||waivOk_(kind,subj||'',tday);
@@ -1796,7 +2005,7 @@ function rBoard(){
   var exemptAll=(contactN>0 && callList.length===0);
   /* სანამ თუნდაც ერთი ზარი მოწმდება, gate მწვანე არ ხდება — მაგრამ წითელიც არაა */
   var callWaived=waivOk_('calls_all','',tday);
-  var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && unknownOns.length===0));
+  var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && unknownOns.length===0)) && !scHas('calls');
   var callGate_="<div class='gate "+(callOkAll?'ok':(waitN&&!callP.length?'wait':'no'))+"'><div class='ic'>"+(callOkAll?'✓':(waitN&&!callP.length?'◔':'!'))+
     "</div><div class='t'><b>ზარები · Pickup / Delivery</b>"+
     (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+
@@ -1822,6 +2031,8 @@ function rBoard(){
   var apptAll=PL.filter(apptNeeded_), gpAll=PL.filter(gatePassNeeded_);
   var apptP=apptAll.filter(function(l){ return !apptOf_(l) && !waivOk_('appt',l.order_number,tday); });
   var gpP=gpAll.filter(function(l){ return !gatePassOf_(l) && !waivOk_('gatepass',l.order_number,tday); });
+  scMerge_(apptAll, scOpen, 'appt'); scMerge_(apptP, scOpen, 'appt');
+  scMerge_(gpAll, scOpen, 'gatepass'); scMerge_(gpP, scOpen, 'gatepass');
   function apptRows_(items){
     return items.slice(0,10).map(function(l){
       var e0=encodeURIComponent(l.order_number), cur=apptOf_(l);
@@ -1861,9 +2072,11 @@ function rBoard(){
      „დადასტურებული" ეწერა, მაგრამ `rem` მაინც 1-ს ითვლიდა და ცვლა არ იხურებოდა.
      ყველა სხვა gate-ს ეს უკვე ჰქონდა (`gInv`, `gChk`, `gAppt`, `gGate`). */
   var gCall=callOkAll; /* waiver already inside callOkAll; a call still being checked blocks the close */
-  var wrOk=wrConfirmed_();
+  var wrOk=wrConfirmed_() && !scHas('roster');
+  if(scHas('standard')) stdOk=false;
   var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1)+
-          (apptAll.length&&!gAppt?1:0)+(gpAll.length&&!gGate?1:0);
+          (apptAll.length&&!gAppt?1:0)+(gpAll.length&&!gGate?1:0)+
+          ((scHas('plan_mismatch')||scHas('unknown')||scHas('work_day_mismatch'))?1:0);
   var closed=SCLOSE&&SCLOSE.work_day===tday;
   var chips=[['g','დაცული'],['y','ნაკლები'],['r','ვერ ავსებს']].filter(function(t){ return cnt[t[0]]; })
     .map(function(t){ return "<span class='chip "+t[0]+"'><span class='dot'></span>"+cnt[t[0]]+" "+t[1]+"</span>"; }).join('');
@@ -1888,6 +2101,7 @@ function rBoard(){
       rows_(invP,'bol')+
       gate_('ჩეკის ატვირთვა', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', 'check','')+
       rows_(chkP,'chk')+
+      scPanel_(tday)+
       "<div class='closebar'>"+
         "<button class='bigbtn"+((rem===0&&!closed)?' ready':'')+"' id='logoutBtn'"+((rem>0||closed)?' disabled':'')+" onclick='closeShift()'>"+(closed?'ცვლა დახურულია ✓':'ცვლის დახურვა')+"</button>"+
         "<span id='gateCount' class='chip "+(rem?'r':'g')+"'><span class='dot'></span>"+(rem?rem+' დარჩენილი':'ყველა gate გავლილია')+"</span>"+
@@ -1903,38 +2117,211 @@ function rBoard(){
       "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
 }
 var SCLOSE=null;
+var SCLOSE_SEQ=0;
 async function loadClose(){
-  try{ var r=await sb.from('shift_close').select('*').eq('company_id', COID()).eq('work_day', ymd_(nextWorkDay_())).eq('dispatcher_name', MYD()).maybeSingle();
-    SCLOSE=r.data||null; }catch(e){ console.error(e); SCLOSE=null; }
+  /* SC-STABILIZE-001-P0: a reply for another dispatcher/company/day (view-as
+     switch, company switch, rollover) is dropped instead of committed. */
+  var seq=++SCLOSE_SEQ, co=COID(), me=MYD(), day=ymd_(nextWorkDay_());
+  var cur=function(){ return seq===SCLOSE_SEQ && co===COID() && me===MYD() && day===ymd_(nextWorkDay_()); };
+  try{ var r=await sb.from('shift_close').select('*').eq('company_id', co).eq('work_day', day).eq('dispatcher_name', me).maybeSingle();
+    if(!cur()) return;
+    if(r.error) throw r.error;
+    SCLOSE=r.data||null;
+  }catch(e){ console.error(e);
+    if(cur()){ if(!(SCLOSE && SCLOSE.work_day===day && SCLOSE.dispatcher_name===me)) SCLOSE=null; }
+  }
+}
+/* ---- SC-STABILIZE-001-P0 · the server's refusal, shown and reconciled ----
+   shift_close_submit already returns its evaluated gates (`server.gates`). A
+   refusal is turned into concrete items (gate + order + what is missing),
+   every close-critical dataset is re-read, and each item then stays red on
+   this screen until the local evidence for that order actually changes or the
+   server is asked again. The server remains the only authority to close. */
+var SC_REF=null, CLOSE_INFLIGHT=null;
+var SC_GATE_LBL={roster:'კვირის როსტერი', standard:'ტვირთების სტანდარტი', calls:'ზარები', invoice:'ინვოისი და BOL',
+  check:'ჩეკი', appt:'Copart appointment', gatepass:'Gate Pass', plan_mismatch:'ხვალინდელი სია',
+  work_day_mismatch:'სამუშაო დღე', unknown:'სერვერის შემოწმება'};
+function scOrders_(v){
+  var out=[];
+  (Array.isArray(v)?v:[]).forEach(function(x){
+    var o=(x && typeof x==='object') ? (x.order_number||x.order||x.on||'') : x;
+    o=String(o==null?'':o).trim(); if(o && out.indexOf(o)<0) out.push(o);
+  });
+  return out;
+}
+function scItems_(r){
+  var g=(r && r.server && r.server.gates) || {}, items=[], seen={};
+  var add=function(gate, order, why){ var k=gate+'|'+(order||''); if(seen[k]) return; seen[k]=1;
+    items.push({gate:gate, order:order||'', why:why}); };
+  (r && r.reasons || []).forEach(function(k0){
+    var k=String(k0), base=k.split(':')[0], rest=k.slice(base.length+1);
+    if(base==='plan_mismatch'){
+      (rest?rest.split(','):['']).forEach(function(o){ add('plan_mismatch', String(o).trim(), 'შენს ხვალინდელ სიაშია, სერვერის სიაში — არა (სია შეიცვალა)'); });
+      return;
+    }
+    if(base==='work_day_mismatch'){ add('work_day_mismatch','', 'დღე შეიცვალა — სია ხელახლა ჩაიტვირთა'); return; }
+    if(base==='evaluator_inconsistent' || rest==='unknown'){ add('unknown','', (SC_GATE_LBL[base]||base)+' — სერვერმა ვერ შეაფასა, სცადე ხელახლა'); return; }
+    if(base==='calls' && rest==='pending'){
+      var wn=Number(g.calls && g.calls.detail && g.calls.detail.wait_n)||0;
+      add('calls','', (wn?wn+' ':'')+'ზარი ჯერ მოწმდება — დაელოდე რამდენიმე წუთს'); return;
+    }
+    if(base==='invoice'){
+      var inv=g.invoice||{}, det=inv.detail||{}, mi=scOrders_(det.missing_invoice), mb=scOrders_(det.missing_bol);
+      var ords=scOrders_(inv.pending);
+      if(!ords.length) add('invoice','', 'ინვოისი / BOL გასაგზავნია');
+      ords.forEach(function(o){
+        var w=(mi.indexOf(o)>=0 && mb.indexOf(o)>=0)?'ინვოისი და BOL გაგზავნილად არ ჩანს'
+             :(mi.indexOf(o)>=0)?'ინვოისი გაგზავნილად არ ჩანს':(mb.indexOf(o)>=0)?'BOL გაგზავნილად არ ჩანს'
+             :'ინვოისი / BOL გაგზავნილად არ ჩანს';
+        add('invoice', o, w); });
+      return;
+    }
+    if(base==='check'){ var co=scOrders_((g.check||{}).pending);
+      if(!co.length) add('check','', 'ჩეკი ასატვირთია');
+      co.forEach(function(o){ add('check', o, 'ჩეკი ატვირთული არ არის'); }); return; }
+    if(base==='appt'){ var ao=scOrders_((g.appt||{}).pending);
+      if(!ao.length) add('appt','', 'Copart appointment ჩასაწერია');
+      ao.forEach(function(o){ add('appt', o, 'appointment ჩაწერილი არ არის'); }); return; }
+    if(base==='gatepass'){ var go=scOrders_((g.gatepass||{}).pending);
+      if(!go.length) add('gatepass','', 'Gate Pass ასატვირთია');
+      go.forEach(function(o){ add('gatepass', o, 'Gate Pass ატვირთული არ არის'); }); return; }
+    if(base==='calls'){
+      var cd=(g.calls||{}).detail||{}, cp=scOrders_(cd.pending), cu=scOrders_(cd.unknown_unwaived), cn=scOrders_(cd.plan_without_contact);
+      cp.forEach(function(o){ add('calls', o, 'ფიქაფზე ან დელივერზე ნასაუბრები ზარი არ დადასტურდა'); });
+      cu.concat(cn).forEach(function(o){ add('calls', o, 'ამ ტვირთზე ზარის მონაცემი სერვერზე არ არის'); });
+      if(!cp.length && !cu.length && !cn.length) add('calls','', 'ზარების gate წითელია');
+      return;
+    }
+    if(base==='standard'){ add('standard','', 'მძღოლის დღიური სტანდარტი არ სრულდება'); return; }
+    if(base==='roster'){ add('roster','', 'კვირის როსტერი დასადასტურებელია'); return; }
+    add('unknown','', k);
+  });
+  return items;
+}
+function scWaivFp_(kind, subj, day){ var w=waivOf_(kind, subj||'', day); return w ? (w.status+'|'+(w.decided_at||'')) : ''; }
+/* what the local screen knows about one refused item; any change = new evidence */
+function scFp_(gate, order, day){
+  try{
+    var l=order?(loadOf_(order)||null):null, a=order?actOf_(order):{};
+    var L=l?[l.status,l.pickup_completed,l.delivery_completed,l.payment_terms,l.invoice_sent_at,l.booking_dispatcher,l.dispatcher_name,l.driver_name,l.pu_venue,l.is_canceled]:null;
+    if(gate==='invoice') return JSON.stringify([L,a.bol_sent_at||null,scWaivFp_('invoice',order,day),scWaivFp_('invoice','',day)]);
+    if(gate==='check') return JSON.stringify([L,a.check_uploaded_at||null,a.check_resolution||null,scWaivFp_('check',order,day),scWaivFp_('check','',day)]);
+    if(gate==='appt') return JSON.stringify([L,a.appt_at||null,scWaivFp_('appt',order,day),scWaivFp_('appt_all','',day)]);
+    if(gate==='gatepass') return JSON.stringify([L,a.gate_pass_path||null,scWaivFp_('gatepass',order,day),scWaivFp_('gatepass_all','',day)]);
+    if(gate==='calls'){
+      var pc=(PCONT||[]).filter(function(x){ return !order || x.order_number===order; })
+        .map(function(x){ return [x.order_number,x.pu_verified,x.del_verified,x.pu_sms,x.del_sms,x.pu_pending,x.del_pending,x.not_required]; });
+      return JSON.stringify([pc, order?scWaivFp_('calls',order,day):'', scWaivFp_('calls_all','',day), PCONT_ERR]);
+    }
+    if(gate==='plan_mismatch') return JSON.stringify(planLoads_(day).map(function(x){ return x.order_number; }).sort());
+    if(gate==='standard') return JSON.stringify([planLoads_(day).map(function(x){ return [x.order_number, drvName_(x)]; }).sort(),
+      Object.keys(WAIV).filter(function(k){ return k.indexOf('|'+day+'|standard|')>=0; }).map(function(k){ return k+'='+WAIV[k].status; }).sort(),
+      DASG.length]);
+    if(gate==='roster') return JSON.stringify(WROS[MYD()]||null);
+    if(gate==='work_day_mismatch') return day;
+    return 'server';
+  }catch(e){ return 'err'; }
+}
+function scKey_(day){ return String(COID()||'')+'|'+MYD()+'|'+day; }
+/* the refused items that still stand: same company/dispatcher/day, unchanged evidence */
+function scOpen_(day){
+  if(!SC_REF || SC_REF.key!==scKey_(day)) return [];
+  return SC_REF.items.filter(function(it){
+    /* a plan mismatch is settled once the re-read plan no longer lists the order */
+    if(it.gate==='plan_mismatch' && it.order &&
+       !planLoads_(day).some(function(x){ return x.order_number===it.order; })) return false;
+    return scFp_(it.gate, it.order, day)===it.fp; });
+}
+function scLoadRow_(o){
+  return loadOf_(o) || {order_number:o, driver_name:'', pickup_location:'', delivery_location:'', price:0, _scOnly:true};
+}
+/* add refused orders the local list does not contain, so the gate is red and
+   the row offers the same actions (upload / mark / explain) */
+function scMerge_(list, open, gate){
+  open.forEach(function(it){
+    if(it.gate!==gate || !it.order) return;
+    if(list.some(function(l){ return l.order_number===it.order; })) return;
+    list.push(scLoadRow_(it.order));
+  });
+}
+function scPanel_(day){
+  if(!SC_REF || SC_REF.key!==scKey_(day)) return '';
+  var open=scOpen_(day);
+  var t=SC_REF.at.toLocaleTimeString('ka-GE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  var rows=SC_REF.items.map(function(it){
+    var still=open.indexOf(it)>=0;
+    return "<div class='scitem' data-gate='"+esc(it.gate)+"' data-order='"+esc(it.order)+"' data-open='"+(still?'1':'0')+"' style='padding:3px 0'>"+
+      "<b>"+esc(SC_GATE_LBL[it.gate]||it.gate)+"</b>"+(it.order?(" · <b>"+esc(it.order)+"</b>"):"")+" — "+esc(it.why)+
+      (still?"":" <span style='color:var(--good);font-weight:650'>· შეიცვალა — სცადე ხელახლა</span>")+"</div>";
+  }).join('');
+  var wait=Math.max(0, 15000-(Date.now()-SC_REF.at.getTime()));
+  return "<div id='scPanel' role='status' style='margin:10px 15px;padding:10px 12px;border:1.5px solid var(--crit);border-radius:10px;font-size:12.5px'>"+
+    "<div style='font-weight:700;margin-bottom:4px'>სერვერმა ცვლა არ დახურა ("+esc(t)+"). მიზეზი:</div>"+rows+
+    (SC_REF.reconciled
+      ? "<div class='muted' style='margin-top:6px'>მონაცემები ხელახლა ჩაიტვირთა. გამოასწორე ჩამოთვლილი და სცადე ხელახლა — საბოლოო შემოწმება ისევ სერვერზეა.</div>"
+      : "<div style='margin-top:6px;color:var(--crit);font-weight:600'>მონაცემები ბოლომდე ვერ განახლდა — ეკრანი შეიძლება ძველი იყოს. დააჭირე ⟳ და სცადე ხელახლა; საბოლოო შემოწმება ისევ სერვერზეა.</div>")+
+    "<button class='fixbtn' id='scRetry' style='margin-top:8px'"+(wait?" disabled title='რამდენიმე წამში'":"")+" onclick='closeShift()'>ხელახლა შემოწმება და დახურვა</button></div>";
 }
 async function closeShift(){
   /* SCCEV-001: the server decides. shift_close_submit() re-evaluates every gate
      (close_gates_co), audits the attempt in close_event, and writes shift_close
      only when every required gate is green. Red, pending and unknown refuse;
-     an approved waiver is the only exception. There is no direct table write. */
-  var btn=document.getElementById('logoutBtn'); if(btn) btn.disabled=true;
-  var LBL={roster:'კვირის როსტერი', standard:'ტვირთების სტანდარტი', calls:'ზარები',
-           'calls:pending':'ზარი ჯერ მოწმდება', invoice:'ინვოისი და BOL', check:'ჩეკი',
-           appt:'Copart appointment', gatepass:'Gate Pass', work_day_mismatch:'დღე შეიცვალა — განაახლე გვერდი'};
+     an approved waiver is the only exception. There is no direct table write.
+     SC-STABILIZE-001-P0: one submit at a time from this screen; a refusal is
+     shown with its orders and every close-critical dataset is re-read. */
+  if(CLOSE_INFLIGHT) return;
+  var co=COID(), me=MYD(), day=ymd_(nextWorkDay_());
+  if(!co || !me) return;
+  CLOSE_INFLIGHT=co+'|'+me+'|'+day;
+  /* F3: the result belongs to the company, dispatcher AND work day it was submitted for */
+  var same=function(){ return co===COID() && me===MYD() && day===ymd_(nextWorkDay_()); };
+  var moved=function(){ if(co===COID() && me===MYD() && day!==ymd_(nextWorkDay_()))
+    toast('სამუშაო დღე შეიცვალა — '+day+'-ის შემოწმების შედეგი ახალ დღეზე არ გადადის. სია ახლდება.'); };
+  var btn=document.getElementById('logoutBtn'); if(btn){ btn.disabled=true; btn.textContent='მოწმდება სერვერზე…'; }
+  var rb=document.getElementById('scRetry'); if(rb) rb.disabled=true;
+  var painted=false;
   try{
-    var day=ymd_(nextWorkDay_());
     var PLd=planLoads_(day);
     var frozen=PLd.map(function(l){ return l.order_number; });
     var client={orders:frozen, count:frozen.length, rem:0,          /* the button is enabled only at rem===0 */
                 gross:PLd.reduce(function(s,l){ return s+grossOf_(l); },0)};
-    var res=await sb.rpc('shift_close_submit',{p_company_id:COID(), p_work_day:day, p_client:client,
+    var res=await sb.rpc('shift_close_submit',{p_company_id:co, p_work_day:day, p_client:client,
                                                p_dispatcher:(VIEWAS||null)});
     if(res.error) throw res.error;
     var r=res.data||{};
     if(r.closed){
+      if(SC_REF && SC_REF.key===co+'|'+me+'|'+day) SC_REF=null;
+      if(!same()){ moved(); return; }
       await loadClose();
-      toast(r.already_closed?'ცვლა უკვე დახურულია ✓':'ცვლა დახურულია ✓'); render(); return;
+      if(!same()){ moved(); return; }            /* P0-R2 (A2): day/scope changed during the read */
+      toast(r.already_closed?'ცვლა უკვე დახურულია ✓':'ცვლა დახურულია ✓');
+      CLOSE_INFLIGHT=null; render(); painted=true; return;
     }
-    var why=(r.reasons||[]).map(function(k){ var b=String(k).split(':')[0]; return LBL[k]||LBL[b]||k; });
-    toast('ცვლა ვერ დაიხურა — სერვერის შემოწმება: '+why.join(', '));
-    try{ await loadPlanContacts(); }catch(e){ console.error(e); }
-    render();
-  }catch(e){ console.error(e); toast('ვერ დაიხურა'); if(btn) btn.disabled=false; }
+    var items=scItems_(r);
+    if(!same()){ moved(); return; }             /* the user moved on; the attempt is audited server-side */
+    toast('ცვლა ვერ დაიხურა — '+items.slice(0,3).map(function(it){
+      return (SC_GATE_LBL[it.gate]||it.gate)+(it.order?(': '+it.order):''); }).join(', ')+(items.length>3?' …':''));
+    /* reconcile: re-read loads, actions, plan, waivers, assignments and calls */
+    var rr=await critRefresh_(true);
+    await loadClose();
+    if(!same()){ moved(); return; }
+    SC_REF={key:co+'|'+me+'|'+day, at:new Date(), event:r.event_id||null,
+            reconciled:!!(rr && rr.ok),                 /* F2: say "reloaded" only when it was */
+            items:items.map(function(it){ it.fp=scFp_(it.gate, it.order, day); return it; })};
+    CLOSE_INFLIGHT=null; render(); painted=true;
+    setTimeout(function(){ var b=document.getElementById('scRetry'); if(b && !CLOSE_INFLIGHT) b.disabled=false; }, 15100);
+  }catch(e){
+    console.error(e);
+    toast('ცვლა ვერ დაიხურა — '+((e&&e.message)?e.message:'კავშირის შეცდომა')+'. სცადე ხელახლა.');
+  }finally{
+    CLOSE_INFLIGHT=null;
+    if(!painted){
+      /* repaint whatever scope is current now; after a day change, re-read it */
+      if(co===COID() && me===MYD() && day!==ymd_(nextWorkDay_())){ loadClose().then(function(){ return loadPlanContacts(); })
+        .then(function(){ try{ render(); }catch(e){} }, function(){ try{ render(); }catch(e){} }); }
+      try{ render(); }catch(e){ console.error(e); }
+    }
+  }
 }
 var CHKARM=null, CHKKIND='check';
 function chkArm(enc){
@@ -1977,8 +2364,10 @@ async function apptSave(enc){
   var iso=v.slice(0,16)+':00+00:00';
   try{
     var now=new Date().toISOString();
-    var res=await sb.from('load_actions').upsert({company_id:COID(), order_number:on, appt_at:iso, appt_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
+    var co0=COID();
+    var res=await sb.from('load_actions').upsert({company_id:co0, order_number:on, appt_at:iso, appt_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
+    actAck_(on, {appt_at:iso, appt_by:USER.email, updated_at:now}, co0);   /* P0-R1 F1 */
     await loadActions(); toast('Appointment შენახულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა — '+(e&&e.message?e.message:'')); }
 }
@@ -2022,6 +2411,7 @@ async function upFile_(on, f, kind){
       : {company_id:COID(), order_number:on, check_path:path, check_uploaded_at:now, check_by:USER.email};
     var res=await sb.from('load_actions').upsert(row,{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
+    actAck_(on, row, row.company_id);                                      /* P0-R1 F1 */
     await loadActions(); toast(kind==='gate'?'Gate Pass ატვირთულია ✓':'ჩეკი ატვირთულია ✓'); render();
   }catch(e){ console.error(e); toast('ვერ აიტვირთა — '+(e&&e.message?e.message:'')); }
 }
@@ -2039,21 +2429,22 @@ async function chkResolve(enc, kind){
   if(!CHKRES[kind]) return;
   if(!confirm('ტვირთი '+on+' — მონიშნო როგორც „'+CHKRES[kind]+'“?\n\nეს თანხა მძღოლთან დარჩენილად ჩაითვლება და ხელფასიდან გამოაკლდება.')) return;
   try{
-    var now=new Date().toISOString();
-    var res=await sb.from('load_actions').upsert({company_id:COID(), order_number:on, check_resolution:kind, check_resolution_at:now,
+    var now=new Date().toISOString(), co0=COID();
+    var res=await sb.from('load_actions').upsert({company_id:co0, order_number:on, check_resolution:kind, check_resolution_at:now,
       check_resolution_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
-    ACT[on]=Object.assign(ACT[on]||{},{check_resolution:kind,check_resolution_at:now,check_resolution_by:USER.email});
+    actAck_(on, {check_resolution:kind,check_resolution_at:now,check_resolution_by:USER.email}, co0);   /* P0-R1 F1 */
     toast('მონიშნულია — '+CHKRES[kind]+' ✓'); render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
 }
 async function chkResolveUndo(enc){
   var on=decodeURIComponent(enc);
   try{
-    var res=await sb.from('load_actions').upsert({company_id:COID(), order_number:on, check_resolution:null, check_resolution_at:null,
+    var co0=COID();
+    var res=await sb.from('load_actions').upsert({company_id:co0, order_number:on, check_resolution:null, check_resolution_at:null,
       check_resolution_by:null, updated_at:new Date().toISOString()},{onConflict:'company_id,order_number'});
     if(res.error) throw res.error;
-    ACT[on]=Object.assign(ACT[on]||{},{check_resolution:null});
+    actAck_(on, {check_resolution:null, check_resolution_at:null, check_resolution_by:null}, co0);   /* P0-R1 F1 */
     toast('მონიშვნა მოიხსნა'); render();
   }catch(e){ console.error(e); toast('ვერ მოიხსნა'); }
 }
@@ -2065,7 +2456,7 @@ async function markAct(enc, kind){
   try{
     const { error } = await sb.from('load_actions').upsert(row,{onConflict:'company_id,order_number'});
     if(error) throw error;
-    ACT[o]=Object.assign(ACT[o]||{},row);
+    actAck_(o, row, row.company_id);                                       /* P0-R1 F1 */
     toast(kind==='bol'?'BOL მონიშნულია ✓':'ჩეკი მონიშნულია ✓');
     render();
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
@@ -2236,9 +2627,10 @@ async function saveDeadHead(enc, v){
   if(n!=null && !isFinite(n)){ toast('რიცხვი ჩაწერე'); return; }
   try{
     const now=new Date().toISOString();
-    const { error } = await sb.from('load_actions').upsert({company_id:COID(), order_number:o, dead_head:n, dead_head_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
+    const co0=COID();
+    const { error } = await sb.from('load_actions').upsert({company_id:co0, order_number:o, dead_head:n, dead_head_by:USER.email, updated_at:now},{onConflict:'company_id,order_number'});
     if(error) throw error;
-    ACT[o]=Object.assign(ACT[o]||{},{dead_head:n});
+    actAck_(o, {dead_head:n, dead_head_by:USER.email, updated_at:now}, co0);   /* P0-R1 F1 */
     toast('შენახულია ✓');
     render();   /* $/mi მაშინვე გადაითვალოს */
   }catch(e){ console.error(e); toast('ვერ შეინახა'); }
@@ -2329,20 +2721,10 @@ function weekLabel(mon){
   var f=function(d){ return d.getDate()+' '+GM[d.getMonth()]; };
   return f(a)+' – '+f(b);
 }
-async function loadLiveLoads(){
-  var all=[], from=0;
-  while(true){
-    var res = await sb.from('loads').select('order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin,booking_dispatcher').eq('company_id', COID()).is('deleted_at', null).order('order_number',{ascending:true}).range(from, from+999);
-    if(res.error){ console.error(res.error); break; }
-    var d=res.data||[]; all=all.concat(d);
-    if(d.length<1000) break;
-    from+=1000;
-  }
-  LIVE=all;
-  normalizeDriverNames_();
-  dedupeLoads_();
-  rebuildLoadIndex_();
-}
+/* SC-STABILIZE-001-P0: the paginated read used to `break` on an error page and
+   then publish the partial list as LIVE. Same query, same columns, same
+   order and page size — now staged through critLoad_. */
+async function loadLiveLoads(){ return critLoad_('loads'); }
 /* ---- დუბლიკატები ----
    ბროკერმა SD-ში ორდერის ნომერი ოდნავ შეცვალა (მაგ. „25295716" → „25295716.")
    და სინქრონმა ორი ცალკე ტვირთი შექმნა. გროსი ორმაგდება. ვაერთიანებთ
@@ -3898,11 +4280,7 @@ function rPayMix(){
 /* ---- ხვალინდელი გეგმა: ხელით რედაქტირება, გაყინვა, გუშინდელის შედარება ---- */
 var DPLAN=[];      // day_plan rows
 var PQ='';         // ძებნის ტექსტი
-async function loadPlan(){
-  try{ DPLAN=await selAll_(function(){ return sb.from('day_plan').select('*').eq('company_id', COID()).gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
-  }catch(e){ console.error(e); DPLAN=[]; }
-  PDRVC=null;   /* მძღოლის ხელით მიბმის ქეში თავიდან აეწყოს */
-}
+async function loadPlan(){ return critLoad_('plan'); }   /* SC-STABILIZE-001-P0 (commit also resets PDRVC) */
 function planRows_(day, disp){
   var d=disp||(USER&&MYD())||'';
   return DPLAN.filter(function(p){ return p.work_day===day && (!d || p.dispatcher_name===d); });
@@ -4648,6 +5026,8 @@ try{
       if(res.error){
         console.error('content gate', res.error);
         PCONT.forEach(cgMarkUnknown_);      // NOT verified, and it says so
+        /* SC-STABILIZE-001-P0-R1 (F2): an unverified refresh is not a successful refresh */
+        SYNC.contactsErr=true; SYNC.contactsStage='contact_content_orders';
         return;
       }
       var m = {}; (res.data||[]).forEach(function(x){ m[x.order_number] = x; });
@@ -4661,7 +5041,8 @@ try{
       });
     }catch(e){
       console.error('content gate', e);
-      try{ if(gen===PCONT_GEN && contentRows===PCONT && company===COID() && dispatcher===MYD() && Array.isArray(PCONT)) PCONT.forEach(cgMarkUnknown_); }catch(e2){}
+      try{ if(gen===PCONT_GEN && contentRows===PCONT && company===COID() && dispatcher===MYD() && Array.isArray(PCONT)){ PCONT.forEach(cgMarkUnknown_);
+        SYNC.contactsErr=true; SYNC.contactsStage='contact_content_orders'; } }catch(e2){}
     }
   };
 }catch(e){ console.error('content gate init', e); }
@@ -4675,8 +5056,20 @@ loadPlanContacts = async function(){
   try{
     var res=await sb.rpc('ai_technical_exception_list',{
       p_company_id:company,p_work_day:day,p_orders:rows.map(function(r){return r.order_number;})});
-    if(res.error || rows!==PCONT || company!==COID() || dispatcher!==MYD()) return;
-    if(!res.data || res.data.company_id!==company || res.data.work_day!==day) return;
+    if(rows!==PCONT || company!==COID() || dispatcher!==MYD()) return;
+    /* SC-STABILIZE-001-P0-R1 (F2): a failed or malformed relief read is incomplete
+       coverage. An authorization refusal (42501: caller not on the AI pilot) is a
+       definite "no relief readable for this caller", not a transient failure; no
+       relief is applied either way, so the gate only stays stricter. */
+    if(res.error){
+      /* P0-R2 (A3): the specific non-pilot answer = optional feature unavailable, no
+         relief applied, no permanent stale warning. Every other denial or error
+         stays a failed read. Nothing is ever relieved on a denied read. */
+      if(String(res.error.code||'')==='42501' && await reliefNotPilot_()) return;
+      if(rows===PCONT && company===COID() && dispatcher===MYD()){ SYNC.contactsErr=true; SYNC.contactsStage='ai_technical_exception_list'; }
+      return; }
+    if(!res.data || res.data.company_id!==company || res.data.work_day!==day){
+      SYNC.contactsErr=true; SYNC.contactsStage='ai_technical_exception_list'; return; }
     (res.data.exceptions||[]).forEach(function(e){
       if(e.state!=='active' || e.evidence_still_holds!==true || e.obligation_relieved!==true) return;
       var row=rows.find(function(r){return r.order_number===e.order_number;});
@@ -4688,7 +5081,8 @@ loadPlanContacts = async function(){
         row.del_verified=true; row.del_reason=''; row.del_content_unknown=false; row.del_technical_exception=e.exception_id;
       }
     });
-  }catch(e){console.error('technical relief read',e);}
+  }catch(e){console.error('technical relief read',e);
+    if(rows===PCONT && company===COID() && dispatcher===MYD()){ SYNC.contactsErr=true; SYNC.contactsStage='ai_technical_exception_list'; } }
 };
 
 
@@ -4959,12 +5353,14 @@ loadPlanContacts = async function(){
       var _rlOrig = window.refreshLive_;
       window.refreshLive_ = function () {
         var res = _rlOrig.apply(this, arguments);
+        /* SC-STABILIZE-001-P0-R2 (A1): with the P0 base, the refresh verdict
+           (freshness time, toast, repaint) is given here, after this last read. */
+        var p0fin = function (r) { if (r && r.p0 && typeof refreshFinish_ === 'function') refreshFinish_(r); else rfSafeRender_(); return r; };
         return Promise.resolve(res).then(function (r) {
-          if (typeof window.loadPlanContacts !== 'function') return r;
-          return Promise.resolve(window.loadPlanContacts()).catch(function(){}).then(function(){
-            rfSafeRender_(); return r;
-          });
-        }).catch(function(){ return res; });
+          if (typeof window.loadPlanContacts !== 'function') return p0fin(r);
+          if (r && r.p0 && r.cycle && r.cycle.stale) return p0fin(r);
+          return Promise.resolve(window.loadPlanContacts()).catch(function(){}).then(function(){ return p0fin(r); });
+        }).catch(function(){ try { if (typeof refreshFinish_ === 'function') refreshFinish_({p0:true, cycle:{ok:false}}); } catch (e) {} return res; });
       };
     }
   } catch (e) {}
@@ -7606,5 +8002,85 @@ loadPlanContacts = async function(){
   document.addEventListener('visibilitychange', onReturn_);
 })();
 
+</script>
+<script>
+/* =====================================================================
+   SC-STABILIZE-001-P0 · outermost render wrapper
+   1. No complete data for this company → an explicit "unavailable" card
+      (with retry) instead of an empty board that reads as "no work".
+   2. Last refresh failed → a visible stale banner over the last complete data.
+   3. Values the dispatcher has typed but not saved survive a repaint.
+   ===================================================================== */
+(function(){
+  if (typeof render !== 'function' || window.__scP0Render) return;
+  window.__scP0Render = true;
+  var EXEMPT_M = { health:1, dispatchers:1, expenses:1 };
+  function needsCritical_(){ return ROLE === 'disp' || !EXEMPT_M[MTAB]; }
+  function snapInputs_(){
+    var v = document.getElementById('view'); if (!v) return null;
+    var vals = {}, n = 0;
+    v.querySelectorAll('input[id],textarea[id]').forEach(function(el){
+      var t = String(el.type || '').toLowerCase();
+      if (t === 'file' || t === 'hidden' || t === 'button' || t === 'submit') return;
+      var chk = (t === 'checkbox' || t === 'radio');
+      if (chk ? (el.checked === el.defaultChecked) : (el.value === el.defaultValue)) return;
+      vals[el.id] = { chk: chk, v: el.value, c: el.checked, dv: el.defaultValue, dc: el.defaultChecked }; n++;
+    });
+    var a = document.activeElement, foc = null;
+    if (a && a.id && v.contains(a)) { foc = { id: a.id, s: null, e: null };
+      try { foc.s = a.selectionStart; foc.e = a.selectionEnd; } catch (e) {} }
+    return (n || foc) ? { vals: vals, foc: foc } : null;
+  }
+  function restoreInputs_(s){
+    if (!s) return;
+    Object.keys(s.vals).forEach(function(id){
+      var el = document.getElementById(id), x = s.vals[id]; if (!el) return;
+      /* restore only when the field still starts from the same saved value */
+      if (x.chk) { if (el.defaultChecked === x.dc) el.checked = x.c; }
+      else if (el.defaultValue === x.dv) el.value = x.v;
+    });
+    if (s.foc) { var f = document.getElementById(s.foc.id);
+      if (f && document.activeElement !== f) { try { f.focus({ preventScroll: true });
+        if (s.foc.s != null) f.setSelectionRange(s.foc.s, s.foc.e); } catch (e) {} } }
+  }
+  function paintUnavailable_(){
+    var v = document.getElementById('view'); if (!v) return;
+    var failed = !!SYNC.failAt;
+    v.innerHTML = "<div class='card p' role='alert' data-sync='" + (failed ? 'unavailable' : 'loading') + "' id='syncUnavail' style='border:1.5px solid " + (failed ? 'var(--crit)' : 'var(--line)') + "'>" +
+      "<h4 style='margin-bottom:6px'>" + (failed ? 'მონაცემები ვერ ჩაიტვირთა' : 'მონაცემები იტვირთება…') + "</h4>" +
+      "<div class='muted' style='font-size:12.5px'>" + (failed
+        ? ('ეს <b>არ ნიშნავს</b>, რომ სამუშაო არ გაქვს — სისტემამ სია ვერ მიიღო. სანამ სრული მონაცემი არ ჩაიტვირთება, ცვლის დახურვა არ ჩანს. <span style="opacity:.7">(' + esc(SYNC.failMsg || '') + ')</span>')
+        : 'ცოტა ხანს დაელოდე.') + "</div>" +
+      (failed ? "<button class='bigbtn' style='margin-top:12px;padding:9px 18px;font-size:13px' onclick='refreshLive_(true)'>ხელახლა ცდა</button>" : '') +
+      "</div>";
+  }
+  function decorate_(){
+    var v = document.getElementById('view'); if (!v) return;
+    var old = document.getElementById('syncBanner'); if (old && old.parentNode) old.parentNode.removeChild(old);
+    if (syncState_() === 'stale' && needsCritical_()) {
+      var b = document.createElement('div'); b.id = 'syncBanner'; b.setAttribute('role', 'status'); b.setAttribute('data-sync', 'stale');
+      b.style.cssText = 'margin:0 0 12px;padding:9px 12px;border:1.5px solid var(--crit);border-radius:10px;font-size:12.5px;font-weight:600';
+      b.textContent = '⚠ ბოლო განახლება ვერ დასრულდა' + (SYNC.contactsErr ? ' (ზარების მონაცემი)' : '') +
+        '. ნაჩვენებია ბოლო სრული მონაცემი' + (LAST_SYNC ? (' — ' + syncAgeTxt_()) : '') + '. ';
+      var btn = document.createElement('button'); btn.className = 'fixbtn'; btn.textContent = '⟳ ხელახლა';
+      btn.onclick = function(){ refreshLive_(true); };
+      b.appendChild(btn);
+      v.insertBefore(b, v.firstChild);
+    }
+    if (CLOSE_INFLIGHT) { var lb = document.getElementById('logoutBtn');
+      if (lb) { lb.disabled = true; lb.textContent = 'მოწმდება სერვერზე…'; } }
+  }
+  var prev = render;
+  render = function(){
+    if (USER && needsCritical_() && (!SYNC.have || SYNC.co !== COID())) {
+      paintUnavailable_(); try { paintSyncAge_(); } catch (e) {}
+      return;
+    }
+    var snap = null; try { snap = snapInputs_(); } catch (e) {}
+    var r = prev.apply(this, arguments);
+    try { decorate_(); restoreInputs_(snap); paintSyncAge_(); } catch (e) { console.error(e); }
+    return r;
+  };
+})();
 </script>
 
