@@ -51,9 +51,22 @@
   .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
   .logo{display:flex;align-items:center;gap:9px;font-weight:750;font-size:15px}
   .logo .m2{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--brand),#1c5cab);display:grid;place-items:center;color:#fff;font-size:13px;font-weight:800}
-  .cswitch{display:inline-flex;align-items:center;gap:7px;background:var(--page);border:1px solid var(--border);border-radius:9px;padding:6px 10px;font-size:12px;font-weight:600;color:var(--ink2)}
-  .cswitch .bdg{width:7px;height:7px;border-radius:50%;background:var(--good)}
-  .cswitch b{color:var(--ink)}
+  /* COMPANY-UI-001: compact company identity; presentation only. */
+  #app{--company-accent:#2266c4;--company-soft:#eaf2ff;--company-line:#abc6ef}
+  #app[data-company="DISCARRY"]{--company-accent:#95601c;--company-soft:#fff3df;--company-line:#ddc397}
+  #app[data-company="QRD"]{--company-accent:#7450b8;--company-soft:#f2ecff;--company-line:#c8b5e9}
+  :root[data-theme="dark"] #app{--company-accent:#91bbff;--company-soft:#192b43;--company-line:#466b9e}
+  :root[data-theme="dark"] #app[data-company="DISCARRY"]{--company-accent:#e6bd7b;--company-soft:#352b1d;--company-line:#82683d}
+  :root[data-theme="dark"] #app[data-company="QRD"]{--company-accent:#c3a7f3;--company-soft:#2e233f;--company-line:#725896}
+  .topbar{flex-wrap:wrap}
+  .topbar .logo{flex-shrink:0}
+  .cswitch{display:inline-flex;align-items:center;min-height:44px;max-width:100%;min-width:0;background:var(--company-soft);border:1px solid var(--company-line);border-left:3px solid var(--company-accent);border-radius:8px;color:var(--ink);overflow:hidden}
+  #coswitch{font:inherit;font-size:17px;font-weight:700;line-height:1.3;color:var(--ink);background:transparent;border:0;border-radius:5px;padding:9px 10px;min-height:42px;max-width:100%;cursor:pointer}
+  #coswitch option{color:var(--ink);background:var(--card)}
+  #coswitch:focus-visible{outline:2px solid var(--company-accent);outline-offset:-3px}
+  #companySingle{padding:9px 12px;font-size:17px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+  .close-company{display:inline-flex;align-items:center;max-width:100%;padding:6px 10px;border-left:3px solid var(--company-accent);border-radius:6px;background:var(--company-soft);color:var(--ink);font-size:14px;font-weight:700;overflow-wrap:anywhere}
+  #logoutBtn[data-company-code]::after{content:' · ' attr(data-company-code)}
   .spacer{flex:1}
   .stdrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:5px 0}
   .stdrow .who{font-weight:640;font-size:13px}
@@ -155,7 +168,10 @@
 
   @media(max-width:760px){
     .kpis{grid-template-columns:repeat(2,1fr)} .grid2{grid-template-columns:1fr}
-    .cswitch{display:none} .rolepill button{padding:6px 10px}
+    .topbar{gap:8px}
+    .cswitch{order:-1;flex:1 0 100%;width:100%}
+    #coswitch{width:100%}
+    .rolepill button{padding:6px 10px}
     .who .txwrap{display:none}
     .driver{grid-template-columns:34px 1fr;grid-auto-rows:auto;gap:6px 10px}
     .driver .st{grid-column:2} .driver .lw{grid-column:1/-1}
@@ -193,8 +209,9 @@
   <div id="demoBanner">ცოცხალი აპი · ცნობარი DisCarry / Quo-დან (წაკითხვა) · პარამეტრები ინახება ბაზაში</div>
   <div class="topbar">
     <div class="logo"><span class="m2">M</span><span>Melos Dispatch</span></div>
-    <span class="cswitch"><span class="bdg"></span>მოქმედი კომპანია:
-      <select id="coswitch" onchange="coSwitch(this.value)" style="display:none;font:inherit;color:inherit;background:transparent;border:0;font-weight:700;cursor:pointer"></select></span>
+    <span class="cswitch" id="companyIdentity" role="group" aria-label="მოქმედი კომპანია">
+      <select id="coswitch" aria-label="მოქმედი კომპანია — კომპანიის შეცვლა" onchange="coSwitch(this.value)" style="display:none"></select>
+      <span id="companySingle" aria-live="polite">კომპანია იტვირთება…</span></span>
     <span class="spacer"></span>
     <div class="rolepill" id="rolepill">
       <button id="rDisp" class="on" onclick="setRole('disp')">დისპეტჩერი</button>
@@ -1066,9 +1083,16 @@ function paintCompany_(){
   var el=document.getElementById('coswitch');
   if(!el) return;
   el.innerHTML=COLIST.map(function(c){
-    return '<option value="'+c.code+'"'+(CO&&c.code===CO.code?' selected':'')+'>'+c.legal_name+'</option>';
+    return '<option value="'+esc(c.code).replace(/"/g,'&quot;')+'"'+(CO&&c.code===CO.code?' selected':'')+'>'+esc(c.legal_name||c.code)+'</option>';
   }).join('');
   el.style.display = COLIST.length>1 ? '' : 'none';
+  /* COMPANY-UI-001: the current name stays visible even with one company. */
+  var name=CO&&(CO.legal_name||CO.code)||'კომპანია იტვირთება…';
+  var single=document.getElementById('companySingle');
+  if(single){ single.textContent=name; single.hidden=COLIST.length>1; }
+  el.setAttribute('aria-label','მოქმედი კომპანია: '+name+' — კომპანიის შეცვლა');
+  var app=document.getElementById('app');
+  if(app) app.setAttribute('data-company',CO&&CO.code||'');
 }
 
 /* SC-STABILIZE-001-P0: loads run one after another, never interleaved, so an
@@ -2142,7 +2166,8 @@ function rBoard(){
       rows_(chkP,'chk')+
       scPanel_(tday)+
       "<div class='closebar'>"+
-        "<button class='bigbtn"+((rem===0&&!closed)?' ready':'')+"' id='logoutBtn'"+((rem>0||closed)?' disabled':'')+" onclick='closeShift()'>"+(closed?'ცვლა დახურულია ✓':'ცვლის დახურვა')+"</button>"+
+        "<span class='close-company' id='closeCompany'>"+esc(CO&&(CO.legal_name||CO.code)||'კომპანია ვერ დადგინდა')+"</span>"+
+        "<button class='bigbtn"+((rem===0&&!closed)?' ready':'')+"' id='logoutBtn' data-company-code='"+esc(COCODE()||'—').replace(/'/g,'&#39;')+"' aria-describedby='closeCompany'"+((rem>0||closed)?' disabled':'')+" onclick='closeShift()'>"+(closed?'ცვლა დახურულია ✓':'ცვლის დახურვა')+"</button>"+
         "<span id='gateCount' class='chip "+(rem?'r':'g')+"'><span class='dot'></span>"+(rem?rem+' დარჩენილი':'ყველა gate გავლილია')+"</span>"+
         (closed?("<span class='muted' style='font-size:12px'>"+new Date(SCLOSE.closed_at).toLocaleString('ka-GE')+"</span>"):"<span class='muted' style='font-size:12px'>ყველა ✓-ის შემდეგ — „მწვანე“</span>")+
       "</div></div>"+
