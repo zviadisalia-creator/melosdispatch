@@ -529,6 +529,12 @@ function callSkip_(l, side){
   if(!venue) return null;
   if(sameOrg_(l.customer, venue)) return {why:'shipper', src:'venue', venue:venue,
     text:'shipper = '+(side==='pu'?'ფიქაფი':'დელივერი')+' ('+venue+') — ზარი არ მოეთხოვება'};
+  /* SC-OVERNIGHT-REPAIR-002 B (P0-R5) · owner-approved: a Manheim PICKUP Business Name exempts
+     the pickup call, evaluated after every other exemption (same order as the server's
+     call_skip_pu wrapper). Gate Pass stays required (gatePassNeeded_ uses the same test);
+     a broker/customer name alone never exempts; delivery and ADESA are unchanged. */
+  if(side==='pu' && venueKind_(l.pu_venue)==='manheim') return {why:'auction', kind:'manheim', src:'venue', venue:l.pu_venue,
+    text:'Manheim — ფიქაფის გადამოწმების ზარი არ მოეთხოვება (Gate Pass ცალკე მოწმდება)'};
   return null;
 }
 /* ზარების ცხრილში მძღოლის სახელი — RPC-ის პასუხი ბაზის ნედლ `loads.driver_name`-ს
@@ -2014,11 +2020,11 @@ function rBoard(){
   }).join('');
 
   /* ზარები — გამოცხადებული სიის ყველა ტვირთი, ფიქაფი/დელივერი ცალ-ცალკე */
-  var callCell_=function(missing, ok, phone, skip, waiting, rang){
+  var callCell_=function(missing, ok, phone, skip, waiting, rang, sms){
     if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>";
     /* 2026-08-11: წითლად — დისპეტჩერმა უნდა მიხვდეს, რატომ ვერ ხურავს gate-ს. */
     if(missing) return "<span class='ccell no' title='SD-ში კონტაქტის ნომერი არ არის შეყვანილი — მის გარეშე ზარი ვერ მოწმდება და gate ვერ დაიხურება'>✗ ნომერი არ წერია</span>";
-    if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+"</span>";
+    if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+(sms?" · SMS-ით პასუხი მიღებულია":"")+"</span>";
     if(waiting) return "<span class='ccell' style='color:var(--warn)' title='ჩანაწერი გადაიწერება ტექსტად და მოწმდება — ჩვეულებრივ რამდენიმე წუთი'>◔ მოწმდება…</span>";
     if(rang) return "<span class='ccell no' title='ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა'>✗ ავტომოპასუხე</span>";
     return "<span class='ccell no'>✗ "+esc(fmtPhone_(phone)||'—')+"</span>";
@@ -2050,8 +2056,8 @@ function rBoard(){
          callList.map(function(r){
            var L1=loadOf_(r.order_number);
            return "<tr><td><b>"+esc(r.order_number)+"</b></td><td>"+esc(rDrv_(r))+"</td>"+
-             "<td>"+callCell_(r.pu_missing,(r.pu_verified||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'),r.pu_pending,r.pu_call)+"</td>"+
-             "<td>"+callCell_(r.del_missing,(r.del_verified||r.del_sms),r.delivery_phone,callSkip_(L1,'del'),r.del_pending,r.del_call)+"</td></tr>";
+             "<td>"+callCell_(r.pu_missing,(r.pu_verified||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'),r.pu_pending,r.pu_call,r.pu_sms)+"</td>"+
+             "<td>"+callCell_(r.del_missing,(r.del_verified||r.del_sms),r.delivery_phone,callSkip_(L1,'del'),r.del_pending,r.del_call,r.del_sms)+"</td></tr>";
          }).join('')+"</tbody></table></div>")
       : (exemptAll
           ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px;color:var(--good)'>ხვალინდელ სიაშია <b>"+contactN+"</b> ტვირთი და ყველა მათგანზე ზარი <b>არ მოეთხოვება</b> — ბროკერის წესი, აუქციონი ან shipper = ვენიუ. შესამოწმებელი არაფერია ✓</div>"
@@ -5441,6 +5447,10 @@ loadPlanContacts = async function(){
            server-validated relief in PCONT already resolved that verdict. */
         var current=(typeof PCONT!=='undefined' && Array.isArray(PCONT))
           ? PCONT.find(function(x){return x.order_number===ccOrd_(rows[r]);}) : null;
+        /* SC-SMS-DISPLAY-001: the contact gate already accepts an incoming SMS.
+           A raw call-only content failure must not repaint that accepted leg red.
+           The base cell labels SMS explicitly; no call/content verdict is changed. */
+        if(current && current[pre+'_sms']===true) continue;
         if(current && current[pre+'_technical_exception']!=null
            && current[pre+'_verified']===true && !current[pre+'_pending']
            && !current[pre+'_content_unknown']) continue;
