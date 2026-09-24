@@ -6691,6 +6691,9 @@ loadPlanContacts = async function(){
     if (o === "system_issue" || o === "error") return ["tech", "ტექნიკური ხარვეზი — ქეისი ვერ შეინახა"];
     if (o === "management" || o === "management_review") return ["mgmt", "მენეჯმენტის განხილვა"];
     if (o === "insufficient_evidence") return ["wait", "მტკიცებულება ჯერ არ არის საკმარისი"];
+    // CHAT-DIALOGUE-002: conversation status only; gates are server-owned.
+    if (o === "clarification") return ["wait", "დაზუსტება საჭიროა"];
+    if (o === "conversation") return ["wait", "საუბარი — ფაქტები არ შემოწმებულა"];
     if (o === "no_issue") return ["ok", "სერვერზე ბლოკი არ ჩანს"];
     if (o === "refused") return ["tech", "მოთხოვნა უარყოფილია"];
     return ["wait", "ვერ შემოწმდა"];
@@ -7097,6 +7100,8 @@ loadPlanContacts = async function(){
       ui_gate_snapshot: { orders: {}, rem: item.rem },
       context_version: EDGE_CONTEXT_VERSION
     };
+    // Management view-as can only narrow the dialogue route.
+    try { if (typeof VIEWAS !== "undefined" && VIEWAS) body.view_as = true; } catch (e) {}
     if (SERVER_THREAD && /^[0-9a-f-]{36}$/i.test(item.id || "")) {
       body.request_key = item.id;                   // same key on every retry of this message
       if (item.ctx && item.ctx.gate) body.gate = String(item.ctx.gate).slice(0, 80);
