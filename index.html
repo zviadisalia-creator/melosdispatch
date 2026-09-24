@@ -518,8 +518,17 @@ function puAuctionKind_(l){
 function isCarmaxBusiness_(name){
   return /(^|[^a-z0-9])car\s*max([^a-z0-9]|$)/i.test(String(name==null?'':name));
 }
+/* ANI-QUO-074AUTO-001: shared rule, independent pickup/delivery location. */
+function is74AutoSikeston_(customer, location){
+  return String(customer==null?'':customer).replace(/[^a-zA-Z0-9]/g,'').toLowerCase()==='74auto'
+    && /(^|[^a-z0-9])sikeston[\s,.]+(mo|missouri)[\s,.]+63801(-[0-9]{4})?([^a-z0-9-]|$)/i.test(String(location==null?'':location));
+}
 function callSkip_(l, side){
   if(!l) return null;
+  var legLocation=side==='pu'?l.pickup_location:l.delivery_location;
+  if((side==='pu'||side==='del') && is74AutoSikeston_(l.customer,legLocation))
+    return {why:'shipper_location',kind:'74auto_sikeston',src:'shipper_location',venue:legLocation,
+      text:'74 Auto — Sikeston, MO 63801: '+(side==='pu'?'ფიქაფის':'დელივერის')+' ზარი და გადამოწმება არ მოეთხოვება'};
   var carmaxVenue=side==='pu'? l.pu_venue : l.del_venue;
   if(isCarmaxBusiness_(carmaxVenue)) return {why:'business', kind:'carmax', src:'venue', venue:carmaxVenue,
     text:'CarMax — '+(side==='pu'?'ფიქაფის':'დელივერის')+' გადამოწმების ზარი არ მოეთხოვება'};
@@ -2177,7 +2186,7 @@ function rBoard(){
       "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და იმ დღეს ჯერ კიდევ გზაშია</b> — ტვირთი არ მოეთხოვება. თავისუფლდება იმ დღეს, როცა აბარებს: SD-ის ჩაბარების თარიღით, ან თუ არ წერია — აღების დღეს + "+transitMi_()+" მილი დღეში (მაგ. 1 400 მილი 4 რიცხვში აღებული → 6 რიცხვში აბარებს, ე.ი. იმ დღეს ტვირთი <b>სჭირდება</b>). "+
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
-      "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონის გამო ზარის გამონაკლისი მოქმედებს <b>Copart-ისა და IAA/IAAI-ის ფიქაფზე</b>. <b>Manheim-სა და ADESA-ზე ავტომატური გამონაკლისი არ მოქმედებს</b>; დელივერის მოთხოვნები ცალკე მოწმდება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
+      "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონის გამო ზარის გამონაკლისი მოქმედებს <b>Copart-ისა და IAA/IAAI-ის ფიქაფზე</b>. <b>Manheim-ის ფიქაფზე ზარი არ მოეთხოვება; Gate Pass კვლავ საჭიროა</b>. ADESA-ს ფიქაფზე ავტომატური გამონაკლისი არ მოქმედებს. <b>თუ shipper არის 74 Auto და შესაბამისი მხარის მისამართია Sikeston, MO 63801, იმ მხარეს ზარი და გადამოწმება არ მოეთხოვება</b>. ფიქაფი და დელივერი დამოუკიდებლად მოწმდება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
       "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
 }
 var SCLOSE=null;
