@@ -4405,22 +4405,24 @@ function addRes_(day){
   if(q.length<2) return "<div class='muted' style='font-size:12px;margin-top:8px'>ჩაწერე მინიმუმ 2 სიმბოლო — Order ID, ბროკერი ან მძღოლი</div>";
   var inPlan=planOrders_(day);
   var hits=(LIVE||[]).filter(function(l){
-    if(inPlan[l.order_number]) return false;
+    /* NIKA-LOAD-001: planned loads remain findable; only their Add action disappears. */
     if(l.status==='delivered') return false;
     return String(l.order_number||'').toLowerCase().indexOf(q)>=0
         || String(l.customer||'').toLowerCase().indexOf(q)>=0
         || String(drvName_(l)||'').toLowerCase().indexOf(q)>=0;
-  }).slice(0,12);
+  }).sort(function(a,b){ return Number(!!inPlan[a.order_number])-Number(!!inPlan[b.order_number]); }).slice(0,12);
   var rows=hits.map(function(l){
     return "<tr><td><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"</td><td>"+esc(l.customer||'—')+"</td>"+
       "<td>"+(drvName_(l)?(esc(drvName_(l))+sdMissChip_(l)):"<span style='color:var(--crit)'>მძღოლი არ არის</span>")+"</td>"+
       "<td>"+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+"</td>"+
       "<td class='num'>"+money(grossOf_(l))+"</td>"+
       "<td>"+gd(puDay_(l))+"</td><td>"+gd(delDay_(l))+"</td>"+
-      "<td><button class='fixbtn' onclick=\"planAskAdd('"+encodeURIComponent(l.order_number)+"')\">დამატება</button></td></tr>";
+      "<td>"+(inPlan[l.order_number]
+        ? "<span class='tick' data-in-plan='true'>✓ უკვე დღის გეგმაშია</span>"
+        : "<button class='fixbtn' onclick=\"planAskAdd('"+encodeURIComponent(l.order_number)+"')\">დამატება</button>")+"</td></tr>";
   }).join('');
   return "<div class='tablewrap' style='margin-top:10px'><table style='min-width:960px'><thead><tr><th>Order ID</th><th>ბროკერი</th><th>მძღოლი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
-    (rows||"<tr><td colspan='8' class='muted'>ვერაფერი მოიძებნა</td></tr>")+"</tbody></table></div>";
+    (rows||"<tr><td colspan='8' class='muted wrapcell'>ტვირთი ჩვენს აპში ჯერ ვერ მოიძებნა. თუ Super Dispatch-ში ახლახან დაემატა, შესაძლოა ჯერ სინქრონიზაციას ელოდებოდეს.</td></tr>")+"</tbody></table></div>";
 }
 function addBox_(day, boardList){
   var P=planLoads_(day);
@@ -4441,7 +4443,7 @@ function addBox_(day, boardList){
       "<td><button class='fixbtn' onclick=\"planDrop('"+encodeURIComponent(l.order_number)+"')\">მოხსნა</button></td></tr>";
   }).join('');
   return "<div class='card p' style='margin-bottom:16px'><h4>ხვალინდელი სია — "+gdFull(day)+"</h4>"+
-    "<div class='muted' style='font-size:12px;margin-bottom:8px'>სიას <b>შენ ავსებ</b>: მოძებნე Order ID-ით, ბროკერით ან მძღოლით და დაამატე. ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
+    "<div class='muted' style='font-size:12px;margin-bottom:8px'>ამ დღისათვის SD-ში მძღოლზე მიბმული ტვირთები <b>ავტომატურად ემატება</b>. სხვა ტვირთი მოძებნე Order ID-ით, ბროკერით ან მძღოლით და დაამატე. ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
       "<b>"+P.length+"</b> ტვირთი · "+Object.keys(drv).length+" მძღოლი · "+money(gross)+"</div>"+
     (rest.length? ("<div class='tablewrap'><table style='min-width:1040px'><thead><tr><th>Order ID</th><th>მძღოლი</th><th>ბროკერი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th class='num'>$/მილი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
       selHtml+"</tbody></table></div>"
