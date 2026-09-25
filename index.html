@@ -4400,6 +4400,49 @@ function planDrop(enc){
   return planAdd(enc,'remove');
 }
 function delDay_(l){ return String(l&&(l.delivery_completed||l.delivery_scheduled)||'').slice(0,10); }
+/* DISPATCH-REPAIR-004: explicit exact-number lookup, never a request per keystroke. */
+var SD_MISSING_BUSY = {};
+function sdMissingSearchButton_(){
+  var q=String(PQ||'').trim();
+  if(!/^[A-Za-z0-9][A-Za-z0-9._\/-]{1,79}$/.test(q)) return '';
+  return "<div style='margin-top:8px'><button class='fixbtn' onclick=\"sdFindMissingOrder('"+encodeURIComponent(q)+"',this)\">ზუსტი ნომრით SD-ში ძებნა</button> <span class='muted' style='font-size:12px'>ეძებს მხოლოდ არჩეულ კომპანიაში</span></div>";
+}
+async function sdFindMissingOrder(enc,button){
+  var number=decodeURIComponent(enc), company=COID(), busyKey=company+'|'+number;
+  if(!company || SD_MISSING_BUSY[busyKey]) return;
+  SD_MISSING_BUSY[busyKey]=true;
+  var label=button.textContent; button.disabled=true; button.textContent='SD-ში მოწმდება…';
+  var controller=new AbortController(), timer=setTimeout(function(){controller.abort();},45000);
+  function sameScope(){return String(COID()||'')===String(company);}
+  try {
+    var session=await sb.auth.getSession(), token=session.data&&session.data.session&&session.data.session.access_token;
+    if(!token) throw new Error('no_session');
+    var endpoint=await sb.from('app_settings').select('txt_value').eq('key','refresh_endpoint').maybeSingle();
+    if(endpoint.error || !endpoint.data || !endpoint.data.txt_value) throw new Error('no_endpoint');
+    var url=new URL(endpoint.data.txt_value);
+    // Existing application setting only; no caller-supplied destination.
+    if(url.origin!=='https://script.google.com' || !/\/exec$/.test(url.pathname)) throw new Error('bad_endpoint');
+    url.searchParams.set('action','refreshOrderCo');
+    var response=await fetch(url.toString(),{method:'POST',headers:{'Content-Type':'text/plain'},signal:controller.signal,
+      body:JSON.stringify({sub:'import_missing',order:number,company_id:company,token:token})});
+    var answer=await response.json();
+    if(!sameScope()) return;
+    if(answer.company_id!==company || answer.order!==number) throw new Error('scope_mismatch');
+    if(!answer.ok){
+      var messages={sd_not_found:'ამ კომპანიის SD-ში ამ ნომრით ტვირთი ვერ მოიძებნა. გადაამოწმე სრული Order ID.',
+        cooldown:'ეს ნომერი ახლახან მოწმდებოდა. 90 წამში სცადე ხელახლა.',rate_limit:'ძებნის ლიმიტი ამოიწურა. მოგვიანებით სცადე.',
+        not_enabled:'SD-ში პირდაპირი ძებნა ჯერ ჩართული არ არის.',company_disabled:'ამ კომპანიის SD კავშირი გამორთულია.',
+        exact_order_required:'ჩაწერე სრული Order ID.',not_allowed:'ამ კომპანიაზე წვდომა ვერ დადასტურდა. განაახლე სესია.'};
+      toast(messages[answer.reason]||'ტვირთის შემოტანა ვერ დადასტურდა. მოგვიანებით გადაამოწმე.'); return;
+    }
+    await refreshLive_(true);
+    if(!sameScope()) return;
+    var visible=(LIVE||[]).some(function(l){return String(l.order_number)===number;});
+    toast(visible?'ტვირთი ნაპოვნია — შედეგების სიაშია ✓':'ჩანაწერი ბაზაშია, მაგრამ ამ ხედში ჯერ არ ჩანს. შეატყობინე მენეჯმენტს.');
+  } catch(e){if(sameScope()) toast(e&&e.message==='no_session'?'შედი ანგარიშში ხელახლა.':'შემოწმება ვერ დასრულდა. შედეგი არ დადასტურებულა; მოგვიანებით გადაამოწმე.');}
+  finally{clearTimeout(timer);delete SD_MISSING_BUSY[busyKey];button.disabled=false;button.textContent=label;}
+}
+
 function addRes_(day){
   var q=String(PQ||'').trim().toLowerCase();
   if(q.length<2) return "<div class='muted' style='font-size:12px;margin-top:8px'>ჩაწერე მინიმუმ 2 სიმბოლო — Order ID, ბროკერი ან მძღოლი</div>";
@@ -4421,7 +4464,7 @@ function addRes_(day){
         ? "<span class='tick' data-in-plan='true'>✓ უკვე დღის გეგმაშია</span>"
         : "<button class='fixbtn' onclick=\"planAskAdd('"+encodeURIComponent(l.order_number)+"')\">დამატება</button>")+"</td></tr>";
   }).join('');
-  return "<div class='tablewrap' style='margin-top:10px'><table style='min-width:960px'><thead><tr><th>Order ID</th><th>ბროკერი</th><th>მძღოლი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
+  return sdMissingSearchButton_()+"<div class='tablewrap' style='margin-top:10px'><table style='min-width:960px'><thead><tr><th>Order ID</th><th>ბროკერი</th><th>მძღოლი</th><th>მარშრუტი</th><th class='num'>გროსი</th><th>აღება (SD)</th><th>ჩაბარება</th><th></th></tr></thead><tbody>"+
     (rows||"<tr><td colspan='8' class='muted wrapcell'>ტვირთი ჩვენს აპში ჯერ ვერ მოიძებნა. თუ Super Dispatch-ში ახლახან დაემატა, შესაძლოა ჯერ სინქრონიზაციას ელოდებოდეს.</td></tr>")+"</tbody></table></div>";
 }
 function addBox_(day, boardList){
