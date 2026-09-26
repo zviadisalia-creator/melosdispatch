@@ -416,6 +416,15 @@ let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
 async function loadContacts(){ return auxLoad_('contacts', async function(co){ return auxRes_(await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: co })); },
   function(data){ CONTACTS = data || []; }, function(){ CONTACTS = []; }, true); }   /* P0-R3 */
+/* SHIFT-CLOSE-OVERNIGHT-007 P2: an SD pickup/delivery contact equal to one of our own verified Quo work
+   lines. Management only, informational: it never blocks a close and never notifies anyone. Until the
+   P2 SQL is installed the RPC does not exist; that case is an empty list, not an error banner. */
+let EMPPH = [];
+async function loadEmpPhone(){ return auxLoad_('empphone', async function(co){
+    var r=await sb.rpc('employee_phone_alerts_v1', { p_company_id: co });
+    if(r && r.error && /PGRST202|Could not find the function/i.test(String(r.error.code||'')+' '+String(r.error.message||''))) return [];
+    return auxRes_(r); },
+  function(data){ EMPPH = data || []; }, function(){ EMPPH = []; }, true); }
 /* გამოცხადებულ სიაზე — ზარები ზუსტად იმ ტვირთებზე მოწმდება, რაც დისპეტჩერმა აირჩია */
 let PCONT = [];
 let PCONT_ERR = false;
@@ -964,7 +973,7 @@ function critRefresh_(fresh, opts){
    the manual refresh retries it. */
 var AUXERR={}, AUXCO={}, AUXLOAD={};
 var AUX_LBL={rates:'დისპეტჩერის განაკვეთები', expenses:'ხარჯები', contacts:'ხვალინდელი კონტაქტები', attempts:'ზარის ცდები',
-  ledger:'მძღოლის ანგარიშსწორება', payout:'მძღოლის გადახდები', closes:'ცვლის დახურვების ისტორია', dispatchers:'დისპეჩერების სია'};
+  ledger:'მძღოლის ანგარიშსწორება', payout:'მძღოლის გადახდები', closes:'ცვლის დახურვების ისტორია', dispatchers:'დისპეჩერების სია', empphone:'სამუშაო ნომრის შემთხვევები'};
 async function auxLoad_(name, fetchFn, commitFn, clearFn, scoped){
   var co=COID(); AUXLOAD[name]=function(){ return auxLoad_(name, fetchFn, commitFn, clearFn, scoped); };
   try{
@@ -1079,7 +1088,7 @@ function coSwitch(code){
   if(!next || (CO && next.code===CO.code)) return;
   CO=next; coRemember_(); paintCompany_();
   /* every cached table in this browser belongs to the company we just left */
-  LIVE=[]; ACT={}; DPLAN=[]; WAIV={}; CONTACTS=[]; PCONT=[]; SCLOSE=null;
+  LIVE=[]; ACT={}; DPLAN=[]; WAIV={}; CONTACTS=[]; PCONT=[]; SCLOSE=null; EMPPH=[];
   /* SC-STABILIZE-001-P0: no complete data for the new company yet; any read
      still in flight for the old one is dropped when it lands */
   SYNC.gen++; SYNC.have=false; SYNC.co=null; SYNC.base=null; SYNC.okAt=null; LAST_SYNC=null;
@@ -1119,7 +1128,7 @@ async function loadData_(){
     /* `payment_received` აღარ იკითხება — ფულის შემოსვლის ერთადერთი წყარო SD-ის `paid_at`-ია. */
     await Promise.all([
       crit, loadRates(), loadExpenses(), loadContacts(),
-      loadAttempts(), loadCloses(), loadLedger(), loadDispatchers()
+      loadAttempts(), loadCloses(), loadLedger(), loadDispatchers(), loadEmpPhone()
     ]);
   } else {
     await Promise.all([
@@ -1993,11 +2002,13 @@ function rBoard(){
      `call_logs.status` ავტომოპასუხეზეც `completed`-ია, ე.ი. ხმოვან ფოსტაზე
      დარეკვა gate-ს ამწვანებდა (გაზომილი: 3 486 voicemail + 4 349 IVR).
      ახლა ითვლება მხოლოდ ის ზარი, რომელიც AI-მ **ნამდვილ საუბრად** ცნო
-     (`pu_verified`/`del_verified`), ან შემომავალი SMS — ის ცოცხალი ადამიანია.
+     (`pu_verified`/`del_verified`). CV-006: *_verified = საჭირო ფაქტები შინაარსით
+     დადასტურებულია (ზარი ან SMS მიმოწერის ანალიზი). SMS-ის მიღება ან ზარის
+     ხანგრძლივობა თავისთავად აღარ ითვლება — ეს სერვერის close_gates_co-ს იგივე წესია.
      სანამ შეფასება მოვა, `pu_pending`-ია და gate ღიაა („მოწმდება…"). */
   /* 2026-08-11: ნომრის არქონა აღარ ამწვანებს — ხვრელი იყო. გამონაკლისები რჩება. */
-  var puOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'pu') || r.pu_verified || r.pu_sms); };
-  var delOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'del') || r.del_verified || r.del_sms); };
+  var puOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'pu') || r.pu_verified); };
+  var delOk_=function(r){ return !!(callSkip_(loadOf_(r.order_number),'del') || r.del_verified); };
   /* ჯერ მოწმდება — არც წარმატება, არც დარღვევა */
   var puWait_=function(r){ return !puOk_(r) && !!r.pu_pending; };
   var delWait_=function(r){ return !delOk_(r) && !!r.del_pending; };
@@ -2011,9 +2022,9 @@ function rBoard(){
       var a=ATT[r.order_number]||{};
       var L0=loadOf_(r.order_number);
       var miss=[], ev=[];
-      if(!callSkip_(L0,'pu') && !(r.pu_verified||r.pu_sms)){ miss.push(r.pu_missing?'ფიქაფი — SD-ში ნომერი არ წერია':('ფიქაფი '+fmtPhone_(r.pickup_phone)+(r.pu_reason?' — არ დაზუსტდა: '+r.pu_reason:(r.pu_call?' (ავტომოპასუხე)':''))));
+      if(!callSkip_(L0,'pu') && !r.pu_verified){ miss.push(r.pu_missing?'ფიქაფი — SD-ში ნომერი არ წერია':('ფიქაფი '+fmtPhone_(r.pickup_phone)+(r.pu_reason?' — არ დაზუსტდა: '+r.pu_reason:r.pu_sms?' (SMS მიღებულია — ფაქტი არ დადასტურებულა)':(r.pu_call?' (ავტომოპასუხე)':''))));
         ev.push(r.pu_missing?'შეიყვანე ნომერი SD-ში':('ფიქაფზე '+(a.pu_try||0)+' ცდა'+(a.pu_sms_out?(' + '+a.pu_sms_out+' SMS'):''))); }
-      if(!callSkip_(L0,'del') && !(r.del_verified||r.del_sms)){ miss.push(r.del_missing?'დელივერი — SD-ში ნომერი არ წერია':('დელივერი '+fmtPhone_(r.delivery_phone)+(r.del_reason?' — არ დაზუსტდა: '+r.del_reason:(r.del_call?' (ავტომოპასუხე)':''))));
+      if(!callSkip_(L0,'del') && !r.del_verified){ miss.push(r.del_missing?'დელივერი — SD-ში ნომერი არ წერია':('დელივერი '+fmtPhone_(r.delivery_phone)+(r.del_reason?' — არ დაზუსტდა: '+r.del_reason:r.del_sms?' (SMS მიღებულია — ფაქტი არ დადასტურებულა)':(r.del_call?' (ავტომოპასუხე)':''))));
         ev.push(r.del_missing?'შეიყვანე ნომერი SD-ში':('დელივერზე '+(a.del_try||0)+' ცდა'+(a.del_sms_out?(' + '+a.del_sms_out+' SMS'):''))); }
       var tried=((a.pu_try||0)+(a.del_try||0))>0;
       return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div>"+
@@ -2030,12 +2041,17 @@ function rBoard(){
      იყო და დახურვა იბლოკებოდა. ახლა ორივე ერთსა და იმავე წყაროს კითხულობს. */
   var PLAN2=planLoads_(tday);
   var plDrv_=function(nm){ return PLAN2.filter(function(l){ return drvName_(l)===nm; }); };
-  var stdOk = list.length>0 && list.every(function(d){
+  /* SHIFT-CLOSE-007-R2 · ყველა მძღოლი ისვენებს: როსტერი სრულად ჩაიტვირთა, შესაბამისი მძღოლები არიან და
+     ყველა ისვენებს (იგივე წესი, რაც სერვერის close_gates_co-ში) — ტვირთის სტანდარტი არ მოეთხოვება.
+     ცარიელი, უცნობი ან ნაწილობრივ ჩატვირთული როსტერი „ყველა ისვენებს" არ არის. სხვა gate-ები უცვლელია. */
+  var rosterFresh=!!(SYNC.have && SYNC.co===COID() && !SYNC.failAt);
+  var stdAllOff=rosterFresh && list.length===0 && resting.length>0;
+  var stdOk = stdAllOff || (list.length>0 && list.every(function(d){
     var dl=plDrv_(d.name);
     return driverStd_(d.name, dl).ok || waivOk_('standard',d.name,tday);
-  });
+  }));
   /* თითო მძღოლზე — რამდენი ტვირთი სჭირდება (ტევადობა) და რამდენი აქვს */
-  var stdSlots=list.map(function(d){
+  var stdSlots=(stdAllOff?"<div class='muted' style='padding:4px 15px 8px 49px;font-size:12px;color:var(--good)'>ყველა მძღოლი ისვენებს — ამ დღეს ტვირთის სტანდარტი არ მოეთხოვება. დანარჩენი gate-ები (ზარები, ინვოისი/BOL, ჩეკი) ჩვეულებრივ მოწმდება.</div>":'')+list.map(function(d){
     var reg=DRIVERS_BY_NAME[d.name]||{}, cap=Number(reg.cap)||1;
     var dl=plDrv_(d.name);
     var st=driverStd_(d.name, dl);
@@ -2057,8 +2073,10 @@ function rBoard(){
     if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>";
     /* 2026-08-11: წითლად — დისპეტჩერმა უნდა მიხვდეს, რატომ ვერ ხურავს gate-ს. */
     if(missing) return "<span class='ccell no' title='SD-ში კონტაქტის ნომერი არ არის შეყვანილი — მის გარეშე ზარი ვერ მოწმდება და gate ვერ დაიხურება'>✗ ნომერი არ წერია</span>";
-    if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+(sms?" · SMS-ით პასუხი მიღებულია":"")+"</span>";
-    if(waiting) return "<span class='ccell' style='color:var(--warn)' title='ჩანაწერი გადაიწერება ტექსტად და მოწმდება — ჩვეულებრივ რამდენიმე წუთი'>◔ მოწმდება…</span>";
+    if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+"</span>";
+    if(waiting) return "<span class='ccell' style='color:var(--warn)' title='ზარი ან SMS მიმოწერა მოწმდება შინაარსზე — ჩვეულებრივ რამდენიმე წუთი'>◔ მოწმდება…</span>";
+    /* CV-006: SMS-ის მიღება კონტაქტია, არა დადასტურება */
+    if(sms && !rang) return "<span class='ccell no' title='SMS მიღებულია, მაგრამ მასში საჭირო ფაქტები (მზადყოფნა/საათები/თანხა) არ დადასტურდა'>✗ "+esc(fmtPhone_(phone)||'—')+" · SMS მიღებულია</span>";
     if(rang) return "<span class='ccell no' title='ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა'>✗ ავტომოპასუხე</span>";
     return "<span class='ccell no'>✗ "+esc(fmtPhone_(phone)||'—')+"</span>";
   };
@@ -2089,8 +2107,8 @@ function rBoard(){
          callList.map(function(r){
            var L1=loadOf_(r.order_number);
            return "<tr><td><b>"+esc(r.order_number)+"</b></td><td>"+esc(rDrv_(r))+"</td>"+
-             "<td>"+callCell_(r.pu_missing,(r.pu_verified||r.pu_sms),r.pickup_phone,callSkip_(L1,'pu'),r.pu_pending,r.pu_call,r.pu_sms)+"</td>"+
-             "<td>"+callCell_(r.del_missing,(r.del_verified||r.del_sms),r.delivery_phone,callSkip_(L1,'del'),r.del_pending,r.del_call,r.del_sms)+"</td></tr>";
+             "<td>"+callCell_(r.pu_missing,r.pu_verified,r.pickup_phone,callSkip_(L1,'pu'),r.pu_pending,r.pu_call,r.pu_sms)+"</td>"+
+             "<td>"+callCell_(r.del_missing,r.del_verified,r.delivery_phone,callSkip_(L1,'del'),r.del_pending,r.del_call,r.del_sms)+"</td></tr>";
          }).join('')+"</tbody></table></div>")
       : (exemptAll
           ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px;color:var(--good)'>ხვალინდელ სიაშია <b>"+contactN+"</b> ტვირთი და ყველა მათგანზე ზარი <b>არ მოეთხოვება</b> — ბროკერის წესი, აუქციონი ან shipper = ვენიუ. შესამოწმებელი არაფერია ✓</div>"
@@ -2187,7 +2205,23 @@ function rBoard(){
       "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
       "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონის გამო ზარის გამონაკლისი მოქმედებს <b>Copart-ისა და IAA/IAAI-ის ფიქაფზე</b>. <b>Manheim-ის ფიქაფზე ზარი არ მოეთხოვება; Gate Pass კვლავ საჭიროა</b>. ADESA-ს ფიქაფზე ავტომატური გამონაკლისი არ მოქმედებს. <b>თუ shipper არის 74 Auto და შესაბამისი მხარის მისამართია Sikeston, MO 63801, იმ მხარეს ზარი და გადამოწმება არ მოეთხოვება</b>. ფიქაფი და დელივერი დამოუკიდებლად მოწმდება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ის ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
-      "<span class='muted'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
+      "<span class='muted'>ფეხი ჩაითვლება, როცა საჭირო ფაქტები (მზადყოფნა, საათები, თანხა) დადასტურებულია საუბრით — ზარით ან SMS მიმოწერით. მხოლოდ SMS-ის მიღება ან ზარის ხანგრძლივობა არ ითვლება. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
+  /* R2 · ყველა ისვენებს და სხვა ყველაფერი დახურულია → ცვლა ავტომატურად იხურება იმავე სერვერული გზით */
+  if(stdAllOff && rem===0 && !closed) autoCloseAllOff_(tday);
+}
+/* SHIFT-CLOSE-007-R2 · all drivers OFF: automatic completion through the SAME server-authoritative path.
+   shift_close_submit re-evaluates every gate at submit time (a concurrent OFF cancellation, a new duty or
+   a status change refuses the close), audits the attempt in close_event and writes shift_close once
+   (an existing close is returned as already_closed, never rewritten). The payload says it was automatic
+   (client.auto='all_off'). Only in the dispatcher's own session (never in the management view or
+   view-as), at most once per company/dispatcher/day per page session, so polling never repeats it. */
+var AUTO_ALLOFF={};
+function autoCloseAllOff_(day){
+  if(!USER || USER.role==='mgmt' || VIEWAS || CLOSE_INFLIGHT) return;
+  var key=COID()+'|'+MYD()+'|'+day;
+  if(!COID() || !MYD() || AUTO_ALLOFF[key]) return;
+  AUTO_ALLOFF[key]=Date.now();
+  setTimeout(function(){ closeShift({auto:'all_off'}); }, 0);
 }
 var SCLOSE=null;
 var SCLOSE_SEQ=0;
@@ -2335,7 +2369,8 @@ function scPanel_(day){
       : "<div style='margin-top:6px;color:var(--crit);font-weight:600'>მონაცემები ბოლომდე ვერ განახლდა — ეკრანი შეიძლება ძველი იყოს. დააჭირე ⟳ და სცადე ხელახლა; საბოლოო შემოწმება ისევ სერვერზეა.</div>")+
     "<button class='fixbtn' id='scRetry' style='margin-top:8px'"+(wait?" disabled title='რამდენიმე წამში'":"")+" onclick='closeShift()'>ხელახლა შემოწმება და დახურვა</button></div>";
 }
-async function closeShift(){
+async function closeShift(opts){
+  opts=(opts && typeof opts==='object' && opts.auto)?opts:{};
   /* SCCEV-001: the server decides. shift_close_submit() re-evaluates every gate
      (close_gates_co), audits the attempt in close_event, and writes shift_close
      only when every required gate is green. Red, pending and unknown refuse;
@@ -2358,6 +2393,7 @@ async function closeShift(){
     var frozen=PLd.map(function(l){ return l.order_number; });
     var client={orders:frozen, count:frozen.length, rem:0,          /* the button is enabled only at rem===0 */
                 gross:PLd.reduce(function(s,l){ return s+grossOf_(l); },0)};
+    if(opts.auto==='all_off'){ client.auto='all_off'; client.gates={standard:{all_off:true, auto:true}}; }
     var res=await sb.rpc('shift_close_submit',{p_company_id:co, p_work_day:day, p_client:client,
                                                p_dispatcher:(VIEWAS||null)});
     if(res.error) throw res.error;
@@ -2367,7 +2403,7 @@ async function closeShift(){
       if(!same()){ moved(); return; }
       await loadClose();
       if(!same()){ moved(); return; }            /* P0-R2 (A2): day/scope changed during the read */
-      toast(r.already_closed?'ცვლა უკვე დახურულია ✓':'ცვლა დახურულია ✓');
+      toast(r.already_closed?'ცვლა უკვე დახურულია ✓':(opts.auto==='all_off'?'ყველა მძღოლი ისვენებს — ცვლა ავტომატურად დაიხურა ✓':'ცვლა დახურულია ✓'));
       CLOSE_INFLIGHT=null; render(); painted=true; return;
     }
     var items=scItems_(r);
@@ -2646,7 +2682,7 @@ function rProfile(){
           row('საშ. კვირის გროსი',money(g30/4.33))+
           row('საშ. ტვირთი/კვირა',Math.round(R30.length/4.33))+
         "</div>"+
-        "<div class='muted' style='font-size:11.5px;margin-top:10px'>ზარი ჩაითვლება მხოლოდ ნასაუბრები ზარით ან პასუხად მოსული SMS-ით.</div></div></div>";
+        "<div class='muted' style='font-size:11.5px;margin-top:10px'>ფეხი ჩაითვლება, როცა საჭირო ფაქტები დადასტურებულია საუბრით — ზარით ან SMS მიმოწერით. მხოლოდ SMS-ის მიღება ან ზარის ხანგრძლივობა არ ითვლება.</div></div></div>";
 }
 function row(k,v){return `<div style="display:flex;justify-content:space-between"><span class="ink2">${k}</span><b class="tnum">${v}</b></div>`;}
 function meter(l,v,max,col,txt){var pct=txt?100:Math.round(v/max*100);return `<div class="meter"><div class="ml"><span>${l}</span><b>${txt?v:v}</b></div><div class="track"><i style="width:${pct}%;background:${col}"></i></div></div>`;}
@@ -3725,12 +3761,20 @@ function excList_(){
     out.push({k:'offactive', r:'r', disp:(offReg[n].dispatcher_name)||'—', who:n,
       t:'გამორთული მძღოლი მუშაობს', s:'რეესტრში „არ მუშაობს", მაგრამ ბოლო 14 დღეში '+a.c+' ტვირთი აქვს · ბოლო '+gd(a.last)+' · სავარაუდოდ ორანგარიშიანია — რეესტრში ჩართე', n:(days==null?1:Math.max(1,14-days)), tab:'drivers'});
   });
+  /* 9. P2: SD-ის კონტაქტად ჩვენივე სამუშაო (Quo) ნომერია. ინფორმაციულია — დახურვას არ ბლოკავს და არავის ადანაშაულებს. */
+  (EMPPH||[]).forEach(function(x){
+    if(x.company_id && COID() && x.company_id!==COID()) return;
+    var d=dAgo(x.first_seen_at); if(d==null) d=0;
+    out.push({k:'empphone', r:'y', disp:x.dispatcher_name||'—', who:x.line_label||'—',
+      t:'SD-ის კონტაქტად ჩვენი სამუშაო ნომერია', s:x.order_number+' · '+(x.leg==='pickup'?'ფიქაფი':'დელივერი')+' '+fmtPhone_(x.phone10)+
+        ' · პირველად '+gd(String(x.first_seen_at||'').slice(0,10))+(x.customer?' · '+x.customer:''), n:d, tab:'liveloads'});
+  });
   out.sort(function(a,b){ if(a.r!==b.r) return a.r==='r'?-1:1; return b.n-a.n; });
   return out;
 }
 function rExc(){
   var A=excList_();
-  var KINDS=[['core','ძირითადი'],['nopickup','არ აღებულა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['offactive','გამორთული მუშაობს'],['markonly','მონიშნა, SD ცარიელია'],['onsite','ადგილზე აღებული'],['all','ყველა']];
+  var KINDS=[['core','ძირითადი'],['nopickup','არ აღებულა'],['calls','ზარები'],['invoice','ინვოისი'],['overdue','ვადაგადაცილება'],['unassigned','მიუბმელი'],['idle','უტვირთოდ'],['stuck','გზაში გაჭედილი'],['offactive','გამორთული მუშაობს'],['markonly','მონიშნა, SD ცარიელია'],['empphone','სამუშაო ნომერი'],['onsite','ადგილზე აღებული'],['all','ყველა']];
   var cnt={}; A.forEach(function(x){ cnt[x.k]=(cnt[x.k]||0)+1; }); cnt.all=A.length;
   cnt.core=A.length-(cnt.onsite||0);
   var F=(EXCF==='all')?A:((EXCF==='core')?A.filter(function(x){ return x.k!=='onsite'; }):A.filter(function(x){ return x.k===EXCF; }));
@@ -5119,7 +5163,8 @@ bootstrap();
    mistaken for "the call was checked and was fine" — nor for the voicemail
    verdict, because wrapper v3.1 below renders a row WITH a reason as a content
    problem and only a row WITHOUT one as an auto-answer.
-   An SMS reply is separate evidence and is deliberately left untouched.
+   CV-006: the server's *_verified already includes grounded SMS facts; a
+   bare *_sms flag is contact only and is never evidence here.
    The server still decides whether a shift may close; this is the display. */
 try{
   var __origLPC = loadPlanContacts;
@@ -5200,6 +5245,50 @@ loadPlanContacts = async function(){
     });
   }catch(e){console.error('technical relief read',e);
     if(rows===PCONT && company===COID() && dispatcher===MYD()){ SYNC.contactsErr=true; SYNC.contactsStage='ai_technical_exception_list'; } }
+};
+
+/* SHIFT-CLOSE-OVERNIGHT-007 · the contact's SMS is analysed ON DEMAND. When the server reports a leg
+   as waiting (pu_pending / del_pending: an unanalysed SMS or a call still being analysed), ask the
+   Help Edge function to analyse THIS dispatcher's due SMS legs — the database decides which legs are
+   the caller's and reserves the cost first — then re-read the contacts once and repaint. Throttled per
+   scope (45 s). It never greens anything itself and a failure changes nothing: the leg simply stays
+   'checking' and the server remains authoritative for the close. */
+var SMS_CHK_={at:0,key:'',busy:false};
+async function smsCheck_(company, orders){
+  var c=(typeof SB_URL==='string' && SB_URL) ? SB_URL : null;
+  if(!c || !company || !orders.length) return null;
+  var s=await sb.auth.getSession(), token=s && s.data && s.data.session && s.data.session.access_token;
+  if(!token) return null;
+  var ctl=new AbortController(), timer=setTimeout(function(){ ctl.abort(); }, 60000);
+  try{
+    var res=await fetch(c+'/functions/v1/ai-shift-close-help',{method:'POST',signal:ctl.signal,
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body:JSON.stringify({sms_check:{company_id:company, orders:orders}})});
+    var j=null; try{ j=await res.json(); }catch(e){}
+    return j;
+  }catch(e){ return null; } finally{ clearTimeout(timer); }
+}
+var __contactsWithReliefSms = loadPlanContacts;
+loadPlanContacts = async function(){
+  await __contactsWithReliefSms.apply(this, arguments);
+  try{
+    var rows=(typeof PCONT!=='undefined' && Array.isArray(PCONT)) ? PCONT : [];
+    var waiting=rows.filter(function(r){ return r && (r.pu_pending===true || r.del_pending===true); })
+                    .map(function(r){ return r.order_number; }).filter(Boolean);
+    if(!waiting.length || SMS_CHK_.busy) return;
+    var company=COID(), dispatcher=MYD();
+    var key=String(company)+'#'+String(dispatcher)+'#'+waiting.slice().sort().join('|');
+    if(key===SMS_CHK_.key && Date.now()-SMS_CHK_.at<45000) return;
+    SMS_CHK_.key=key; SMS_CHK_.at=Date.now(); SMS_CHK_.busy=true;
+    /* not awaited: the screen renders now; a completed analysis re-reads and repaints */
+    smsCheck_(company, waiting.slice(0,30)).then(function(r){
+      SMS_CHK_.busy=false;
+      if(!r || company!==COID() || dispatcher!==MYD()) return;
+      if((r.analysed||0)+(r.superseded||0)>0){
+        return __contactsWithReliefSms().then(function(){ try{ if(typeof render==='function') render(); }catch(e){} });
+      }
+    }).catch(function(){ SMS_CHK_.busy=false; });
+  }catch(e){ SMS_CHK_.busy=false; console.error('sms check', e); }
 };
 
 
@@ -5526,10 +5615,9 @@ loadPlanContacts = async function(){
            server-validated relief in PCONT already resolved that verdict. */
         var current=(typeof PCONT!=='undefined' && Array.isArray(PCONT))
           ? PCONT.find(function(x){return x.order_number===ccOrd_(rows[r]);}) : null;
-        /* SC-SMS-DISPLAY-001: the contact gate already accepts an incoming SMS.
-           A raw call-only content failure must not repaint that accepted leg red.
-           The base cell labels SMS explicitly; no call/content verdict is changed. */
-        if(current && current[pre+'_sms']===true) continue;
+        /* CV-006 (supersedes SC-SMS-DISPLAY-001): an SMS receipt no longer
+           satisfies the gate, so it must not suppress the content reason either.
+           The painter and the gate now read the same evaluated verdict. */
         if(current && current[pre+'_technical_exception']!=null
            && current[pre+'_verified']===true && !current[pre+'_pending']
            && !current[pre+'_content_unknown']) continue;
@@ -5552,7 +5640,8 @@ loadPlanContacts = async function(){
     var ords=[], rows=t.querySelectorAll('tbody tr');
     for (var r=0;r<rows.length;r++){ var o=ccOrd_(rows[r]); if(o) ords.push(o); }
     if(!ords.length||CC_BUSY) return;
-    var key=ords.slice().sort().join('|');
+    /* CV-006: a fresh contacts load must re-read content (new evidence can clear a block) */
+    var key=String(COID())+'#'+String(typeof PCONT_GEN!=='undefined'?PCONT_GEN:'')+'#'+ords.slice().sort().join('|');
     if(key===CC_KEY){ ccPaint_(); return; }
     CC_BUSY=true;
     sb.rpc('contact_content_orders',{p_orders:ords, p_company_id: COID()}).then(function(r){
