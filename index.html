@@ -8475,10 +8475,57 @@ loadPlanContacts = async function(){
 @media (max-width:560px){ .scp{padding:12px;border-radius:12px} .scp-hd h2{font-size:18px} }
 .scp-closebar>.scp-coinfo{order:1} .scp-closebar>#logoutBtn{order:2} .scp-closebar>.scp-muted{order:3}
 .scp-closebar>#rfHint{order:4;flex-basis:100%;margin:0!important;color:var(--p-muted)}
+/* ===== SHIFT-CLOSE-UI-002 (4) · softer sage & cream, both themes (renderer-scoped tokens) ===== */
+.scp{--p-page:#f2efe3;--p-paper:#faf7ee;--p-line:#dcdfd1;--p-tint:#e9efe1;--p-btn:#e0e9d9;--p-foot:#f1ece0;--p-sub:#f5f2e7;--p-hover:#efede2;--p-edge:#dfdfcf;
+  --p-sym-def-bg:#e7ecdd;--p-sym-def:#5f6e45;--p-sym-calls-bg:#f5e7c8;--p-sym-calls:#8f5c12;--p-sym-docs-bg:#e1e9f2;--p-sym-docs:#355b86;--p-sym-chk-bg:#ece4d6;--p-sym-chk:#735f45;
+  --p-amber-bg:#f5e7c8;--p-amber:#7a5010;--p-rate-bg:#e3ebf4;--p-rate:#355b86;--p-seg-on:#c6d8bf;--p-rest:#766c5b;--p-close-off-bg:#e4e3d6;--p-close-off:#6c7169;--p-on-accent:#fbf8ef;
+  border-color:var(--p-edge)}
+:root[data-theme="dark"] .scp{--p-page:#262c28;--p-paper:#2e3531;--p-ink:#e9eee8;--p-muted:#b3bdb4;--p-line:#46514a;--p-accent:#95c8ab;--p-ok:#8ad6a8;--p-err:#f29a94;--p-blue:#a9c4e8;
+  --p-tint:#343e37;--p-btn:#37473c;--p-foot:#2c312b;--p-sub:#2a302c;--p-hover:#353d38;--p-edge:#3f4842;--p-warn:#e7bd73;
+  --p-sym-def-bg:#38432f;--p-sym-def:#c3d3a4;--p-sym-calls-bg:#4a3f25;--p-sym-calls:#efc77c;--p-sym-docs-bg:#2f3d50;--p-sym-docs:#b2cbeb;--p-sym-chk-bg:#463d31;--p-sym-chk:#dcc6a1;
+  --p-amber-bg:#4a3f25;--p-amber:#efc77c;--p-rate-bg:#2f3d50;--p-rate:#b2cbeb;--p-seg-on:#4f6755;--p-rest:#c9bea9;--p-close-off-bg:#3a423d;--p-close-off:#a3aca4;--p-on-accent:#1f2622}
+.scp-sym{background:var(--p-sym-def-bg);color:var(--p-sym-def)}
+.scp-sym.sym-calls{background:var(--p-sym-calls-bg);color:var(--p-sym-calls)}
+.scp-sym.sym-docs{background:var(--p-sym-docs-bg);color:var(--p-sym-docs)}
+.scp-sym.sym-checks{background:var(--p-sym-chk-bg);color:var(--p-sym-chk)}
+.scp-banner{background:var(--p-amber-bg);color:var(--p-amber)}
+.scp-banner.ok{background:var(--p-tint);color:var(--p-ok)}
+.scp-tag{background:var(--p-amber-bg);color:var(--p-amber)}
+.scp-rate{background:var(--p-rate-bg);color:var(--p-rate)}
+.scp-seg button.on{border-color:var(--p-seg-on)}
+.scp-add{border-color:var(--p-seg-on)}
+.scp-restsum{color:var(--p-rest)}
+.scp .gate.scp-gate[role=button]:hover,:root[data-theme="dark"] .scp .gate.scp-gate[role=button]:hover{background:var(--p-hover)}
+.scp .gate.scp-sub,:root[data-theme="dark"] .scp .gate.scp-sub{background:var(--p-sub)}
+.scp-st.st-unavail,.scp-c.un{color:var(--p-amber)}
+.scp-primary,.scp-closebtn.ready{color:var(--p-on-accent)!important}
+.scp-cnt{color:var(--p-on-accent)}
+.scp-closebtn{background:var(--p-close-off-bg)!important;color:var(--p-close-off)!important}
+.scp-closebtn.ready{background:var(--p-accent)!important}
+.scp .fixbtn{background:var(--p-paper);border-color:var(--p-line);color:var(--p-accent)}
+.scp .chip{border:1px solid transparent}
+/* (1) belt: should any shortcut ever get in, it is not shown in this renderer */
+.scp .ai-ask{display:none!important}
+/* (2) group request row */
+.scp .scp-grouprow .scp-glbl{color:var(--p-muted)!important;font-size:11.5px!important}
+/* (3) vertical criteria per order */
+.scp .scp-orow{align-items:flex-start!important}
+.scp .scp-ident{display:block;color:var(--p-muted)!important;font-size:11.5px!important;margin-top:1px}
+.scp-legs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px;margin-top:8px}
+.scp-leg{min-width:0}
+.scp-legh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;margin-bottom:3px}
+.scp-legn{font-weight:600;color:var(--p-ink)}
+.scp-ph{color:var(--p-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.scp-att{color:var(--p-muted);font-size:11px;white-space:nowrap}
+.scp-crit{list-style:none;margin:0;padding:0}
+.scp-crit li{position:relative;padding:1px 0 1px 13px;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.scp-crit li::before{content:"";position:absolute;left:2px;top:.62em;width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.75}
+.scp-crit li.c-ok{color:var(--p-ok)} .scp-crit li.c-no{color:var(--p-err)} .scp-crit li.c-wait{color:var(--p-blue)} .scp-crit li.c-un{color:var(--p-amber)}
+@container scp (max-width:560px){ .scp-legs{grid-template-columns:1fr} }
 </style>
 <script>
 /* =====================================================================
-   SHIFT-CLOSE-UI-PILOT-001 — dispatcher Shift Close pilot renderer
+   SHIFT-CLOSE-UI-PILOT-001 / UI-002 — dispatcher Shift Close renderer
    (append-only tail; candidate, NOT deployed)
 
    Who sees it: only a signed-in dispatcher for whom the server function
@@ -8676,23 +8723,59 @@ function scpSt_(state, text) {
 }
 /* a gate: header row (.gate ok|no|wait — what the AI launcher and counters read)
    followed by its detail rows (.gate, padding-left:34px — same contract as rBoard) */
+/* SHIFT-CLOSE-UI-002 (1): the shared assistant tick (attachAsk, every 1.5 s) adds a
+   "ვკითხო ასისტენტს" button to every red #closeCard row that has no `.ai-ask` yet.
+   Each pilot row is rendered WITH an inert, hidden `.ai-ask` placeholder, so that check
+   finds one and inserts nothing — after polling, re-renders, accordion toggles and
+   company switches alike. The shared code and the old renderer are untouched; the
+   floating launcher and drawer stay the one entry point. */
+var SCP_NOASK = "<span class='ai-ask scp-noask' hidden aria-hidden='true'></span>";
 function scpGate_(key, o) {
+  if (o.group) { o.extra = o.group.chip; o.extraLabel = o.group.label; }
   var open = !!SCP_OPEN[key], rows = (o.rows || []).slice();
-  /* the gate-level explanation lives in the expanded part, so the collapsed row stays one short line */
-  if (o.extra) rows.unshift("<div class='gate' style='padding-left:34px'><div class='t'><span>ყველა ტვირთზე ერთად:</span></div><div class='scp-ract'>" + o.extra + "</div></div>");
+  /* SHIFT-CLOSE-UI-002 (2): a group ("all at once") explanation is offered only as a
+     separate, labelled secondary row — see scpGroup_ */
+  if (o.extra) rows.unshift("<div class='gate scp-grouprow' style='padding-left:34px'><div class='t'><span class='scp-glbl'>" + (o.extraLabel || '') + "</span></div><div class='scp-ract'>" + o.extra + "</div></div>");
   var cls = o.state === 'ok' ? 'ok' : (o.state === 'wait' ? 'wait' : 'no');
   var head = "<div class='gate scp-gate " + cls + "' data-scp-gate='" + key + "' data-scp-state='" + o.state + "'" +
     (rows.length ? (" role='button' tabindex='0' aria-expanded='" + (open ? 'true' : 'false') + "' onclick=\"scpToggle(event,'" + key + "')\" onkeydown=\"scpKey(event,'" + key + "')\"") : '') + ">" +
     "<span class='scp-sym sym-" + (o.sym || 'def') + "'>" + scpIc_(o.icon || 'check') + "</span>" +
-    "<div class='t'><b>" + esc(o.title) + "</b><span class='scp-why" + (o.state === 'ok' ? '' : (' why-' + o.state)) + "'>" + (o.reason || '') + "</span></div>" +
+    "<div class='t'><b>" + esc(o.title) + "</b><span class='scp-why" + (o.state === 'ok' ? '' : (' why-' + o.state)) + "'>" + (o.reason || '') + "</span>" + SCP_NOASK + "</div>" +
     scpSt_(o.state, o.status) + (rows.length ? scpIc_('chev', 'scp-chev') : "<span class='scp-chev-sp'></span>") + "</div>";
-  return head + rows.map(function (r) { return r.replace("<div class='gate'", "<div class='gate scp-sub' data-scp-parent='" + key + "'" + (open ? '' : ' hidden')); }).join('');
+  return head + rows.map(function (r) {
+    r = r.replace(/^<div class='gate( [^']*)?'/, function (m0, c) { return "<div class='gate scp-sub" + (c || '') + "' data-scp-parent='" + key + "'" + (open ? '' : ' hidden'); });
+    return r.replace(/<div class='t'>/, "<div class='t'>" + SCP_NOASK);
+  }).join('');
 }
 /* quiet=true: an in-order row — its title is <strong>, so the assistant's "ask" button (which reads .t > b) is not added */
 function scpRow_(title, sub, act, extraAttr, quiet) {
   var tg = quiet ? 'strong' : 'b';
   return "<div class='gate' style='padding-left:34px'" + (extraAttr || '') + "><div class='t'><" + tg + " class='scp-rt'>" + esc(title) + "</" + tg + "><span>" + sub + "</span></div>" +
     (act ? ("<div class='scp-ract'>" + act + "</div>") : '') + "</div>";
+}
+/* SHIFT-CLOSE-UI-002 (2): the existing gate-level request (subject '') is shown only when it
+   adds something: two or more open items, or a group request that already exists (so its
+   pending / approved / rejected state and reason stay visible). One open item → only its own
+   individual request. Same kinds, subjects, handlers and states as before. */
+function scpGroup_(kind, n, what, label, tday) {
+  var existing = waivOf_(kind, '', tday);
+  if (!(n >= 2 || existing)) return null;
+  return { label: n >= 2 ? ('ან ერთი ახსნა ყველა ' + n + ' ' + what + ' ერთად:') : ('ერთიანი ახსნა (' + what + '):'),
+           chip: waivChip_(kind, '', label, tday) };
+}
+/* SHIFT-CLOSE-UI-002 (3): the server's reason text lists criteria as "label — state" joined by
+   " · " (contact_content_orders). Known labels become one row each; any part that does not start
+   with a known label is kept whole as its own row (lossless — nothing is split on other dashes). */
+var SCP_CRIT_LABELS = ['მანქანა მზადაა', 'აღების საათები', 'INOP: rolls/steers/brakes', 'ჩაბარების საათები', 'თანხა', 'არასამუშაო საათები: გასაღები/dropbox'];
+function scpCriteria_(text) {
+  var t = String(text == null ? '' : text); if (!t.trim()) return [];
+  return t.split(' · ').map(function (part) {
+    for (var i = 0; i < SCP_CRIT_LABELS.length; i++) {
+      var L = SCP_CRIT_LABELS[i];
+      if (part.indexOf(L + ' — ') === 0) return { label: L, state: part.slice(L.length + 3), raw: part };
+    }
+    return { label: null, state: null, raw: part };
+  });
 }
 function scpFrozen_() {
   if (!SCLOSE) return null;
@@ -8788,28 +8871,46 @@ function scpGates_(M) {
   out += scpGate_('standard', { title: 'მძღოლის დღიური სტანდარტი · ' + gd(tday), icon: 'users', state: M.stdOk ? 'ok' : 'no',
     status: M.stdOk ? 'რიგზეა' : 'აკლია', reason: esc(sReason), rows: sRows });
 
-  /* calls: missing / processing / unavailable are three different states */
-  var cellTxt = function (r, side) {
+  /* calls: missing / processing / unavailable are three different states.
+     SHIFT-CLOSE-UI-002 (3): one order = identification line, then a pickup and a delivery
+     section, each criterion on its own row. Same fields and states as before. */
+  var legHtml = function (r, side) {
     var L0 = loadOf_(r.order_number), skip = callSkip_(L0, side);
     var miss = side === 'pu' ? r.pu_missing : r.del_missing, ver = side === 'pu' ? r.pu_verified : r.del_verified;
     var pend = side === 'pu' ? M.puWait_(r) : M.delWait_(r), ph = side === 'pu' ? r.pickup_phone : r.delivery_phone;
     var why = side === 'pu' ? r.pu_reason : r.del_reason, sms = side === 'pu' ? r.pu_sms : r.del_sms, rang = side === 'pu' ? r.pu_call : r.del_call;
-    var lbl = side === 'pu' ? 'ფიქაფი' : 'დელივერი';
-    if (skip) return "<span class='scp-c ok'>" + lbl + ": ზარი არ სჭირდება</span>";
-    if (miss) return "<span class='scp-c no'>" + lbl + ": SD-ში ნომერი არ წერია</span>";
-    if (ver) return "<span class='scp-c ok'>" + lbl + ": ✓ " + esc(fmtPhone_(ph)) + "</span>";
-    if (pend) return "<span class='scp-c wait'>" + lbl + ": მოწმდება…</span>";
-    return "<span class='scp-c no'>" + lbl + ": " + esc(fmtPhone_(ph)) + (why ? (' — ' + esc(why)) : sms ? ' — SMS-ში ფაქტი არ დადასტურდა' : rang ? ' — ავტომოპასუხე' : '') + "</span>";
+    var unk = side === 'pu' ? r.pu_content_unknown : r.del_content_unknown, tex = side === 'pu' ? r.pu_technical_exception : r.del_technical_exception;
+    var a = ATT[r.order_number] || {}, tries = side === 'pu' ? (a.pu_try || 0) : (a.del_try || 0), smsOut = side === 'pu' ? a.pu_sms_out : a.del_sms_out;
+    var lbl = side === 'pu' ? 'ფიქაფი' : 'დელივერი', cls, items = [];
+    if (skip) { cls = 'ok'; items.push(["ok", "ზარი არ სჭირდება" + (skip.text ? (' — ' + skip.text) : '')]); }
+    else if (miss) { cls = 'no'; items.push(["no", "SD-ში ნომერი არ წერია"]); }
+    else if (ver) { cls = 'ok'; items.push(["ok", "დადასტურებულია" + (tex ? ' (ტექნიკური გამონაკლისი)' : '')]); }
+    else if (pend) { cls = 'wait'; items.push(["wait", "მოწმდება…"]); }
+    else if (unk) { cls = 'un'; scpCriteria_(why).forEach(function (c) { items.push(["un", c.raw]); }); if (!items.length) items.push(["un", "შინაარსი ვერ შემოწმდა"]); }
+    else {
+      cls = 'no';
+      var crit = scpCriteria_(why);
+      if (crit.length) crit.forEach(function (c) { items.push(["no", c.raw]); });
+      else if (sms) items.push(["no", "SMS მიღებულია — ფაქტი არ დადასტურდა"]);
+      else if (rang) items.push(["no", "ავტომოპასუხე — ცოცხალი საუბარი არ დაფიქსირდა"]);
+      else items.push(["no", "ნასაუბრები ზარი არ ჩანს"]);
+    }
+    var showTries = (cls === 'no' || cls === 'un') && !miss;
+    return "<div class='scp-leg lg-" + cls + "'><div class='scp-legh'><span class='scp-legn'>" + lbl + "</span>" +
+      (ph && !skip ? ("<span class='scp-ph'>" + esc(fmtPhone_(ph)) + "</span>") : '') +
+      (showTries ? ("<span class='scp-att'>ცდა: " + tries + (smsOut ? (' + ' + smsOut + ' SMS') : '') + "</span>") : '') + "</div>" +
+      "<ul class='scp-crit'>" + items.map(function (it) { return "<li class='c-" + it[0] + "'>" + esc(it[1]) + "</li>"; }).join('') + "</ul></div>";
   };
   var cRows = M.callList.slice().sort(function (a, b) {
     var ra = (M.puOk_(a) && M.delOk_(a)) ? 2 : (M.puWait_(a) || M.delWait_(a)) ? 1 : 0;
     var rb = (M.puOk_(b) && M.delOk_(b)) ? 2 : (M.puWait_(b) || M.delWait_(b)) ? 1 : 0;
     return ra - rb || String(a.order_number).localeCompare(String(b.order_number));
   }).map(function (r) {
-    var okR = M.puOk_(r) && M.delOk_(r), waitR = M.puWait_(r) || M.delWait_(r), a = ATT[r.order_number] || {};
-    var tries = (!okR && !waitR) ? (" <span class='scp-muted'>· ცდა: ფიქაფი " + (a.pu_try || 0) + ", დელივერი " + (a.del_try || 0) + "</span>") : '';
-    return scpRow_(r.order_number, esc(rDrv_(r)) + " · " + cellTxt(r, 'pu') + " · " + cellTxt(r, 'del') + tries,
-      (!okR && !waitR) ? waivChip_('calls', r.order_number, 'ზარი — ' + r.order_number, tday) : '', '', okR || waitR);
+    var okR = M.puOk_(r) && M.delOk_(r), waitR = M.puWait_(r) || M.delWait_(r);
+    return "<div class='gate scp-orow' style='padding-left:34px'><div class='t'><strong class='scp-rt'>" + esc(r.order_number) + "</strong>" +
+      "<span class='scp-ident'>" + esc(rDrv_(r)) + "</span>" +
+      "<div class='scp-legs'>" + legHtml(r, 'pu') + legHtml(r, 'del') + "</div></div>" +
+      ((!okR && !waitR) ? ("<div class='scp-ract'>" + waivChip_('calls', r.order_number, 'ზარი — ' + r.order_number, tday) + "</div>") : '') + "</div>";
   });
   M.unknownOns.forEach(function (on) {
     cRows.push(scpRow_(on, "<span class='scp-c un'>ზარების მონაცემი ვერ ჩაიტვირთა — დააჭირე ზედა ⟳-ს. ეს დადასტურება არ არის.</span>", ''));
@@ -8825,7 +8926,7 @@ function scpGates_(M) {
   else if (M.waitN) { cState = 'wait'; cStatus = 'მოწმდება'; cReason = M.waitN + ' ზარი მოწმდება — დაელოდე რამდენიმე წუთს'; }
   else { cState = 'no'; cStatus = 'დასაზუსტებელია'; cReason = 'ზარების gate წითელია'; }
   out += scpGate_('calls', { title: 'ფიქაფი / დელივერი', icon: 'phone', sym: 'calls', state: cState, status: cStatus, reason: esc(cReason),
-    extra: (M.callP.length ? ("<div class='scp-gx'>" + waivChip_('calls_all', '', 'ზარები — ' + M.callP.length + ' ტვირთი', tday) + "</div>") : ''), rows: cRows });
+    group: scpGroup_('calls_all', M.callP.length, 'ტვირთის ზარზე', 'ზარები — ' + M.callP.length + ' ტვირთი', tday), rows: cRows });
 
   /* Copart appointment / Manheim Gate Pass — only when the plan requires them */
   if (M.apptAll.length) {
@@ -8841,7 +8942,7 @@ function scpGates_(M) {
     });
     out += scpGate_('appt', { title: 'Copart — Appointment', icon: 'ticket', state: M.gAppt ? 'ok' : 'no', status: M.gAppt ? 'რიგზეა' : 'აკლია',
       reason: esc(M.apptP.length ? (M.apptP.length + ' ტვირთს appointment-ის დრო არ აქვს ჩაწერილი') : 'ჩაწერილია'),
-      extra: (M.apptP.length ? ("<div class='scp-gx'>" + waivChip_('appt_all', '', 'Copart — Appointment — ' + M.apptP.length, tday) + "</div>") : ''), rows: aRows });
+      group: scpGroup_('appt_all', M.apptP.length, 'appointment-ზე', 'Copart — Appointment — ' + M.apptP.length, tday), rows: aRows });
   }
   if (M.gpAll.length) {
     var gRows = M.gpAll.slice(0, 10).map(function (l) {
@@ -8856,7 +8957,7 @@ function scpGates_(M) {
     });
     out += scpGate_('gatepass', { title: 'Manheim — Gate Pass', icon: 'ticket', state: M.gGate ? 'ok' : 'no', status: M.gGate ? 'რიგზეა' : 'აკლია',
       reason: esc(M.gpP.length ? (M.gpP.length + ' ტვირთს Gate Pass არ აქვს ატვირთული') : 'ატვირთულია'),
-      extra: (M.gpP.length ? ("<div class='scp-gx'>" + waivChip_('gatepass_all', '', 'Manheim — Gate Pass — ' + M.gpP.length, tday) + "</div>") : ''), rows: gRows });
+      group: scpGroup_('gatepass_all', M.gpP.length, 'Gate Pass-ზე', 'Manheim — Gate Pass — ' + M.gpP.length, tday), rows: gRows });
   }
 
   /* one invoice + BOL section; SD invoice-send evidence decides, no self-attestation here */
@@ -8871,7 +8972,7 @@ function scpGates_(M) {
   var fi = M.invP[0];
   out += scpGate_('invoice', { title: 'ინვოისი და BOL', icon: 'doc', sym: 'docs', state: M.gInv ? 'ok' : 'no', status: M.gInv ? 'რიგზეა' : 'არ დასტურდება',
     reason: esc(M.invP.length ? ('Order ID ' + fi.order_number + (M.invP.length > 1 ? (' და კიდევ ' + (M.invP.length - 1)) : '') + ' · ინვოისის გაგზავნა') : 'ყველაფერი დახურულია'),
-    extra: (M.invP.length ? ("<div class='scp-gx'>" + waivChip_('invoice', '', 'ინვოისი და BOL — ' + M.invP.length + ' ტვირთი', tday) + "</div>") : ''), rows: iRows });
+    group: scpGroup_('invoice', M.invP.length, 'ტვირთის ინვოისზე', 'ინვოისი და BOL — ' + M.invP.length + ' ტვირთი', tday), rows: iRows });
 
   /* checks — the existing upload / mark workflow */
   var kRows = M.chkP.slice(0, 12).map(function (l) {
@@ -8886,7 +8987,8 @@ function scpGates_(M) {
   });
   out += scpGate_('check', { title: 'ჩეკები', icon: 'receipt', sym: 'checks', state: M.gChk ? 'ok' : 'no', status: M.gChk ? 'არ დარჩა' : 'ასატვირთია',
     reason: esc(M.chkP.length ? (M.chkP.length + ' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული') : 'ასატვირთი ჩეკი არ არის'),
-    extra: (M.chkP.length ? ("<div class='scp-gx'>" + waivChip_('check', '', 'ჩეკის ატვირთვა — ' + M.chkP.length, tday) + "</div>") : ''), rows: kRows });
+    group: (M.chkP.length || waivOf_('check', '', tday)) ? { label: M.chkP.length >= 2 ? ('ერთი ახსნა ყველა ' + M.chkP.length + ' ჩეკზე ერთად:') : 'ახსნა ჩეკზე:',
+                                                           chip: waivChip_('check', '', 'ჩეკის ატვირთვა — ' + M.chkP.length, tday) } : null, rows: kRows });
   return out;
 }
 
