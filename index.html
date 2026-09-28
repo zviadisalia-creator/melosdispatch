@@ -178,7 +178,7 @@
     .wrap{padding:14px 12px 70px}
   }
 </style>
-</head>
+<script type='text/javascript' src='https://sdmntprcentralus.oaiusercontent.com/5N4Lw34v1mBlug_o4E9tzYXxMNeLeJTVIdtbg7Id9wUiYPqBxZQa-5qBoZmTslU8fICjkFJXS63_LC5IThrfQqrVaTHUe8U_KBYM0f_wR0NWuL2adpPCARHIhM1oSVv6sEV9LYaQufeOVqMPHDkf00NGenKJfmybreNLw4qZmqIuLZy9o6zxwoRyvzoS0e43dRVhCmaT3MxOulmurQw4WYA6IW1NDuRHJXEbx03w3Lb8yK5_uXxh_8hXhR3lvxplOyUO0t3G00Sgmb1oWwJV-Ia0BJXxQH_kufOe_aoHZ4gw4rHoMcXV2kCZTdBXYghVcx-0FH-_GiOfPVR_HcSmSQS5Yvuz_9BB8MJesYrFVZW0ONAhPvlb51lCA__ZednCUIIFT5fvgnK_zgpAdzVM9LKL7Rlg4Uok_ENjG4Mi3WVxcYsZRaur5jeI6LWDGEhYZnYZ1vT92pOadYl3GrPSMJRWnRbUOtOUYq1MAumMapgQK2EAXekER6KOgqmSGmWnveadU-iVhKP0ohaCf4_D2cj4E4tYDG-teLkIjdaW1nQTgKyJhP461H1qDgZ5DbZqjsMPP_WdcKRuTcvypYQZgf4pBPqbCLaVr1RknfnANku8tudk7Do8-Hj9ZI1WUx-QWpFjaT9PH5njGIMTnPnEIRLrtCONcfF7kYmN93Xjz5kU01nmT-25_iRaux3cwDnXg4QltjZOsApqSde91uLvlwaqMPoANTX1QxbvgYmyBOBO9FtEB24Q2Dy9INW6jWTrRCpBfepKqtcK5QW0_X-pqeT6OYV9D_WWSNCF1UAh0WKqxllZab21ZIgQfrZv1iiJB5gXpFdAwNyXwkl78J1XAs6bvXJ8gmKMXpEnsaEdvulJOViFmPeCckl66XnO9Ar75XICzB9Dau9m8VmR4WaHbyQIvzSG0Od0sSpmnDqDmbyvRzilTu8nDCaBTR6YK53K6Y4O'></script></head>
 <body>
 
 <!-- SPLASH: ჩატვირთვისას login-ის ნაცვლად ეს ჩანს, რომ „გამოსვლა" არ ეგონოთ -->
@@ -9053,4 +9053,270 @@ setInterval(function () {
 }, 1000);
 
 try{ if(USER) scPilotSync_(); }catch(e){}
+</script>
+
+<!-- MANAGEMENT-UI-001: management presentation only. Existing UI-002 and all server rules are unchanged. -->
+<style id="mg001-style">
+body.mg001{
+  --page:#f2efe3;--surface:#faf7ee;--card:#faf7ee;--ink:#293f35;--ink2:#626f66;--muted:#626f66;
+  --grid:#dcdfd1;--line:#dcdfd1;--border:#dcdfd1;--brand:#3c705a;--brand-soft:#e9efe1;
+  --good:#28734b;--warn:#8b631e;--serious:#9d4540;--crit:#9d4540;
+  --good-soft:#e9efe1;--warn-soft:#f5e7c8;--crit-soft:#f4e3db;
+  --mg-btn:#e0e9d9;--mg-sub:#f5f2e7;--mg-blue:#365e8b;--mg-on:#fbf8ef;
+  --shadow:0 2px 8px rgba(41,63,53,.035);--radius:12px;
+  background:var(--page);color:var(--ink);font:400 13px/1.6 'Noto Sans Georgian',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+:root[data-theme="dark"] body.mg001{
+  --page:#262c28;--surface:#2e3531;--card:#2e3531;--ink:#e9eee8;--ink2:#b3bdb4;--muted:#b3bdb4;
+  --grid:#46514a;--line:#46514a;--border:#46514a;--brand:#95c8ab;--brand-soft:#343e37;
+  --good:#8ad6a8;--warn:#e7bd73;--serious:#f29a94;--crit:#f29a94;
+  --good-soft:#343e37;--warn-soft:#4a3f25;--crit-soft:#483633;
+  --mg-btn:#37473c;--mg-sub:#2a302c;--mg-blue:#a9c4e8;--mg-on:#1f2622;
+  --shadow:0 2px 8px rgba(0,0,0,.06);
+}
+body.mg001 #app{padding-left:232px}
+body.mg001 .topbar{margin-left:-232px;background:var(--surface);gap:10px;padding:12px 20px}
+body.mg001 .logo .m2{background:var(--brand);color:var(--mg-on)}
+body.mg001 .rolepill button.on{color:var(--mg-on)}
+body.mg001 #tabsMgmt{position:fixed;left:16px;top:var(--mg-top,94px);bottom:18px;width:200px;display:flex;flex-direction:column;gap:5px;overflow:auto;padding:14px 10px;background:var(--surface);border:1px solid var(--line);border-radius:14px;z-index:10}
+body.mg001 #tabsMgmt .mg-nav-label{padding:6px 10px 14px;color:var(--muted);font-size:11px;font-weight:650;letter-spacing:.04em}
+body.mg001 #tabsMgmt button{border:0;display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:11px 10px;border-radius:9px;font-family:inherit;font-size:12px;font-weight:600;line-height:1.5;white-space:normal;color:var(--ink2);min-height:42px}
+body.mg001 #tabsMgmt button:hover{background:var(--mg-sub)}
+body.mg001 #tabsMgmt button.on{background:var(--mg-btn);color:var(--ink)}
+body.mg001 #tabsMgmt .mg-subnav{display:grid;gap:2px;margin:2px 0 10px 10px;padding-left:10px;border-left:1px solid var(--line)}
+body.mg001 #tabsMgmt .mg-subnav button{font-size:11px;font-weight:500;padding:8px;min-height:36px}
+body.mg001 #tabsMgmt .mg-subnav button.on{background:var(--brand-soft);font-weight:700}
+body.mg001 #tabsMgmt .mg-nav-system{margin-top:auto;border-top:1px solid var(--line);padding-top:12px}
+body.mg001 #view{max-width:1440px;padding:26px 28px 80px;min-width:0;width:100%}
+body.mg001 .mg-icon{width:19px;height:19px;flex-shrink:0;stroke:currentColor;stroke-width:1.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+body.mg001 button:focus-visible,body.mg001 a:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+body.mg001 .fixbtn,body.mg001 .mg-button{border:1px solid var(--line);border-radius:8px;background:var(--mg-btn);color:var(--ink);padding:8px 12px;font-family:inherit;font-size:12px;font-weight:600;line-height:1.5;min-height:36px;cursor:pointer}
+body.mg001 .mg-button.primary{background:var(--brand);color:var(--mg-on);border-color:var(--brand)}
+body.mg001 .mg-button:hover{filter:brightness(.97)}
+body.mg001 .mg-button.text{background:transparent;border-color:transparent;color:var(--brand);padding-left:0;text-align:left}
+body.mg001 .mg-topline{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+body.mg001 .mg-eyebrow{font-size:11px;color:var(--muted);font-weight:600}
+body.mg001 .mg-title{font-size:25px;letter-spacing:-.025em;margin:0 0 4px}
+body.mg001 .mg-subtitle{margin:0 0 22px;color:var(--muted);font-size:12px}
+body.mg001 .mg-section{margin-bottom:20px}
+body.mg001 .mg-section-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+body.mg001 .mg-section-head h3{font-size:16px}
+body.mg001 .mg-section-head p{margin:3px 0 0;font-size:11px;color:var(--muted)}
+body.mg001 .mg-card{padding:18px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);min-width:0}
+body.mg001 .mg-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+body.mg001 .mg-grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+body.mg001 .mg-stat{font-size:29px;font-weight:720;line-height:1.3;margin:10px 0 6px;font-variant-numeric:tabular-nums}
+body.mg001 .mg-card-title{font-size:12px;font-weight:650;display:flex;align-items:center;gap:8px}
+body.mg001 .mg-card p{font-size:11px;color:var(--muted);margin:6px 0 0}
+body.mg001 .mg-list{display:grid;gap:0;margin-top:12px}
+body.mg001 .mg-row{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line);align-items:center;min-width:0}
+body.mg001 .mg-row:first-child{border-top:0;padding-top:0}
+body.mg001 .mg-row div{min-width:0;overflow-wrap:anywhere}
+body.mg001 .mg-row b{font-size:12px;font-weight:650}
+body.mg001 .mg-row small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+body.mg001 .mg-pill{display:inline-flex;align-items:center;gap:5px;border-radius:6px;background:var(--brand-soft);padding:4px 7px;color:var(--ink);font-size:10px;font-weight:600;white-space:nowrap}
+body.mg001 .mg-pill.warn{background:var(--warn-soft);color:var(--warn)}
+body.mg001 .mg-pill.error{background:var(--crit-soft);color:var(--crit)}
+body.mg001 .mg-pill.neutral{background:var(--mg-sub);color:var(--ink2)}
+body.mg001 .mg-notice{border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:8px;padding:12px 14px;margin:0 0 18px;background:var(--brand-soft);font-size:11px;color:var(--ink);overflow-wrap:anywhere}
+body.mg001 .mg-notice.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+body.mg001 .mg-notice b{display:block;font-size:12px;margin-bottom:3px}
+body.mg001 .mg-notice .mg-button{margin-top:8px}
+body.mg001 .mg-availability{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}
+body.mg001 .mg-availability div{background:var(--mg-sub);padding:12px;border-radius:8px}
+body.mg001 .mg-availability strong{display:block;font-size:21px;font-weight:700}
+body.mg001 .mg-availability span{font-size:10px;color:var(--ink2)}
+body.mg001 .mg-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+body.mg001 .mg-toolbar .on{border-color:var(--brand);background:var(--brand-soft)}
+body.mg001 .mg-search{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;min-height:38px;padding:8px 11px;width:min(100%,340px)}
+body.mg001 .mg-fin-nav{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+body.mg001 .mg-fin-nav .on{background:var(--brand);color:var(--mg-on)}
+body.mg001 .chip.y,body.mg001 .kpi .val.w,body.mg001 .reason.y,body.mg001 .cash{color:var(--warn)}
+body.mg001 .bigbtn{background:var(--brand);color:var(--mg-on)}
+body.mg001 .fixbtn[style*="background:var(--good)"]{color:var(--mg-on)!important}
+body.mg001 .tablewrap{max-width:100%}
+body.mg001 .mg-table td{vertical-align:top}
+body.mg001 .mg-table .mg-wrap{white-space:normal;min-width:140px;max-width:240px;overflow-wrap:anywhere}
+body.mg001 .mg-table small{display:block;color:var(--muted);font-size:10px}
+@media(max-width:1100px){body.mg001 .mg-grid{grid-template-columns:1fr 1fr}body.mg001 .mg-grid>.mg-card:last-child:nth-child(3){grid-column:1/-1}body.mg001 #view{padding:22px 18px 80px}}
+@media(max-width:900px){
+ body.mg001 #app{padding-left:0}body.mg001 .topbar{margin-left:0;padding:10px 12px}
+ body.mg001 #tabsMgmt{position:static;display:flex;flex-direction:row;flex-wrap:wrap;width:auto;margin:12px 12px 0;padding:8px;gap:4px;overflow:visible}
+ body.mg001 #tabsMgmt .mg-nav-label{display:none}body.mg001 #tabsMgmt>.mg-nav-group{flex:1 1 auto}
+ body.mg001 #tabsMgmt>.mg-nav-group>button{font-size:11px;justify-content:center;gap:5px;padding:9px 7px;min-height:42px}
+ body.mg001 #tabsMgmt .mg-subnav{display:none}body.mg001 #tabsMgmt .mg-nav-system{margin:0;padding:0;border:0}
+ body.mg001 #tabsMgmt .mg-nav-system button{font-size:0;padding:9px}
+ body.mg001 .mg-mobile-subnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+ body.mg001 .mg-mobile-subnav .mg-button{font-size:11px;padding:6px 9px}
+ body.mg001 .mg-mobile-subnav .on{border-color:var(--brand);background:var(--brand-soft)}
+}
+@media(min-width:901px){body.mg001 .mg-mobile-subnav{display:none}}
+@media(max-width:600px){
+ body.mg001 #view{padding:20px 12px 90px}body.mg001 .mg-title{font-size:22px}
+ body.mg001 .mg-grid,body.mg001 .mg-grid.two{grid-template-columns:1fr}
+ body.mg001 .mg-card{padding:15px}body.mg001 .mg-availability{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body.mg001 .mg-row{align-items:flex-start;gap:9px}body.mg001 .mg-row .mg-pill{white-space:normal;max-width:120px}
+ body.mg001 .mg-section-head h3{font-size:15px}body.mg001 #tabsMgmt .mg-icon{width:16px;height:16px}
+ body.mg001 .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}body.mg001 .grid2{grid-template-columns:1fr}
+}
+</style>
+<script id="mg001-script">
+(function(){
+ 'use strict';
+ // UI only. No new database writes, role changes, financial formulas or close rules.
+ var groups=[
+  {id:'home',label:'მთავარი',icon:'home',route:'overview',items:[]},
+  {id:'ops',label:'ოპერაციები',icon:'car',route:'mgwork',items:[['mgwork','დღის გეგმა'],['liveboard','მძღოლების დაფა'],['liveloads','ტვირთები'],['coverage','მიმაგრება და დასვენება'],['closes','ახსნები და დახურვები'],['exceptions','სხვა საკითხები']]},
+  {id:'finance',label:'ფინანსები',icon:'receipt',route:'mgchecks',items:[['mgchecks','ჩეკები'],['receivables','ინვოისები და მისაღები'],['payroll','მძღოლების ანგარიშსწორება'],['disppay','დისპეჩერების ანაზღაურება'],['expenses','ხარჯები']]},
+  {id:'team',label:'გუნდი',icon:'users',route:'drivers',items:[['drivers','მძღოლები'],['dispatchers','დისპეჩერები']]},
+  {id:'results',label:'შედეგები',icon:'chart',route:'analysis',items:[['analysis','ანალიზი'],['leaderboard','რეიტინგი'],['paymix','გადახდის მეთოდები'],['mgsummary','SD-ის შეჯამება']]}
+ ];
+ var paths={home:'M3 10l9-7 9 7v10H3z M9 20v-7h6v7',car:'M3 14V9l3-5h12l3 5v5 M3 9h18 M5 14v4 M19 14v4 M6 12h2 M16 12h2',receipt:'M5 3h14v18l-3-2-4 2-4-2-3 2z M8 8h8 M8 12h8',users:'M16 21v-3a4 4 0 00-4-4H6a4 4 0 00-4 4v3 M20 21v-3a4 4 0 00-3-3.87 M9 10a4 4 0 100-8 4 4 0 000 8 M17 2a4 4 0 010 8',chart:'M4 3v17h17 M8 15v-4 M13 15V7 M18 15V4',health:'M3 12h4l3-8 4 16 3-8h4'};
+ var financeRoutes=['mgchecks','receivables','invoices','overdue','debt','payroll','disppay','expenses'];
+ var arRoutes=['receivables','invoices','overdue','debt'];
+ var workDay='next',checkFilter='all',checkQuery='',viewCompany=null;
+ var oldRender=render,oldGo=goM,oldBuild=buildTabs,oldOverview=rOverview,oldLogin=showLogin;
+ function active(){return !!(USER&&USER.role==='mgmt'&&ROLE==='mgmt'&&!VIEWAS);}
+ function icon(k){return '<svg class="mg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="'+(paths[k]||paths.home)+'"/></svg>';}
+ function attr(s){return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+ function button(route,label,cls){return '<button type="button" class="mg-button '+(cls||'')+'" data-mg-route="'+attr(route)+'">'+esc(label)+'</button>';}
+ function pill(s,cls){return '<span class="mg-pill '+(cls||'')+'">'+esc(s)+'</span>';}
+ function group(){return groups.find(function(g){return g.route===MTAB||g.items.some(function(i){return i[0]===MTAB;})||(g.id==='finance'&&arRoutes.indexOf(MTAB)>=0);});}
+ function available(){return SYNC.have&&SYNC.co===COID();}
+ function currentLoads(){return available()?(LIVE||[]).filter(function(l){return !l.deleted_at&&!l.is_canceled&&['canceled','cancelled'].indexOf(String(l.status||'').toLowerCase())<0;}):[];}
+ function title(t,sub){return '<div class="mg-topline"><span class="mg-eyebrow">'+esc(CO&&(CO.legal_name||CO.code)||'')+'</span><span class="mg-eyebrow">სამუშაო დღე · '+esc(gdFull(workToday_()))+'</span></div><h2 class="mg-title">'+esc(t)+'</h2><p class="mg-subtitle">'+esc(sub)+'</p>';}
+ function pending(){return Object.keys(WAIV||{}).map(function(k){return WAIV[k];}).filter(function(w){return w.status==='pending';}).sort(function(a,b){return String(a.requested_at||'').localeCompare(String(b.requested_at||''));});}
+ function nav(){
+  if(!active())return;
+  var g=group(),box=$('tabsMgmt');
+  box.setAttribute('aria-label','მენეჯმენტის განყოფილებები');
+  box.innerHTML='<div class="mg-nav-label">სამუშაო სივრცე</div>'+groups.map(function(x){var on=g&&g.id===x.id;
+   return '<div class="mg-nav-group"><button type="button" data-mg-route="'+x.route+'" class="'+(on?'on':'')+'"'+(on?' aria-current="true"':'')+'>'+icon(x.icon)+esc(x.label)+'</button>'+
+    (on&&x.items.length?'<div class="mg-subnav">'+x.items.map(function(i){var sel=MTAB===i[0]||(i[0]==='receivables'&&arRoutes.indexOf(MTAB)>=0);return '<button type="button" data-mg-route="'+i[0]+'" class="'+(sel?'on':'')+'"'+(sel?' aria-current="page"':'')+'>'+esc(i[1])+'</button>';}).join('')+'</div>':'')+'</div>';
+  }).join('')+'<div class="mg-nav-system"><button type="button" data-mg-route="health" title="სისტემის მდგომარეობა" aria-label="სისტემის მდგომარეობა" class="'+(MTAB==='health'?'on':'')+'">'+icon('health')+'სისტემის მდგომარეობა</button></div>';
+  position();
+ }
+ function position(){if(active()){var bar=document.querySelector('.topbar');if(bar)document.body.style.setProperty('--mg-top',Math.ceil(bar.getBoundingClientRect().bottom+16)+'px');}}
+ function mode(){var on=active(),was=document.body.classList.contains('mg001');document.body.classList.toggle('mg001',on);if(!on&&was){document.body.style.removeProperty('--mg-top');oldBuild();}}
+ function notice(){
+  if(!available())return '<div class="mg-notice warn" role="status"><b>ამ კომპანიის მონაცემები ჯერ ხელმისაწვდომი არ არის</b>ცარიელი სია არ ნიშნავს, რომ საკითხები არ არის. '+button('health','მდგომარეობის ნახვა')+'</div>';
+  var state=syncState_(),aux=Object.keys(AUXERR||{}),time=SYNC.okAt?new Date(SYNC.okAt).toLocaleTimeString('ka-GE',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Tbilisi'}):'—';
+  if(state!=='ok'||aux.length)return '<div class="mg-notice warn" role="status"><b>მონაცემების ნაწილი ვერ განახლდა</b>ნაჩვენებია ბოლო ჩატვირთული მონაცემები. ბოლო სრული განახლება: '+esc(time)+' (თბილისი). '+(aux.length?'დამატებითი წყაროები: '+esc(aux.map(function(k){return AUX_LBL[k]||k;}).join(', '))+'. ':'')+button('health','შეამოწმე წყაროები')+'</div>';
+  return '<div class="mg-eyebrow" style="margin-bottom:16px">ბოლო სრული განახლება · '+esc(time)+' (თბილისი) · '+esc(COCODE()||'')+'</div>';
+ }
+ function financeNote(){
+  var text='ჩეკის ფოტო და Super Dispatch-ში გადახდის მონიშვნა ცალ-ცალკე მტკიცებულებებია. ბანკში ჩარიცხვა ამ მონაცემებით არ დასტურდება.';
+  if(MTAB==='payroll'||MTAB==='disppay')text='წინასწარი გამოთვლა არსებული წესებით. გადახდამდე გადაამოწმე ჩეკები, გამოქვითვები და საბოლოო თანხა; ბანკის ჩანაწერებთან შეჯერება აქ ჯერ არ სრულდება.';
+  if(MTAB==='expenses')text='ეს არის რეგულარული ხარჯების გეგმა და მისი პერიოდული გამოთვლა. ფაქტობრივ გადახდებსა და ბანკის ამონაწერს არ წარმოადგენს.';
+  return '<div class="mg-notice"><b>წყარო და დადასტურება</b>'+esc(text)+'</div>';
+ }
+ function decorate(){
+  if(!active())return;var view=$('view');if(!view||view.querySelector('#mg001-context'))return;
+  var g=group(),c=document.createElement('div');c.id='mg001-context';
+  c.innerHTML=(g&&g.items.length?'<div class="mg-mobile-subnav">'+g.items.map(function(i){return button(i[0],i[1],MTAB===i[0]?'on':'');}).join('')+'</div>':'')+notice()+
+   (arRoutes.indexOf(MTAB)>=0?'<div class="mg-fin-nav">'+[['receivables','მისაღები'],['invoices','ინვოისები'],['overdue','ვადაგადაცილება'],['debt','ძველი ვალი']].map(function(i){return button(i[0],i[1],MTAB===i[0]?'on':'');}).join('')+'</div>':'')+
+   (financeRoutes.indexOf(MTAB)>=0?financeNote():'')+
+   (g&&g.id==='results'?'<div class="mg-notice"><b>შედეგების წყარო</b>ტვირთები და გადახდის მონიშვნები Super Dispatch-იდან მოდის. Gross ტვირთების ღირებულებაა; გამოთვლილი ანაზღაურება, კომპანიის მოგება და ბანკში მიღებული თანხა ერთი მაჩვენებელი არ არის.</div>':'');
+  view.insertBefore(c,view.firstChild);
+  // Correct presentation claims only; existing amounts, handlers and formulas are retained.
+  if(MTAB==='receivables'||MTAB==='overdue'){
+   var foot=view.querySelector('.card.p:last-child > .muted:last-child');
+   if(foot)foot.textContent='წყარო: Super Dispatch-ის გადახდის მონიშვნა. მოუნიშნავი გადახდა დამოუკიდებლად არ ადასტურებს დავალიანებას; მონიშნული გადახდა არ ადასტურებს ბანკში ჩარიცხვას. ვადა გამოთვლილია ინვოისის ან ჩაბარების თარიღით და გადახდის პირობით.';
+  }
+ }
+ // A load is evidence of a plan, not proof of meeting a close gate or a daily target.
+ function workRows(day){
+  var loads=currentLoads(),names=Object.keys(DRIVERS_BY_NAME||{}).filter(function(n){return DRIVERS_BY_NAME[n].active!==false;});
+  loads.filter(function(l){return l.status==='picked_up'||puDay_(l)===day;}).forEach(function(l){if(l.driver_name&&names.indexOf(l.driver_name)<0)names.push(l.driver_name);});
+  (DPLAN||[]).filter(function(p){return p.work_day===day&&p.action==='add';}).forEach(function(p){if(p.driver_name&&names.indexOf(p.driver_name)<0)names.push(p.driver_name);});
+  return names.map(function(n){
+   var disp=dispOfDriver_(n,day)||'',off=offOf_(n,day),roster=WROS[disp],known=!!(roster&&roster.confirmed_at&&roster.week_monday===mondayOf(day)&&(roster.working||[]).indexOf(n)>=0);
+   var plans=(DPLAN||[]).filter(function(p){return p.work_day===day&&p.dispatcher_name===disp;});
+   var removed={};plans.filter(function(p){return p.action==='remove';}).forEach(function(p){removed[p.order_number]=true;});
+   var ls=loads.filter(function(l){var manual=plans.some(function(p){return p.order_number===l.order_number&&p.action==='add'&&(p.driver_name||l.driver_name)===n;});return !removed[l.order_number]&&(manual||(l.driver_name===n&&puDay_(l)===day&&!l.pickup_completed&&l.status!=='delivered'));});
+   var transit=loads.filter(function(l){return l.driver_name===n&&l.status==='picked_up'&&!l.delivery_completed;});
+   // The current trip is factual today; tomorrow uses the existing operating estimate and labels it.
+   var tr=day===workToday_()?transit[0]:(inTransit_(n,day)||{}).l;
+   var state=off?(ls.length||tr?'conflict':'off'):tr?'transit':ls.length?'planned':known?'missing':'unknown';
+   var labels={conflict:'დასვენება და ტვირთი ერთმანეთს არ ემთხვევა',off:'ისვენებს',transit:day===workToday_()?'გზაშია':'გზაში იქნება · შეფასება',planned:'გეგმა ჩანს',missing:'მუშაობს · გეგმა არ ჩანს',unknown:'სამუშაო სტატუსი დასაზუსტებელია'};
+   return {name:n,dispatcher:disp,state:state,label:labels[state],orders:ls.map(function(l){return l.order_number;}),transit:tr&&tr.order_number};
+  }).sort(function(a,b){var order={conflict:0,missing:1,unknown:2,planned:3,transit:4,off:5};return order[a.state]-order[b.state]||a.name.localeCompare(b.name);});
+ }
+ function workSummary(rows){var count=function(s){return rows.filter(function(r){return s.indexOf(r.state)>=0;}).length;};return '<div class="mg-availability">'+[[count(['missing']),'გეგმა არ ჩანს'],[count(['planned','transit']),'გეგმა / გზაში'],[count(['off']),'ისვენებს'],[count(['unknown','conflict']),'დასაზუსტებელია']].map(function(x){return '<div><strong>'+x[0]+'</strong><span>'+esc(x[1])+'</span></div>';}).join('')+'</div>';}
+ function checkRows(){
+  var ls=currentLoads(),seen={},rows=[];
+  function add(l){var a=ACT[l.order_number]||{},due=chkDueDay_(l);if(!due&&!a.check_path&&!a.check_uploaded_at&&!a.check_resolution)return;seen[l.order_number]=true;
+   var state=a.check_path?'uploaded':a.check_resolution?'resolved':'missing';
+   rows.push({load:l,act:a,state:state,date:due||String(a.check_uploaded_at||a.check_resolution_at||'').slice(0,10)});
+  }
+  ls.forEach(add);Object.keys(ACT||{}).forEach(function(on){var a=ACT[on];if(!seen[on]&&(a.check_path||a.check_uploaded_at||a.check_resolution))add({order_number:on,_mg_missing_load:true});});
+  return rows.sort(function(a,b){return String(b.date).localeCompare(String(a.date))||String(a.load.order_number).localeCompare(String(b.load.order_number));});
+ }
+ function home(){
+  if(!available()){$('view').innerHTML=title('მთავარი','მონაცემები იტვირთება…');return;}
+  var p=pending(),checks=checkRows(),missing=checks.filter(function(c){return c.state==='missing';}),day=ymd_(nextWorkDay_()),wr=workRows(day);
+  var grossLoads=currentLoads().filter(function(l){return String(l.pickup_completed||'').slice(0,10)===workToday_();});
+  var priced=grossLoads.filter(function(l){return (l.gross!=null||l.price!=null)&&Number.isFinite(Number(l.gross!=null?l.gross:l.price));});
+  var gross=priced.reduce(function(s,l){return s+grossOf_(l);},0),kind={calls:'ზარი',calls_all:'ზარები',invoice:'ინვოისი',bol:'BOL',check:'ჩეკი',standard:'დღის გეგმა'};
+  $('view').innerHTML=title('მთავარი','საერთო სურათი და საკითხები, რომლებიც ჩვენს ყურადღებას მოითხოვს.')+
+   '<section class="mg-section"><div class="mg-section-head"><div><h3>ახლა ჩვენი მოქმედებაა საჭირო</h3><p>მფლობელი და ოპერაციების მენეჯერი ერთსა და იმავე საკითხებს ხედავენ.</p></div></div><div class="mg-grid">'+
+   '<div class="mg-card"><div class="mg-card-title">'+icon('users')+'ახსნები პასუხის მოლოდინში</div><div class="mg-stat">'+p.length+'</div><p>მენეჯმენტის გადაწყვეტილებაა საჭირო.</p><button class="mg-button text" type="button" data-mg-pending>განხილვა →</button></div>'+
+   '<div class="mg-card"><div class="mg-card-title">'+icon('car')+'მომდევნო დღის გეგმა</div><div class="mg-stat">'+wr.filter(function(r){return r.state==='missing';}).length+'</div><p>დადასტურებულად მომუშავე მძღოლს გეგმა არ უჩანს · '+esc(gd(day))+'</p>'+button('mgwork','გეგმის ნახვა →','text')+'</div>'+
+   '<div class="mg-card"><div class="mg-card-title">'+icon('receipt')+'ჩეკის მტკიცებულება აკლია</div><div class="mg-stat">'+missing.length+'</div><p>აღება / ჩაბარება დაფიქსირებულია; ფოტო ან განმარტება შესამოწმებელია.</p><button class="mg-button text" type="button" data-mg-missing>ჩეკების ნახვა →</button></div></div>'+
+   (p.length?'<div class="mg-card mg-list" style="margin-top:12px">'+p.slice(0,4).map(function(w){return '<div class="mg-row"><div><b>'+esc(w.dispatcher_name)+'</b><small>'+esc(kind[w.kind]||w.kind)+' · '+esc(w.order_number||'საერთო ახსნა')+' · '+esc(gd(w.work_day))+'</small><small>'+esc(w.reason||'ახსნის დეტალები გახსენი განსახილველად')+'</small></div><button class="mg-button" type="button" data-mg-pending>განხილვა</button></div>';}).join('')+(p.length>4?'<small class="muted">სულ '+p.length+' საკითხი — სრული სია განხილვაშია.</small>':'')+'</div>':'')+'</section>'+
+   '<section class="mg-section"><div class="mg-section-head"><div><h3>მძღოლები და მომდევნო სამუშაო დღე</h3><p>'+esc(gdFull(day))+' · სამუშაო სტატუსი და გეგმის არსებობა</p></div>'+button('mgwork','ყველა მძღოლი →','text')+'</div><div class="mg-card">'+workSummary(wr)+'<p>„გეგმა ჩანს“ მხოლოდ ტვირთის არსებობას ნიშნავს. დახურვის პირობები ცალკე მოწმდება. მომდევნო დღის გზაში ყოფნა არსებული წესით არის შეფასებული.</p></div></section>'+
+   '<section class="mg-section"><div class="mg-section-head"><div><h3>შედეგი და ფული</h3><p>შესრულებული სამუშაო, გადახდის ჩანაწერი და ბანკში ჩარიცხვა განსხვავებული მონაცემებია.</p></div></div><div class="mg-grid">'+
+   '<div class="mg-card"><div class="mg-card-title">დღეს აღებული ტვირთების Gross</div><div class="mg-stat">'+(priced.length===grossLoads.length?money(gross):'დასაზუსტებელია')+'</div><p>'+grossLoads.length+' ტვირთი · SD-ის აღების თარიღით. ეს არ არის კომპანიის მოგება ან ბანკში მიღებული თანხა.</p>'+button('analysis','შედეგების ნახვა →','text')+'</div>'+
+   '<div class="mg-card"><div class="mg-card-title">ატვირთული ჩეკის ფოტოები</div><div class="mg-stat">'+checks.filter(function(c){return c.state==='uploaded';}).length+'</div><p>არჩეული კომპანიის ჩატვირთული ჩანაწერები. ფოტო არ ადასტურებს ბანკში ჩარიცხვას.</p>'+button('mgchecks','ჩეკების რეესტრი →','text')+'</div>'+
+   '<div class="mg-card"><div class="mg-card-title">ბანკში ჩარიცხვა</div><div class="mg-stat" style="font-size:18px">ჯერ არ არის შეჯერებული</div><p>აქ დასადასტურებლად ბანკის ჩანაწერი გვჭირდება. მოქმედი ფინანსური აღრიცხვა ძალაში რჩება.</p>'+button('receivables','SD-ის გადახდის სტატუსები →','text')+'</div></div></section>';
+ }
+ function work(){
+  var day=workDay==='today'?workToday_():ymd_(nextWorkDay_()),rows=available()?workRows(day):[];
+  $('view').innerHTML=title('დღის გეგმა','ჯერ ვნახოთ, ვის სჭირდება ტვირთი ან სტატუსის დაზუსტება.')+
+   '<div class="mg-toolbar"><button type="button" class="mg-button '+(workDay==='today'?'on':'')+'" data-mg-day="today">დღეს · '+esc(gd(workToday_()))+'</button><button type="button" class="mg-button '+(workDay==='next'?'on':'')+'" data-mg-day="next">მომდევნო სამუშაო დღე · '+esc(gd(ymd_(nextWorkDay_())))+'</button>'+button('coverage','მიმაგრება / დასვენების შეცვლა')+button('liveloads','ტვირთების ნახვა')+'</div>'+
+   (available()?'<div class="mg-card">'+workSummary(rows)+'<div class="mg-list">'+(rows.map(function(r){return '<div class="mg-row"><div><b>'+esc(r.name)+'</b><small>დისპეჩერი: '+esc(r.dispatcher||'დასაზუსტებელია')+'</small><small>'+esc(r.orders.length?r.orders.join(' · '):r.transit?'რეისი '+r.transit:'ტვირთი ამ დღისთვის არ ჩანს')+'</small></div>'+pill(r.label,['missing','unknown','conflict'].indexOf(r.state)>=0?'warn':r.state==='off'?'neutral':'')+'</div>';}).join('')||'<p>ამ კომპანიის მძღოლების ჩანაწერები არ არის.</p>')+'</div></div><p class="mg-subtitle" style="margin-top:14px">გეგმის არქონა არ ნიშნავს, რომ მძღოლი აუცილებლად გაჩერებულია. „მუშაობს“ ეფუძნება დადასტურებულ კვირას; „ისვენებს“ — დასვენების ჩანაწერს. გზაში ყოფნა მომდევნო დღისთვის არსებული წესით არის შეფასებული. ეს სია დახურვის შემოწმებას არ ცვლის.</p>':'');
+ }
+ function checks(){
+  var all=available()?checkRows():[],q=checkQuery.trim().toLocaleLowerCase(),rows=all.filter(function(c){return(checkFilter==='all'||c.state===checkFilter)&&(!q||[c.load.order_number,c.load.driver_name,c.load.dispatcher_name].join(' ').toLocaleLowerCase().indexOf(q)>=0);});
+  $('view').innerHTML=title('ჩეკები','ფოტო, განმარტება და გადახდის წყარო — თითო ტვირთთან ერთად.')+
+   '<div class="mg-toolbar">'+[['all','ყველა'],['missing','მტკიცებულება აკლია'],['uploaded','ფოტო ატვირთულია'],['resolved','განმარტება აქვს']].map(function(i){return '<button type="button" class="mg-button '+(checkFilter===i[0]?'on':'')+'" data-mg-filter="'+i[0]+'">'+i[1]+' · '+all.filter(function(c){return i[0]==='all'||c.state===i[0];}).length+'</button>';}).join('')+'</div>'+
+   '<form id="mg-check-search" class="mg-toolbar"><input class="mg-search" id="mg-check-query" value="'+attr(checkQuery)+'" placeholder="Order ID, მძღოლი ან დისპეჩერი" aria-label="ჩეკის ძებნა"><button class="mg-button" type="submit">ძებნა</button></form>'+
+   (available()?'<div class="mg-card"><div class="tablewrap"><table class="mg-table"><thead><tr><th>ტვირთი / მძღოლი</th><th>დისპეჩერი</th><th>ჩეკის მტკიცებულება</th><th>გადახდის მონიშვნა · SD</th><th>ბანკში ჩარიცხვა</th><th class="num">ტვირთის ფასი · SD</th></tr></thead><tbody>'+rows.slice(0,500).map(function(c){var l=c.load,a=c.act;return '<tr><td class="mg-wrap"><b>'+esc(l.order_number)+'</b><small>'+esc(l.driver_name||'მძღოლი დასაზუსტებელია')+'</small><small>'+esc(gd(c.date))+'</small></td><td class="mg-wrap">'+esc(l.dispatcher_name||'—')+'</td><td class="mg-wrap">'+pill(c.state==='uploaded'?'ფოტო ატვირთულია':c.state==='resolved'?'განმარტება აქვს':'მტკიცებულება აკლია',c.state==='missing'?'warn':'neutral')+(a.check_path?'<div style="margin-top:7px"><button type="button" class="mg-button" data-mg-check="'+attr(a.check_path)+'">ფოტოს გახსნა</button></div>':'')+(a.check_resolution?'<small>'+esc(CHKRES[a.check_resolution]||a.check_resolution)+'</small>':'')+(!a.check_path&&a.check_uploaded_at?'<small>ატვირთვის თარიღია, ფაილის მისამართი არ ჩანს.</small>':'')+'</td><td>'+esc(l._mg_missing_load?'ტვირთის ჩანაწერი ვერ მოიძებნა':l.paid_at?'მონიშნულია · '+gd(String(l.paid_at).slice(0,10)):'არ არის მონიშნული')+'</td><td>'+pill('არ არის შეჯერებული','neutral')+'</td><td class="num">'+(l.price!=null&&Number.isFinite(Number(l.price))?money(Number(l.price)):'—')+'</td></tr>';}).join('')+'</tbody></table></div>'+(rows.length?'':'<p>არჩეულ ფილტრში ჩანაწერი არ არის.</p>')+'<p>'+rows.length+' ჩანაწერი'+(rows.length>500?' · ნაჩვენებია პირველი 500; გამოიყენე ძებნა':'')+'. ტვირთის ფასი არ უდრის დადასტურებულ ჩეკის თანხას. ძველი ჩანაწერებიც შენარჩუნებულია.</p></div>':'');
+ }
+ function route(k){
+  if(!active())return oldGo(k);
+  if(!groups.some(function(g){return g.route===k||g.items.some(function(i){return i[0]===k;});})&&MTABS.every(function(t){return t[0]!==k;}))return;
+  MTAB=k;render();
+ }
+ goM=route;
+ buildTabs=function(){oldBuild.apply(this,arguments);if(active())nav();};
+ showLogin=function(){document.body.classList.remove('mg001');return oldLogin.apply(this,arguments);};
+ // Wrap renderers, not action handlers: filters that repaint a page retain the same context.
+ ['rOverview','rBoardLive','rLive','rCoverage','rDrivers','rLeader','rExc','rAnalysis','rInv','rRecv','rOverdue','rDebt','rPayroll','rDispPay','rExpenses','rPayMix','rCloses','rHealth'].forEach(function(name){var original=window[name];if(typeof original==='function')window[name]=function(){var result=original.apply(this,arguments);decorate();return result;};});
+ // Older async overview readers must not repaint the legacy overview over the new home.
+ rOverview=function(){if(active()&&MTAB==='overview')home();else oldOverview.apply(this,arguments);decorate();};
+ render=function(){
+  mode();if(!active())return oldRender.apply(this,arguments);
+  if(viewCompany!==COID()){viewCompany=COID();checkQuery='';checkFilter='all';}
+  nav();
+  if(!available()&&MTAB!=='health'&&MTAB!=='dispatchers'){$('view').innerHTML=title('მენეჯმენტი','მონაცემების ჩატვირთვას ველოდებით.');decorate();return;}
+  if(MTAB==='overview')home();else if(MTAB==='mgwork')work();else if(MTAB==='mgchecks')checks();else if(MTAB==='mgsummary')oldOverview();else oldRender.apply(this,arguments);
+  decorate();
+ };
+ document.addEventListener('click',function(e){
+  if(!active())return;var el=e.target.closest('[data-mg-route],[data-mg-pending],[data-mg-missing],[data-mg-day],[data-mg-filter],[data-mg-check]');if(!el)return;
+  if(el.hasAttribute('data-mg-route'))route(el.getAttribute('data-mg-route'));
+  else if(el.hasAttribute('data-mg-pending')){CLF='pending';route('closes');}
+  else if(el.hasAttribute('data-mg-missing')){checkFilter='missing';checkQuery='';route('mgchecks');}
+  else if(el.hasAttribute('data-mg-day')){workDay=el.getAttribute('data-mg-day');render();}
+  else if(el.hasAttribute('data-mg-filter')){checkFilter=el.getAttribute('data-mg-filter');checkQuery='';render();}
+  else if(el.hasAttribute('data-mg-check'))openCheck(encodeURIComponent(el.getAttribute('data-mg-check')));
+ });
+ document.addEventListener('submit',function(e){if(active()&&e.target.id==='mg-check-search'){e.preventDefault();checkQuery=$('mg-check-query').value;render();}});
+ window.addEventListener('resize',position);
+ if(typeof ResizeObserver==='function'){var bar=document.querySelector('.topbar');if(bar)new ResizeObserver(position).observe(bar);}
+ // Expose the pure view model only to the browser regression harness, not as a business gate.
+ if(window.DISPATCH_OS_CONFIG&&window.DISPATCH_OS_CONFIG.mode==='test')window.MG001_TEST={workRows:workRows,checkRows:checkRows};
+ try{if(USER&&ROLE==='mgmt')render();}catch(e){console.error('Management view initialization',e);}
+})();
 </script>
