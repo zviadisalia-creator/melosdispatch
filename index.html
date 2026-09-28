@@ -1069,6 +1069,7 @@ async function afterLogin_(session){
   if(err){ console.error(err); showLogin('ბაზასთან კავშირი ვერ დამყარდა — განაახლე გვერდი ('+(err.message||'')+')'); return; }
   if(!me || !me.active){ await sb.auth.signOut(); showLogin('ამ ანგარიშს ('+email+') წვდომა არ აქვს. მიმართე მენეჯმენტს.'); return; }
   USER={ email, name:me.dispatcher_name, role:(me.role==='management'?'mgmt':'disp'), dispatcher:me.dispatcher_name, quality:null };
+  try{ if(typeof scPilotSync_==='function') await Promise.race([scPilotSync_(), new Promise(function(r){ setTimeout(r,2500); })]); }catch(e){ console.error(e); }   /* SHIFT-CLOSE-UI-PILOT-001: at most 2.5 s; a late answer switches the view itself */
   var loadErr=null;
   try{ await loadData(); }catch(e){ console.error(e); loadErr=e; }
   startApp();
@@ -1350,7 +1351,7 @@ function gd(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if(!m)
 function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if(!m) return String(s||'—'); return (+m[3])+' '+GMF[+m[2]-1];}
 
 function render(){
-  if(ROLE==='disp'){ if(TAB==='board')return rBoard(); if(TAB==='plan')return rPlan(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
+  if(ROLE==='disp'){ if(TAB==='board')return ((typeof scPilotOn_==='function' && scPilotOn_())?rBoardPilot_():rBoard()); if(TAB==='plan')return rPlan(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
   ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,debt:rDebt,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,paymix:rPayMix,closes:rCloses,health:rHealth}[MTAB])();
 }
 
@@ -8321,3 +8322,633 @@ loadPlanContacts = async function(){
 })();
 </script>
 
+
+<!-- =====================================================================
+     SHIFT-CLOSE-UI-PILOT-001 — dispatcher Shift Close pilot (append-only tail).
+     Inert unless ui_pilot_enabled('shift_close_v2') is true for the signed-in
+     dispatcher's own auth user id. Kill switch: editor/D_pilot_disable.sql.
+===================================================================== -->
+<style id="scPilotCss">
+/* SHIFT-CLOSE-UI-PILOT-001 · pilot renderer only (everything is under .scp) — light sage & cream */
+.scp{--p-page:#f6f5eb;--p-paper:#fffefa;--p-ink:#293f35;--p-muted:#626f66;--p-line:#dfe5d8;--p-accent:#3c705a;--p-ok:#28734b;--p-err:#9d4540;--p-blue:#365e8b;--p-tint:#eef4e9;--p-btn:#e4efdf;--p-foot:#f7f3ea;--p-warn:#8b631e;
+  container-type:inline-size;container-name:scp;background:var(--p-page);color:var(--p-ink);border:1px solid #e1e4d6;border-radius:14px;padding:18px;
+  font:400 13px/1.6 'Noto Sans Georgian',system-ui,-apple-system,'Segoe UI',sans-serif;color-scheme:light;max-width:1180px;margin:0 auto}
+:root[data-theme="dark"] .scp{--p-page:#1b201d;--p-paper:#222824;--p-ink:#e7eee8;--p-muted:#a8b3aa;--p-line:#36403a;--p-accent:#8cc3a6;--p-ok:#7fd1a0;--p-err:#f08b86;--p-blue:#9dbbe0;--p-tint:#26302a;--p-btn:#2c3a31;--p-foot:#262a24;--p-warn:#e0b56a;border-color:#333b35;color-scheme:dark}
+.scp *{box-sizing:border-box}
+.scp [hidden]{display:none!important}
+.scp h2,.scp h3,.scp h4,.scp p{margin:0}
+.scp button,.scp input{font:inherit;color:inherit}
+.scp button:focus-visible,.scp [role=button]:focus-visible,.scp a:focus-visible,.scp input:focus-visible{outline:2px solid var(--p-accent);outline-offset:2px}
+.scp .scp-i{width:16px;height:16px;flex:none;vertical-align:-3px}
+.scp .scp-muted{color:var(--p-muted);font-size:12px}
+.scp .scp-pad{padding:14px 18px}
+.scp-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.scp-hd h2{font-size:20px;font-weight:600;letter-spacing:-.01em}
+.scp-hd p{font-size:12px;color:var(--p-muted);margin-top:2px;overflow-wrap:anywhere}
+.scp-bell{position:relative;display:grid;place-items:center;width:44px;height:44px;border-radius:10px;border:1px solid var(--p-line);background:var(--p-paper);cursor:pointer;color:var(--p-ink)}
+.scp-bell .scp-i{width:18px;height:18px}
+.scp-cnt{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;line-height:19px;text-align:center;border-radius:99px;background:var(--p-err);color:#fffefa;font-size:11px;font-weight:600;padding:0 4px}
+.scp-banner{display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:9px 12px;border-radius:9px;background:#faedce;color:#7a5010;font-size:12.5px}
+.scp-banner.ok{background:var(--p-tint);color:var(--p-ok)}
+.scp-card{background:var(--p-paper);border:1px solid var(--p-line);border-radius:12px;margin-bottom:16px;overflow:hidden}
+.scp-sym{display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:#edf1e5;color:#657448;flex:none}
+.scp-sym .scp-i{width:18px;height:18px}
+.scp-sym.sym-calls{background:#faedce;color:#966114}
+.scp-sym.sym-docs{background:#e5edf7;color:#365e8b}
+.scp-sym.sym-checks{background:#f0e9dd;color:#7b6a4e}
+/* weekly confirmation */
+.scp-week{padding:16px 18px}
+.scp-weekhd{display:flex;gap:12px;align-items:center;margin-bottom:10px}
+.scp-weekhd h3{font-size:15px;font-weight:600}
+.scp-weekhd p{font-size:12px;color:var(--p-muted)}
+.scp-wrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px solid var(--p-line);padding:11px 0}
+.scp-wname{flex:1;min-width:140px;font-weight:500}
+.scp-seg{display:inline-flex;gap:6px}
+.scp-seg button{border:1px solid var(--p-line);background:var(--p-paper);border-radius:7px;padding:7px 11px;min-height:40px;cursor:pointer}
+.scp-seg button.on{background:var(--p-btn);border-color:#cbddc4;color:var(--p-accent);font-weight:600}
+.scp-in{border:1px solid var(--p-line);border-radius:7px;padding:7px 9px;min-height:38px;background:var(--p-paper);color:var(--p-ink);max-width:100%}
+.scp-wrow .scp-in{flex:1 1 180px}
+.scp-weekft{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--p-line);padding-top:12px}
+.scp-primary{display:inline-flex;align-items:center;gap:7px;border:0;border-radius:8px;background:var(--p-accent);color:#fffefa!important;padding:10px 16px;min-height:44px;font-weight:600;cursor:pointer}
+/* drivers */
+.scp-sechd{padding:11px 18px;font-size:13px;font-weight:600;border-bottom:1px solid var(--p-line)}
+.scp-drv+.scp-drv{border-top:1px solid var(--p-line)}
+.scp-dhd{display:grid;grid-template-columns:92px minmax(0,1fr) auto;align-items:center;column-gap:14px;padding:16px 18px;background:var(--p-tint)}
+.scp-rig{display:block;width:92px;color:var(--p-accent)}
+.scp-rigsvg{display:block;width:100%;height:auto}
+.scp-person{min-width:0}
+.scp-person h4{font-size:16px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.scp-person p{font-size:12px;color:var(--p-muted)}
+.scp-goal{display:flex;flex-direction:column;align-items:flex-end;gap:2px;padding-left:18px;border-left:1px solid var(--p-line)}
+.scp-goal span{font-size:12px;font-weight:600;white-space:nowrap}
+.scp-goal strong{font-size:27px;line-height:1.2;font-weight:600;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.scp-loads{padding:0 18px 12px}
+.scp-load{border-bottom:1px solid var(--p-line)}
+.scp-lsum{padding:14px 0 12px;cursor:pointer;border-radius:6px}
+.scp-order{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;color:var(--p-muted);margin-bottom:6px}
+.scp-order strong{color:var(--p-ink);font-weight:600;letter-spacing:.02em}
+.scp-carbox{display:grid;place-items:center;width:30px;height:28px;border-radius:7px;background:var(--p-tint);color:var(--p-accent)}
+.scp-lmain{display:flex;align-items:center;gap:16px;min-width:0}
+.scp-path{flex:1;min-width:0}
+.scp-stop{display:flex;align-items:center;gap:9px;min-height:30px;font-size:14px;font-weight:500;overflow-wrap:anywhere}
+.scp-mk{display:grid;place-items:center;width:18px;min-width:18px;color:var(--p-accent)}
+.scp-mk .scp-i{width:15px;height:15px}
+.scp-date{display:block;font-size:11px;color:var(--p-muted);padding-left:27px}
+.scp-fig{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none;font-variant-numeric:tabular-nums}
+.scp-fig strong{font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.4px}
+.scp-nums{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12px;color:var(--p-muted)}
+.scp-rate{background:#e8f0fa;color:#365e8b;border-radius:4px;padding:1px 5px;white-space:nowrap}
+.scp .scp-chev{width:15px;height:15px;color:var(--p-muted);transition:transform .15s;flex:none}
+.scp-load.open .scp-lsum .scp-chev,.scp [aria-expanded=true]>.scp-chev{transform:rotate(180deg)}
+.scp-chev-sp{width:15px;flex:none}
+.scp-ldet{display:none;border-top:1px dashed var(--p-line);padding:10px 0 14px}
+.scp-load.open .scp-ldet{display:block}
+.scp-ldet p{font-size:12px;color:var(--p-muted)}
+.scp-lact{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px}
+.scp-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--p-line);background:var(--p-paper);color:var(--p-ink)!important;border-radius:6px;padding:6px 10px;min-height:38px;font-size:12px;cursor:pointer;text-decoration:none}
+.scp-btn:hover{background:var(--p-tint)}
+.scp-btn:disabled{opacity:.55;cursor:not-allowed}
+.scp-lock{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--p-muted)}
+.scp-reason{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;margin-top:10px}
+.scp-reason.ok{color:var(--p-ok)} .scp-reason.bad{color:var(--p-err)}
+.scp-next{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--p-warn);margin-top:4px}
+.scp-tag{display:inline-block;font-size:10.5px;font-weight:600;padding:0 6px;border-radius:99px;background:#faedce;color:#7a5010;vertical-align:1px}
+.scp-addrow{padding:12px 18px;border-top:1px solid var(--p-line)}
+.scp-add{display:inline-flex;align-items:center;gap:7px;border:1px solid #cbddc4;background:var(--p-btn);color:var(--p-accent);border-radius:7px;padding:8px 13px;min-height:40px;font-size:12.5px;font-weight:600;cursor:pointer}
+.scp-addbox{padding:0 18px 12px}
+.scp-addbox .card{box-shadow:none;border-color:var(--p-line);background:var(--p-paper);margin-bottom:0!important}
+.scp-rest{border-top:1px solid var(--p-line);background:var(--p-foot);padding:0 18px}
+.scp-restsum{display:flex;align-items:center;gap:7px;min-height:44px;border:0;background:none;color:#7a705f;font-size:12px;cursor:pointer;padding:0}
+.scp-restrow{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--p-line);padding:10px 0;font-size:12.5px}
+.scp-restrow p{font-size:11px;color:var(--p-muted)}
+/* gates (rows keep the app's .gate contract) */
+.scp-h3{font-size:15px;font-weight:600;margin:20px 0 10px}
+.scp-gates{background:var(--p-paper)!important;border:1px solid var(--p-line)!important;border-radius:12px!important;box-shadow:none!important;overflow:hidden;color:var(--p-ink)}
+.scp .gate{border-top:1px solid var(--p-line)}
+.scp .gate.scp-gate{display:grid;grid-template-columns:34px minmax(0,1fr) auto 15px;align-items:center;gap:11px;min-height:64px;padding:12px 16px}
+.scp .gate.scp-gate[role=button]{cursor:pointer}
+.scp .gate.scp-gate[role=button]:hover{background:#f6f7ee}
+:root[data-theme="dark"] .scp .gate.scp-gate[role=button]:hover{background:#2a312c}
+.scp .gate .t b,.scp .gate .t strong.scp-rt{font-weight:600;font-size:13px;display:block}
+.scp-addbox #addQ,.scp-addbox .mini{width:100%!important;max-width:100%}
+.scp .gate .t span{color:var(--p-muted);font-size:11.5px;line-height:1.7;overflow-wrap:anywhere}
+.scp .scp-why{display:block}
+.scp .scp-why.why-no,.scp .scp-why.why-unavail{color:var(--p-err)!important}
+.scp .scp-why.why-wait{color:var(--p-blue)!important}
+.scp .scp-gx{margin-top:6px}
+.scp-st{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;white-space:nowrap;color:var(--p-ok)}
+.scp-st.st-no{color:var(--p-err)} .scp-st.st-wait{color:var(--p-blue)} .scp-st.st-unavail{color:#7a5010}
+.scp .gate.scp-sub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px 10px 61px!important;background:#fbfbf5}
+:root[data-theme="dark"] .scp .gate.scp-sub{background:#1f2521}
+.scp .gate.scp-sub .t{flex:1 1 260px;min-width:0}
+.scp-ract{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.scp-c{font-weight:500} .scp-c.ok{color:var(--p-ok)} .scp-c.no{color:var(--p-err)} .scp-c.wait{color:var(--p-blue)} .scp-c.un{color:#7a5010}
+.scp .scp-note{color:var(--p-blue)!important;font-size:12px!important}
+.scp .fixbtn{border-color:var(--p-line);background:var(--p-paper);color:var(--p-accent);min-height:36px}
+.scp .gate.ok .fixbtn{visibility:visible}
+.scp .ai-ask{margin-top:6px}
+.scp-closebar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px!important;border-top:1px solid var(--p-line)!important;background:var(--p-paper)}
+.scp-coinfo{display:flex;flex-direction:column;gap:6px;min-width:0}
+.scp .close-company{font-size:15px}
+.scp-closebtn{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:12px 22px!important;border-radius:9px!important;background:#e7e8de!important;color:#6f766f!important}
+.scp-closebtn.ready{background:var(--p-accent)!important;color:#fffefa!important}
+.scp #scPanel{margin:10px 16px!important}
+@container scp (max-width:560px){
+  .scp-dhd{grid-template-columns:62px minmax(0,1fr);gap:10px;padding:14px 13px}
+  .scp-rig{width:62px}
+  .scp-person h4{font-size:14px}
+  .scp-goal{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center;border-left:0;border-top:1px solid var(--p-line);padding:9px 0 0}
+  .scp-goal strong{font-size:25px}
+  .scp-loads{padding:0 13px 10px}
+  .scp-lmain{display:grid;grid-template-columns:minmax(0,1fr) 15px;gap:10px}
+  .scp-path{grid-column:1;grid-row:1}
+  .scp-fig{grid-column:1;grid-row:2;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .scp-lmain>.scp-chev{grid-column:2;grid-row:1/3}
+  .scp .gate.scp-gate{grid-template-columns:34px minmax(0,1fr) 15px;row-gap:4px;padding:12px}
+  .scp .gate.scp-gate .scp-st{grid-column:2;grid-row:2;justify-content:flex-start}
+  .scp .gate.scp-gate .scp-chev,.scp .gate.scp-gate .scp-chev-sp{grid-column:3;grid-row:1/3}
+  .scp .gate.scp-sub{padding:10px 12px!important}
+  .scp-closebar{flex-direction:column;align-items:stretch}
+  .scp-closebtn{justify-content:center;width:100%}
+  .scp-week,.scp-sechd,.scp-addrow,.scp-addbox,.scp-rest{padding-left:13px;padding-right:13px}
+}
+@media (max-width:560px){ .scp{padding:12px;border-radius:12px} .scp-hd h2{font-size:18px} }
+.scp-closebar>.scp-coinfo{order:1} .scp-closebar>#logoutBtn{order:2} .scp-closebar>.scp-muted{order:3}
+.scp-closebar>#rfHint{order:4;flex-basis:100%;margin:0!important;color:var(--p-muted)}
+</style>
+<script>
+/* =====================================================================
+   SHIFT-CLOSE-UI-PILOT-001 — dispatcher Shift Close pilot renderer
+   (append-only tail; candidate, NOT deployed)
+
+   Who sees it: only a signed-in dispatcher for whom the server function
+   ui_pilot_enabled('shift_close_v2') returns true for HIS OWN auth user id
+   (M60). Everyone else — other dispatchers, management, management
+   "view as", an RPC error, a missing function — gets the current rBoard().
+   The switch only chooses the renderer. It is not authorization: every
+   read and write below goes through the app's existing handlers and the
+   existing server checks (shift_close_submit, RLS, refreshOrder, M61).
+
+   Data and rules: scpModel_() evaluates the board with the SAME code as
+   rBoard() (copied verbatim; tests/ui compare both renderers' remaining-gate
+   count and close-button state on every fixture). Only the HTML differs.
+
+   Actions: wrSet/wrSave, planDrop/planUndo/planAdd (addBox_), window.sdRefresh,
+   waivChip_/waivAsk, chkArm/upCheck/chkResolve/openCheck, apptSave, gpArm/upGate,
+   offEnd, notifOpen, closeShift — all existing. Nothing here writes a table.
+   Icons: inline SVG paths from Lucide (ISC licence); the pickup+trailer mark
+   is the approved reference's drawing. Pictograms are display-only.
+   ===================================================================== */
+var SC_PILOT = { on: false, uid: null, email: null, at: 0, seq: 0 };
+var SCP_OPEN = {}, SCP_LOPEN = {}, SCP_REST = false, SCP_ADD = false;
+var SCP_I = {"pin": "<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\"/><circle cx=\"12\" cy=\"10\" r=\"3\"/>", "car": "<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\"/><circle cx=\"7\" cy=\"17\" r=\"2\"/><path d=\"M9 17h6\"/><circle cx=\"17\" cy=\"17\" r=\"2\"/>", "dot": "<circle cx=\"12\" cy=\"12\" r=\"10\"/>", "bell": "<path d=\"M10.268 21a2 2 0 0 0 3.464 0\"/><path d=\"M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326\"/>", "cal": "<path d=\"M8 2v4\"/><path d=\"M16 2v4\"/><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\"/><path d=\"M3 10h18\"/><path d=\"m9 16 2 2 4-4\"/>", "task": "<path d=\"M13 5h8\"/><path d=\"M13 12h8\"/><path d=\"M13 19h8\"/><path d=\"m3 17 2 2 4-4\"/><rect x=\"3\" y=\"4\" width=\"6\" height=\"6\" rx=\"1\"/>", "refresh": "<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\"/><path d=\"M21 3v5h-5\"/><path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\"/><path d=\"M8 16H3v5\"/>", "x": "<path d=\"M18 6 6 18\"/><path d=\"m6 6 12 12\"/>", "chev": "<path d=\"m6 9 6 6 6-6\"/>", "phone": "<path d=\"M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384\"/>", "doc": "<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\"/><path d=\"M14 2v5a1 1 0 0 0 1 1h5\"/><path d=\"M10 9H8\"/><path d=\"M16 13H8\"/><path d=\"M16 17H8\"/>", "receipt": "<path d=\"M12 17V7\"/><path d=\"M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8\"/><path d=\"M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z\"/>", "lock": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\"/><path d=\"M7 11V7a5 5 0 0 1 10 0v4\"/>", "check": "<path d=\"M20 6 9 17l-5-5\"/>", "alert": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\"/><line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\"/>", "wait": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M12 6v6l4 2\"/>", "moon": "<path d=\"M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401\"/>", "plus": "<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>", "cloudoff": "<path d=\"M10.94 5.274A7 7 0 0 1 15.71 10h1.79a4.5 4.5 0 0 1 4.222 6.057\"/><path d=\"M18.796 18.81A4.5 4.5 0 0 1 17.5 19H9A7 7 0 0 1 5.79 5.78\"/><path d=\"m2 2 20 20\"/>", "msg": "<path d=\"M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z\"/>", "ticket": "<path d=\"M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z\"/><path d=\"M13 5v2\"/><path d=\"M13 17v2\"/><path d=\"M13 11v2\"/>", "users": "<path d=\"M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2\"/><path d=\"M16 3.128a4 4 0 0 1 0 7.744\"/><path d=\"M22 21v-2a4 4 0 0 0-3-3.87\"/><circle cx=\"9\" cy=\"7\" r=\"4\"/>", "undo": "<path d=\"M9 14 4 9l5-5\"/><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\"/>"};
+
+function scPilotOn_() {
+  try {
+    return !!(SC_PILOT.on && USER && USER.role === 'disp' && !VIEWAS && ROLE === 'disp'
+              && SC_PILOT.email && SC_PILOT.email === USER.email);
+  } catch (e) { return false; }
+}
+/* Resolve the pilot flag for THIS session's auth user. Any failure → current view. */
+async function scPilotSync_() {
+  var seq = ++SC_PILOT.seq, email = (USER && USER.email) || null, uid = null, on = false;
+  var was = scPilotOn_();
+  try {
+    var s = await sb.auth.getSession();
+    uid = s && s.data && s.data.session && s.data.session.user ? s.data.session.user.id : null;
+    if (USER && uid && USER.role === 'disp') {
+      var r = await sb.rpc('ui_pilot_enabled', { p_feature: 'shift_close_v2' });
+      on = !r.error && r.data === true;
+    }
+  } catch (e) { on = false; }
+  if (seq !== SC_PILOT.seq) return;                                   /* a newer check owns the flag */
+  if (!USER || USER.email !== email) { SC_PILOT = { on: false, uid: null, email: null, at: Date.now(), seq: seq }; return; }
+  SC_PILOT = { on: on, uid: uid, email: email, at: Date.now(), seq: seq };
+  if (was !== scPilotOn_()) {
+    try { var app = document.getElementById('app'); if (app && !app.classList.contains('hidden')) render(); } catch (e) {}
+  }
+}
+setInterval(function () { try { if (USER && !document.hidden) scPilotSync_(); } catch (e) {} }, 300000);
+
+function scpIc_(k, cls) {
+  return "<svg class='scp-i" + (cls ? ' ' + cls : '') + "' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' focusable='false'>" + (SCP_I[k] || '') + "</svg>";
+}
+/* pickup + open trailer; trailer length = schematic capacity (1/2/3), never the load count */
+function scpRig_(cap) {
+  var c = Math.max(1, Math.min(3, Number(cap) || 1)), end = 92 + (c - 1) * 17, axle = end - 17;
+  var neck = c === 1 ? "<path d='M45 27h12l5-3'/>" : "<path d='M39 21V11h16l7 13'/>";
+  return "<svg class='scp-rigsvg' viewBox='0 0 " + (end + 5) + " 38' fill='none' stroke='currentColor' stroke-width='1.65' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true' focusable='false'>" +
+    "<path d='M4 27V20l10-2 6-9h12l4 10h9v8h-4m-9 0H18m-9 0H4'/><path d='M17 18l5-6h7l3 6H17Zm16 2v5m-8-4h3M36 19v-3h9v3M4 23h4'/>" +
+    "<circle cx='13.5' cy='27' r='4.5'/><circle cx='36.5' cy='27' r='4.5'/>" + neck +
+    "<path d='M62 24h" + (end - 62) + "v3H57m" + (end - 57) + " 0 3-1M62 24v-3m" + (end - 62) + " 3v-3'/>" +
+    "<circle cx='" + axle + "' cy='30' r='3.5'/><circle cx='" + (axle + 9) + "' cy='30' r='3.5'/></svg>";
+}
+function scpFont_() {
+  if (document.getElementById('scpFont')) return;
+  var l = document.createElement('link'); l.id = 'scpFont'; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Georgian:wght@400;500;600;700&display=swap';
+  document.head.appendChild(l);
+}
+
+/* ---- the board, evaluated exactly as rBoard() evaluates it ---------- */
+function scpModel_() {
+  var L = myLoads_();
+  var tday = ymd_(nextWorkDay_());
+  var cutD = addDays_(workToday_(), -30);
+  var byName = {};
+  L.forEach(function (r) {
+    var nm = drvName_(r) || (r.driver_id_sd ? ('SD ' + r.driver_id_sd) : '');
+    if (!nm) return;
+    if (!byName[nm]) byName[nm] = { name: nm, loads: [], last: '' };
+    byName[nm].loads.push(r);
+    var d = puDay_(r); if (d > byName[nm].last) byName[nm].last = d;
+  });
+  var rost = {};
+  Object.keys(DRIVERS_BY_NAME).forEach(function (n) { rost[n] = 1; });
+  DIR.forEach(function (x) { rost[x.name] = 1; });
+  DASG.forEach(function (p) { rost[p.driver_name] = 1; });
+  Object.keys(rost).forEach(function (n) {
+    if (dispOfDriver_(n, tday) !== MYD()) return;
+    if (!byName[n]) byName[n] = { name: n, loads: [], last: '' };
+  });
+  var list = Object.keys(byName).map(function (k) { return byName[k]; })
+    .filter(function (d) { return driverActive_(d.name); })
+    .filter(function (d) { var own = dispOfDriver_(d.name, tday); return !own || own === MYD(); })
+    .filter(function (d) { return d.last >= cutD || dispOfDriver_(d.name, tday) === MYD(); })
+    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+  var allDrv = list.slice();
+  var resting = list.filter(function (d) { return !!offOf_(d.name, tday); });
+  list = list.filter(function (d) { return !offOf_(d.name, tday); });
+
+  var delDayOf_ = function (l) { return String(l.delivery_completed || '').slice(0, 10); };
+  var LD = docLoads_();
+  var delivered = LD.filter(function (l) { return delDayOf_(l) && delDayOf_(l) >= DOC_FROM; });
+  var docsDone_ = docsGate_;
+  var byNew = function (a, b) { return String(b.delivery_completed || '').localeCompare(String(a.delivery_completed || '')); };
+  var invP = delivered.filter(function (l) {
+    if (l.is_canceled || l.deleted_at) return false;
+    if (waivOk_('invoice', l.order_number, tday)) return false;
+    return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
+  var chkP = LD.filter(function (l) { return chkOpen_(l) && chkDueDay_(l) >= CHK_FROM; })
+            .sort(function (a, b) { return chkDueDay_(b).localeCompare(chkDueDay_(a)); });
+  var scOpen = scOpen_(tday), scHas = function (g) { return scOpen.some(function (x) { return x.gate === g; }); };
+  scMerge_(invP, scOpen, 'invoice'); scMerge_(chkP, scOpen, 'check');
+
+  var CC = (PCONT || []).filter(function (r) { return !r.not_required && callNeeded_(r.order_number); });
+  var puOk_ = function (r) { return !!(callSkip_(loadOf_(r.order_number), 'pu') || r.pu_verified); };
+  var delOk_ = function (r) { return !!(callSkip_(loadOf_(r.order_number), 'del') || r.del_verified); };
+  var puWait_ = function (r) { return !puOk_(r) && !!r.pu_pending; };
+  var delWait_ = function (r) { return !delOk_(r) && !!r.del_pending; };
+  var waitN = CC.filter(function (r) { return puWait_(r) || delWait_(r); }).length;
+  var callP = CC.filter(function (r) { return !(puOk_(r) && delOk_(r)); })
+    .filter(function (r) { return !(puWait_(r) || delWait_(r)); })
+    .filter(function (r) { return !waivOk_('calls', r.order_number, tday); });
+
+  var PLAN2 = planLoads_(tday);
+  var plDrv_ = function (nm) { return PLAN2.filter(function (l) { return drvName_(l) === nm; }); };
+  var rosterFresh = !!(SYNC.have && SYNC.co === COID() && !SYNC.failAt);
+  var stdAllOff = rosterFresh && list.length === 0 && resting.length > 0;
+  var stdOk = stdAllOff || (list.length > 0 && list.every(function (d) {
+    var dl = plDrv_(d.name);
+    return driverStd_(d.name, dl).ok || waivOk_('standard', d.name, tday);
+  }));
+  var callList = CC.slice().sort(function (a, b) { return String(a.order_number).localeCompare(String(b.order_number)); });
+  var contactN = (PCONT || []).length;
+  var pcSeen = {}; (PCONT || []).forEach(function (r) { pcSeen[r.order_number] = 1; });
+  var unknownOns = PLAN2.map(function (l) { return l.order_number; })
+    .filter(function (on) { return !pcSeen[on] && !waivOk_('calls', on, tday); });
+  var exemptAll = (contactN > 0 && callList.length === 0);
+  var callWaived = waivOk_('calls_all', '', tday);
+  var callOkAll = (waitN === 0) && (callWaived || ((callP.length === 0) && unknownOns.length === 0)) && !scHas('calls');
+
+  var PL = planLoads_(tday);
+  var apptAll = PL.filter(apptNeeded_), gpAll = PL.filter(gatePassNeeded_);
+  var apptP = apptAll.filter(function (l) { return !apptOf_(l) && !waivOk_('appt', l.order_number, tday); });
+  var gpP = gpAll.filter(function (l) { return !gatePassOf_(l) && !waivOk_('gatepass', l.order_number, tday); });
+  scMerge_(apptAll, scOpen, 'appt'); scMerge_(apptP, scOpen, 'appt');
+  scMerge_(gpAll, scOpen, 'gatepass'); scMerge_(gpP, scOpen, 'gatepass');
+  var gAppt = (apptP.length === 0) || waivOk_('appt_all', '', tday);
+  var gGate = (gpP.length === 0) || waivOk_('gatepass_all', '', tday);
+  var gInv = (invP.length === 0) || waivOk_('invoice', '', tday);
+  var gChk = (chkP.length === 0) || waivOk_('check', '', tday);
+  var gCall = callOkAll;
+  var wrOk = wrConfirmed_() && !scHas('roster');
+  if (scHas('standard')) stdOk = false;
+  var rem = (wrOk ? 0 : 1) + (stdOk ? 0 : 1) + (gCall ? 0 : 1) + (gInv ? 0 : 1) + (gChk ? 0 : 1) +
+            (apptAll.length && !gAppt ? 1 : 0) + (gpAll.length && !gGate ? 1 : 0) +
+            ((scHas('plan_mismatch') || scHas('unknown') || scHas('work_day_mismatch')) ? 1 : 0);
+  var closed = SCLOSE && SCLOSE.work_day === tday;
+  return { tday: tday, list: list, allDrv: allDrv, resting: resting, invP: invP, chkP: chkP, scOpen: scOpen, scHas: scHas,
+    CC: CC, callList: callList, callP: callP, waitN: waitN, unknownOns: unknownOns, exemptAll: exemptAll, contactN: contactN,
+    puOk_: puOk_, delOk_: delOk_, puWait_: puWait_, delWait_: delWait_, PLAN2: PLAN2, plDrv_: plDrv_, stdAllOff: stdAllOff,
+    stdOk: stdOk, callOkAll: callOkAll, apptAll: apptAll, apptP: apptP, gpAll: gpAll, gpP: gpP, gAppt: gAppt, gGate: gGate,
+    gInv: gInv, gChk: gChk, gCall: gCall, wrOk: wrOk, rem: rem, closed: !!closed };
+}
+
+/* ---- small pieces ----------------------------------------------------- */
+/* safe inside a single-quoted JS string in an onclick attribute: ' ( ) ! * ~ are percent-encoded too */
+function scpEnc_(s) { return encodeURIComponent(String(s == null ? '' : s)).replace(/['()!*~]/g, function (c) { return '%' + c.charCodeAt(0).toString(16).toUpperCase(); }); }
+function scpAttr_(s) { return esc(s).replace(/'/g, '&#39;').replace(/"/g, '&quot;'); }
+function scpToggle(ev, key) {
+  if (ev && ev.target && ev.target.closest && ev.target.closest('button,a,input,label,select,textarea')) return;
+  SCP_OPEN[key] = !SCP_OPEN[key];
+  var v = document.getElementById('view'); if (!v) return;
+  var h = v.querySelector("[data-scp-gate='" + key + "']"); if (h) h.setAttribute('aria-expanded', SCP_OPEN[key] ? 'true' : 'false');
+  v.querySelectorAll("[data-scp-parent='" + key + "']").forEach(function (r) { r.hidden = !SCP_OPEN[key]; });
+}
+function scpKey(ev, key) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); scpToggle(null, key); } }
+function scpLoadToggle(ev, enc) {
+  if (ev && ev.target && ev.target.closest && ev.target.closest('.scp-lact')) return;
+  var on = decodeURIComponent(enc); SCP_LOPEN[on] = !SCP_LOPEN[on];
+  var v = document.getElementById('view'); if (!v) return;
+  var el = null; v.querySelectorAll('.scp-load').forEach(function (x) { if (x.getAttribute('data-order') === on) el = x; });
+  if (el) { el.classList.toggle('open', !!SCP_LOPEN[on]); var s = el.querySelector('.scp-lsum'); if (s) s.setAttribute('aria-expanded', SCP_LOPEN[on] ? 'true' : 'false'); }
+}
+function scpLoadKey(ev, enc) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); scpLoadToggle(null, enc); } }
+function scpRestToggle() { SCP_REST = !SCP_REST; render(); }
+function scpAddToggle() {
+  SCP_ADD = !SCP_ADD; render();
+  if (SCP_ADD) { var q = document.getElementById('addQ'); if (q) { try { q.focus(); } catch (e) {} } }
+}
+function scpSt_(state, text) {
+  var ic = state === 'ok' ? 'check' : state === 'wait' ? 'wait' : state === 'unavail' ? 'cloudoff' : state === 'hold' ? 'wait' : 'alert';
+  return "<span class='scp-st st-" + state + "'>" + scpIc_(ic) + esc(text) + "</span>";
+}
+/* a gate: header row (.gate ok|no|wait — what the AI launcher and counters read)
+   followed by its detail rows (.gate, padding-left:34px — same contract as rBoard) */
+function scpGate_(key, o) {
+  var open = !!SCP_OPEN[key], rows = (o.rows || []).slice();
+  /* the gate-level explanation lives in the expanded part, so the collapsed row stays one short line */
+  if (o.extra) rows.unshift("<div class='gate' style='padding-left:34px'><div class='t'><span>ყველა ტვირთზე ერთად:</span></div><div class='scp-ract'>" + o.extra + "</div></div>");
+  var cls = o.state === 'ok' ? 'ok' : (o.state === 'wait' ? 'wait' : 'no');
+  var head = "<div class='gate scp-gate " + cls + "' data-scp-gate='" + key + "' data-scp-state='" + o.state + "'" +
+    (rows.length ? (" role='button' tabindex='0' aria-expanded='" + (open ? 'true' : 'false') + "' onclick=\"scpToggle(event,'" + key + "')\" onkeydown=\"scpKey(event,'" + key + "')\"") : '') + ">" +
+    "<span class='scp-sym sym-" + (o.sym || 'def') + "'>" + scpIc_(o.icon || 'check') + "</span>" +
+    "<div class='t'><b>" + esc(o.title) + "</b><span class='scp-why" + (o.state === 'ok' ? '' : (' why-' + o.state)) + "'>" + (o.reason || '') + "</span></div>" +
+    scpSt_(o.state, o.status) + (rows.length ? scpIc_('chev', 'scp-chev') : "<span class='scp-chev-sp'></span>") + "</div>";
+  return head + rows.map(function (r) { return r.replace("<div class='gate'", "<div class='gate scp-sub' data-scp-parent='" + key + "'" + (open ? '' : ' hidden')); }).join('');
+}
+/* quiet=true: an in-order row — its title is <strong>, so the assistant's "ask" button (which reads .t > b) is not added */
+function scpRow_(title, sub, act, extraAttr, quiet) {
+  var tg = quiet ? 'strong' : 'b';
+  return "<div class='gate' style='padding-left:34px'" + (extraAttr || '') + "><div class='t'><" + tg + " class='scp-rt'>" + esc(title) + "</" + tg + "><span>" + sub + "</span></div>" +
+    (act ? ("<div class='scp-ract'>" + act + "</div>") : '') + "</div>";
+}
+function scpFrozen_() {
+  if (!SCLOSE) return null;
+  var o = SCLOSE.gates && SCLOSE.gates.orders;
+  return Array.isArray(o) ? o : null;           /* null = closed, list unknown → treat every load as declared */
+}
+
+/* ---- weekly confirmation (existing wrSet / wrWhy / wrSave) ------------ */
+function scpWeek_(all) {
+  if (wrConfirmed_()) return '';
+  if (!WRSEL) { WRSEL = {}; all.forEach(function (d) { var o = offOf_(d.name, workToday_());
+    WRSEL[d.name] = { st: (o ? 'off' : 'work'), why: (o ? (o.reason || '') : '') }; }); }
+  var mon = weekMon_(), sun = addDays_(mon, 6);
+  var rows = all.map(function (d, i) {
+    var cur = WRSEL[d.name] || { st: 'work', why: '' }, e = scpEnc_(d.name);
+    return "<div class='scp-wrow'><span class='scp-wname'>" + esc(d.name) + "</span>" +
+      "<span class='scp-seg' role='group' aria-label='" + scpAttr_(d.name) + "'>" +
+        "<button type='button' class='" + (cur.st === 'work' ? 'on' : '') + "' aria-pressed='" + (cur.st === 'work') + "' onclick=\"wrSet('" + e + "','work')\">მუშაობს</button>" +
+        "<button type='button' class='" + (cur.st === 'off' ? 'on' : '') + "' aria-pressed='" + (cur.st === 'off') + "' onclick=\"wrSet('" + e + "','off')\">ისვენებს</button></span>" +
+      (cur.st === 'off' ? ("<input class='scp-in' id='scpWhy" + i + "' placeholder='მიზეზი' value='" + scpAttr_(cur.why) + "' oninput=\"wrWhy('" + e + "',this.value)\">") : '') +
+      "</div>";
+  }).join('');
+  return "<section class='scp-card scp-week' aria-labelledby='scpWeekH'>" +
+    "<div class='scp-weekhd'><span class='scp-sym sym-def'>" + scpIc_('cal') + "</span><div><h3 id='scpWeekH'>ვინ მუშაობს ამ კვირაში?</h3>" +
+    "<p>" + esc(gdFull(mon)) + " – " + esc(gdFull(sun)) + "</p></div></div>" +
+    (rows || "<p class='scp-muted'>მძღოლი არ არის</p>") +
+    "<div class='scp-weekft'><span class='scp-muted'>კვირაში ერთხელ · დადასტურებამდე ცვლა არ იხურება</span>" +
+    "<button type='button' class='scp-primary' onclick='wrSave()'>" + scpIc_('check') + "დადასტურება</button></div></section>";
+}
+
+/* ---- drivers and their declared loads -------------------------------- */
+function scpDriver_(d, M) {
+  var tday = M.tday, reg = DRIVERS_BY_NAME[d.name] || {}, cap = Number(reg.cap) || 1;
+  var dl = M.plDrv_(d.name), st = driverStd_(d.name, dl), tgt = st.tgt;
+  var okW = waivOk_('standard', d.name, tday), ok = st.ok || okW;
+  var cov = coverOf_(d.name, tday);
+  var covChip = (cov && cov.dispatcher_name === MYD()) ? " <span class='scp-tag'>დროებით ჩემთან</span>" : "";
+  var frozen = scpFrozen_(), closed = M.closed;
+  var shortOne = (cap < 2 && dl.length === 1 && loadMiles_(dl[0]) > 0 && loadMiles_(dl[0]) <= shortMi_());
+  var loads = dl.map(function (l) {
+    var on = l.order_number, e = scpEnc_(on), mi = loadMiles_(l), gross = grossOf_(l);
+    var rate = mi > 0 ? (gross / mi).toFixed(2) : null, dd = delDay_(l), open = !!SCP_LOPEN[on];
+    var canDrop = !closed || (frozen && frozen.indexOf(on) < 0);
+    return "<div class='scp-load" + (open ? ' open' : '') + "' data-order='" + scpAttr_(on) + "'>" +
+      "<div class='scp-lsum' role='button' tabindex='0' aria-expanded='" + open + "' aria-label='Order ID " + scpAttr_(on) + " — ტვირთის დეტალები' onclick=\"scpLoadToggle(event,'" + e + "')\" onkeydown=\"scpLoadKey(event,'" + e + "')\">" +
+        "<div class='scp-order'><span class='scp-carbox'>" + scpIc_('car') + "</span><span>Order ID</span><strong>" + esc(on) + "</strong>" + sdMissChip_(l) + inopChip_(l) + "</div>" +
+        "<div class='scp-lmain'><div class='scp-path'>" +
+          "<div class='scp-stop scp-pu'><span class='scp-mk' title='ფიქაფი'>" + scpIc_('dot') + "</span><span>" + esc(locShort(l.pickup_location)) + "</span></div>" +
+          "<div class='scp-stop'><span class='scp-mk' title='დელივერი'>" + scpIc_('pin') + "</span><span>" + esc(locShort(l.delivery_location)) + "</span></div>" +
+          (dd ? ("<span class='scp-date'>ჩაბარება · " + esc(gd(dd)) + "</span>") : '') + sdDayWarn_(l, tday) +
+        "</div><div class='scp-fig'><strong>" + money(gross) + "</strong><span class='scp-nums'>" +
+          (mi > 0 ? ("<span>" + Math.round(mi).toLocaleString('en-US') + " მილი</span>") : "<span>მილი უცნობია</span>") +
+          (rate ? ("<span class='scp-rate' title='$" + rate + " თითო მილზე' aria-label='" + rate + " დოლარი თითო მილზე'>$" + rate + "</span>") : '') +
+          (cars_(l) > 1 ? ("<span>" + cars_(l) + " მანქ.</span>") : '') + "</span></div>" + scpIc_('chev', 'scp-chev') + "</div></div>" +
+      "<div class='scp-ldet'>" +
+        "<p>" + esc(l.customer || '—') + (l._manual ? " · <span class='scp-tag'>ხელით დამატებული</span>" : '') + "</p>" +
+        "<div class='scp-lact'>" +
+          "<button type='button' class='scp-btn rfbtn' data-ord='" + scpAttr_(on) + "' title='ამ ტვირთის მონაცემები SD-დან' onclick=\"return window.sdRefresh(decodeURIComponent('" + e + "'),this,false)\">SD-დან განახლება</button>" +
+          (canDrop ? ("<button type='button' class='scp-btn' onclick=\"planDrop('" + e + "')\">მოხსნა</button>")
+                   : "<span class='scp-lock'>" + scpIc_('lock') + "ცვლა დახურულია — ეს ტვირთი აღარ მოიხსნება</span>") +
+        "</div></div></div>";
+  }).join('');
+  var why;
+  if (!dl.length && !st.transit) why = "<div class='scp-reason bad'>" + scpIc_('alert') + "ხვალინდელი ტვირთი ჯერ არ არის არჩეული</div>";
+  else if (shortOne && st.ok) why = "<div class='scp-reason ok'>" + scpIc_('check') + "მოკლე რეისი</div>" +
+      "<div class='scp-next'>" + scpIc_('task') + "ხვალ მეორე ტვირთი ასაღებია</div>";
+  else why = "<div class='scp-reason " + (ok ? 'ok' : 'bad') + "'>" + scpIc_(ok ? 'check' : 'alert') + esc(okW && !st.ok ? 'ახსნა დადასტურებულია' : st.reason) + "</div>";
+  return "<div class='scp-drv'>" +
+    "<div class='scp-dhd'><span class='scp-rig'>" + scpRig_(cap) + "</span>" +
+      "<div class='scp-person'><h4>" + esc(d.name) + covChip + "</h4><p>" + cap + "-მანქანიანი</p></div>" +
+      "<div class='scp-goal'><span>დღიური გეგმა</span><strong>" + (tgt != null ? money(tgt) : '—') + "</strong></div></div>" +
+    "<div class='scp-loads'>" + loads + why + "</div></div>";
+}
+
+/* ---- the gates --------------------------------------------------------- */
+function scpGates_(M) {
+  var tday = M.tday, out = '';
+  if (!M.wrOk) out += scpGate_('roster', { title: 'კვირის როსტერი', icon: 'cal', state: 'no', status: 'დასადასტურებელია',
+    reason: esc(M.scHas('roster') ? 'სერვერი: კვირის როსტერი დასადასტურებელია' : 'ზემოთ მონიშნე, ვინ მუშაობს ამ კვირაში'), rows: [] });
+
+  /* driver standard */
+  var bad = M.list.filter(function (d) { var dl = M.plDrv_(d.name); return !(driverStd_(d.name, dl).ok || waivOk_('standard', d.name, tday)); });
+  var sRows = bad.map(function (d) {
+    var dl = M.plDrv_(d.name), st = driverStd_(d.name, dl), reason = (dl.length || st.transit) ? st.reason : 'ტვირთი არ არის აღებული';
+    var chip = (st.lvl === 'g' || st.tgt == null) ? '' : waivChip_('standard', d.name, d.name + ' — ' + reason, tday);
+    return scpRow_(d.name, esc(reason), chip);
+  });
+  var sReason = M.stdAllOff ? 'ყველა მძღოლი ისვენებს — ამ დღეს სტანდარტი არ მოეთხოვება'
+    : M.scHas('standard') ? 'სერვერი: მძღოლის დღიური სტანდარტი არ სრულდება'
+    : !M.list.length ? 'მძღოლი არ არის'
+    : bad.length ? (bad.slice(0, 2).map(function (d) { return d.name; }).join(', ') + (bad.length > 2 ? ' …' : '') + ' — ვერ ავსებს')
+    : M.list.length + ' მძღოლი რიგზეა';
+  out += scpGate_('standard', { title: 'მძღოლის დღიური სტანდარტი · ' + gd(tday), icon: 'users', state: M.stdOk ? 'ok' : 'no',
+    status: M.stdOk ? 'რიგზეა' : 'აკლია', reason: esc(sReason), rows: sRows });
+
+  /* calls: missing / processing / unavailable are three different states */
+  var cellTxt = function (r, side) {
+    var L0 = loadOf_(r.order_number), skip = callSkip_(L0, side);
+    var miss = side === 'pu' ? r.pu_missing : r.del_missing, ver = side === 'pu' ? r.pu_verified : r.del_verified;
+    var pend = side === 'pu' ? M.puWait_(r) : M.delWait_(r), ph = side === 'pu' ? r.pickup_phone : r.delivery_phone;
+    var why = side === 'pu' ? r.pu_reason : r.del_reason, sms = side === 'pu' ? r.pu_sms : r.del_sms, rang = side === 'pu' ? r.pu_call : r.del_call;
+    var lbl = side === 'pu' ? 'ფიქაფი' : 'დელივერი';
+    if (skip) return "<span class='scp-c ok'>" + lbl + ": ზარი არ სჭირდება</span>";
+    if (miss) return "<span class='scp-c no'>" + lbl + ": SD-ში ნომერი არ წერია</span>";
+    if (ver) return "<span class='scp-c ok'>" + lbl + ": ✓ " + esc(fmtPhone_(ph)) + "</span>";
+    if (pend) return "<span class='scp-c wait'>" + lbl + ": მოწმდება…</span>";
+    return "<span class='scp-c no'>" + lbl + ": " + esc(fmtPhone_(ph)) + (why ? (' — ' + esc(why)) : sms ? ' — SMS-ში ფაქტი არ დადასტურდა' : rang ? ' — ავტომოპასუხე' : '') + "</span>";
+  };
+  var cRows = M.callList.slice().sort(function (a, b) {
+    var ra = (M.puOk_(a) && M.delOk_(a)) ? 2 : (M.puWait_(a) || M.delWait_(a)) ? 1 : 0;
+    var rb = (M.puOk_(b) && M.delOk_(b)) ? 2 : (M.puWait_(b) || M.delWait_(b)) ? 1 : 0;
+    return ra - rb || String(a.order_number).localeCompare(String(b.order_number));
+  }).map(function (r) {
+    var okR = M.puOk_(r) && M.delOk_(r), waitR = M.puWait_(r) || M.delWait_(r), a = ATT[r.order_number] || {};
+    var tries = (!okR && !waitR) ? (" <span class='scp-muted'>· ცდა: ფიქაფი " + (a.pu_try || 0) + ", დელივერი " + (a.del_try || 0) + "</span>") : '';
+    return scpRow_(r.order_number, esc(rDrv_(r)) + " · " + cellTxt(r, 'pu') + " · " + cellTxt(r, 'del') + tries,
+      (!okR && !waitR) ? waivChip_('calls', r.order_number, 'ზარი — ' + r.order_number, tday) : '', '', okR || waitR);
+  });
+  M.unknownOns.forEach(function (on) {
+    cRows.push(scpRow_(on, "<span class='scp-c un'>ზარების მონაცემი ვერ ჩაიტვირთა — დააჭირე ზედა ⟳-ს. ეს დადასტურება არ არის.</span>", ''));
+  });
+  var cState, cStatus, cReason;
+  var firstBad = M.callP[0];
+  if (M.callOkAll) { cState = 'ok'; cStatus = 'რიგზეა';
+    cReason = M.exemptAll ? ('ყველა ' + M.contactN + ' ტვირთზე ზარი არ მოეთხოვება') : !M.callList.length ? 'ხვალინდელ სიაში შესამოწმებელი ზარი არ არის' : (M.callList.length + ' ტვირთი დადასტურებულია'); }
+  else if (M.callP.length || M.scHas('calls')) { cState = 'no'; cStatus = 'დასაზუსტებელია';
+    cReason = firstBad ? ('Order ID ' + firstBad.order_number + (M.callP.length > 1 ? (' და კიდევ ' + (M.callP.length - 1)) : '') + ' · ნასაუბრები ზარი არ დადასტურდა') : 'სერვერი: ზარების gate წითელია'; }
+  else if (M.unknownOns.length || PCONT_ERR) { cState = 'unavail'; cStatus = 'ვერ ჩაიტვირთა';
+    cReason = (M.unknownOns.length ? (M.unknownOns.length + ' ტვირთზე ') : '') + 'ზარების მონაცემი ვერ ჩაიტვირთა — ეს არ ნიშნავს, რომ დადასტურებულია'; }
+  else if (M.waitN) { cState = 'wait'; cStatus = 'მოწმდება'; cReason = M.waitN + ' ზარი მოწმდება — დაელოდე რამდენიმე წუთს'; }
+  else { cState = 'no'; cStatus = 'დასაზუსტებელია'; cReason = 'ზარების gate წითელია'; }
+  out += scpGate_('calls', { title: 'ფიქაფი / დელივერი', icon: 'phone', sym: 'calls', state: cState, status: cStatus, reason: esc(cReason),
+    extra: (M.callP.length ? ("<div class='scp-gx'>" + waivChip_('calls_all', '', 'ზარები — ' + M.callP.length + ' ტვირთი', tday) + "</div>") : ''), rows: cRows });
+
+  /* Copart appointment / Manheim Gate Pass — only when the plan requires them */
+  if (M.apptAll.length) {
+    var aRows = M.apptAll.slice(0, 10).map(function (l) {
+      var e0 = scpEnc_(l.order_number), cur = apptOf_(l);
+      var pd = puDay_(l); if (!pd || pd < tday) pd = tday;
+      var def = apptVal_(cur) || (pd + 'T09:00');
+      return scpRow_(l.order_number, esc(drvName_(l) || '—') + " · " + esc(l.pu_venue || 'Copart') +
+        (cur ? (" · <span class='scp-c ok'>appointment " + esc(apptShow_(cur)) + "</span>") : " · <span class='scp-c no'>appointment ჩაწერილი არ არის</span>"),
+        "<input id='ap_" + e0 + "' type='datetime-local' value='" + scpAttr_(def) + "' class='scp-in'>" +
+        "<button type='button' class='scp-btn' onclick=\"apptSave('" + e0 + "')\">შენახვა</button>" +
+        (cur ? '' : waivChip_('appt', l.order_number, 'Appointment — ' + l.order_number, tday)));
+    });
+    out += scpGate_('appt', { title: 'Copart — Appointment', icon: 'ticket', state: M.gAppt ? 'ok' : 'no', status: M.gAppt ? 'რიგზეა' : 'აკლია',
+      reason: esc(M.apptP.length ? (M.apptP.length + ' ტვირთს appointment-ის დრო არ აქვს ჩაწერილი') : 'ჩაწერილია'),
+      extra: (M.apptP.length ? ("<div class='scp-gx'>" + waivChip_('appt_all', '', 'Copart — Appointment — ' + M.apptP.length, tday) + "</div>") : ''), rows: aRows });
+  }
+  if (M.gpAll.length) {
+    var gRows = M.gpAll.slice(0, 10).map(function (l) {
+      var e0 = scpEnc_(l.order_number), p = gatePassOf_(l);
+      return scpRow_(l.order_number, esc(drvName_(l) || '—') + " · " + esc(l.pu_venue || 'Manheim') +
+        (p ? " · <span class='scp-c ok'>Gate Pass ატვირთულია</span>" : " · <span class='scp-c no'>Gate Pass არ არის</span>"),
+        (p ? ("<a class='scp-btn' href='#' onclick=\"openCheck('" + scpEnc_(p) + "');return false\">ნახვა</a>") : '') +
+        "<button type='button' class='scp-btn' onclick=\"gpArm('" + e0 + "')\">ჩასმა Ctrl+V</button>" +
+        "<label class='scp-btn'>ფაილი<input type='file' accept='image/*,application/pdf' style='display:none' onchange=\"upGate('" + e0 + "',this)\"></label>" +
+        (p ? '' : waivChip_('gatepass', l.order_number, 'Gate Pass — ' + l.order_number, tday)),
+        " ondragover=\"event.preventDefault()\" ondrop=\"gpDrop('" + e0 + "',event)\"");
+    });
+    out += scpGate_('gatepass', { title: 'Manheim — Gate Pass', icon: 'ticket', state: M.gGate ? 'ok' : 'no', status: M.gGate ? 'რიგზეა' : 'აკლია',
+      reason: esc(M.gpP.length ? (M.gpP.length + ' ტვირთს Gate Pass არ აქვს ატვირთული') : 'ატვირთულია'),
+      extra: (M.gpP.length ? ("<div class='scp-gx'>" + waivChip_('gatepass_all', '', 'Manheim — Gate Pass — ' + M.gpP.length, tday) + "</div>") : ''), rows: gRows });
+  }
+
+  /* one invoice + BOL section; SD invoice-send evidence decides, no self-attestation here */
+  var iRows = M.invP.slice(0, 12).map(function (l) {
+    return scpRow_(l.order_number, esc(l.driver_name || '—') + " · " + esc(locShort(l.pickup_location)) + " → " + esc(locShort(l.delivery_location)) +
+      " · " + money(grossOf_(l)) + " · <span class='scp-c no'>ინვოისის გაგზავნა SD-ში არ ჩანს</span>",
+      "<button type='button' class='scp-btn rfbtn' data-ord='" + scpAttr_(l.order_number) + "' title='SD-ში ინვოისი და BOL გააგზავნე, მერე შეამოწმე' onclick=\"return window.sdRefresh(decodeURIComponent('" + scpEnc_(l.order_number) + "'),this,true)\">SD-ში შემოწმება</button>" +
+      waivChip_('invoice', l.order_number, 'ინვოისი და BOL — ' + l.order_number, tday));
+  });
+  if (M.invP.length > 12) iRows.push("<div class='gate' style='padding-left:34px'><div class='t'><span>…და კიდევ " + (M.invP.length - 12) + "</span></div></div>");
+  if (M.invP.length) iRows.unshift("<div class='gate' style='padding-left:34px'><div class='t'><span class='scp-note'>ინვოისი და BOL ერთად გააგზავნე Super Dispatch-იდან. აქ ცალკე „გავაგზავნე“ მონიშვნა აღარ არის — ითვლება SD-ის ინვოისის გაგზავნა.</span></div></div>");
+  var fi = M.invP[0];
+  out += scpGate_('invoice', { title: 'ინვოისი და BOL', icon: 'doc', sym: 'docs', state: M.gInv ? 'ok' : 'no', status: M.gInv ? 'რიგზეა' : 'არ დასტურდება',
+    reason: esc(M.invP.length ? ('Order ID ' + fi.order_number + (M.invP.length > 1 ? (' და კიდევ ' + (M.invP.length - 1)) : '') + ' · ინვოისის გაგზავნა') : 'ყველაფერი დახურულია'),
+    extra: (M.invP.length ? ("<div class='scp-gx'>" + waivChip_('invoice', '', 'ინვოისი და BOL — ' + M.invP.length + ' ტვირთი', tday) + "</div>") : ''), rows: iRows });
+
+  /* checks — the existing upload / mark workflow */
+  var kRows = M.chkP.slice(0, 12).map(function (l) {
+    var a0 = actOf_(l.order_number), e0 = scpEnc_(l.order_number);
+    return scpRow_(l.order_number, esc(l.driver_name || '—') + " · " + esc(locShort(l.pickup_location)) + " → " + esc(locShort(l.delivery_location)) + " · " + money(grossOf_(l)),
+      (a0.check_path ? ("<a class='scp-btn' href='#' onclick=\"openCheck('" + scpEnc_(a0.check_path) + "');return false\">ნახვა</a>") : "") +
+      "<button type='button' class='scp-btn' onclick=\"chkArm('" + e0 + "')\">ჩასმა Ctrl+V</button>" +
+      "<label class='scp-btn'>ფაილი<input type='file' accept='image/*,application/pdf' capture='environment' style='display:none' onchange=\"upCheck('" + e0 + "',this)\"></label>" +
+      "<button type='button' class='scp-btn' title='ჩეკი მძღოლმა თვითონ გაანაღდა — ფული მასთანაა' onclick=\"chkResolve('" + e0 + "','driver_cashed')\">მძღოლმა გაანაღდა</button>" +
+      "<button type='button' class='scp-btn' title='ჩეკის ნაცვლად ადგილზე ქეში დაგვახვედრეს' onclick=\"chkResolve('" + e0 + "','cash_on_site')\">ქეში იყო</button>",
+      " ondragover=\"event.preventDefault()\" ondrop=\"chkDrop('" + e0 + "',event)\"");
+  });
+  out += scpGate_('check', { title: 'ჩეკები', icon: 'receipt', sym: 'checks', state: M.gChk ? 'ok' : 'no', status: M.gChk ? 'არ დარჩა' : 'ასატვირთია',
+    reason: esc(M.chkP.length ? (M.chkP.length + ' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული') : 'ასატვირთი ჩეკი არ არის'),
+    extra: (M.chkP.length ? ("<div class='scp-gx'>" + waivChip_('check', '', 'ჩეკის ატვირთვა — ' + M.chkP.length, tday) + "</div>") : ''), rows: kRows });
+  return out;
+}
+
+/* ---- the page --------------------------------------------------------- */
+function rBoardPilot_() {
+  scpFont_();
+  var M = scpModel_(), tday = M.tday;
+  var coName = CO && (CO.legal_name || CO.code) || 'კომპანია ვერ დადგინდა';
+  var unread = 0; try { unread = notifUnseen_().length; } catch (e) {}
+  var list = M.list;
+  var drivers = list.map(function (d) { return scpDriver_(d, M); }).join('');
+  var rest = M.resting.length ? ("<div class='scp-rest'><button type='button' class='scp-restsum' aria-expanded='" + SCP_REST + "' onclick='scpRestToggle()'>" +
+      scpIc_('moon') + M.resting.length + " ისვენებს" + scpIc_('chev', 'scp-chev') + "</button>" +
+      (SCP_REST ? M.resting.map(function (d) { var o = offOf_(d.name, tday) || {};
+        return "<div class='scp-restrow'><div>" + esc(d.name) + "<p>" + (o.to_day ? (esc(gdFull(o.to_day)) + '-ის ჩათვლით') : 'ვადის გარეშე') + (o.reason ? (' · ' + esc(o.reason)) : '') + "</p></div>" +
+          (o.id ? ("<button type='button' class='scp-btn' onclick=\"offEnd('" + scpAttr_(o.id) + "')\">დაბრუნება</button>") : '') + "</div>"; }).join('') : '') + "</div>") : '';
+  var addOpen = SCP_ADD || !!String(PQ || '').trim();
+  var closedAt = M.closed && SCLOSE.closed_at ? new Date(SCLOSE.closed_at).toLocaleString('ka-GE') : '';
+  var pend = Object.keys(WAIV).filter(function (k) { return WAIV[k].status === 'pending' && WAIV[k].work_day === tday; }).length;
+
+  $('view').innerHTML =
+    "<div class='scp' data-sc-pilot='1'>" +
+    "<header class='scp-hd'><div><h2>ცვლის დახურვა</h2><p>" + esc(coName) + " · " + esc(gdFull(tday)) + " · " + esc(MYD()) + "</p></div>" +
+      "<button type='button' class='scp-bell' onclick='notifOpen()' aria-label='შეტყობინებები" + (unread ? (', ' + unread + ' წაუკითხავი') : '') + "'>" + scpIc_('bell') +
+      (unread ? ("<span class='scp-cnt'>" + unread + "</span>") : '') + "</button></header>" +
+    (pend ? ("<div class='scp-banner'>" + scpIc_('wait') + pend + " ახსნა მენეჯმენტის პასუხს ელოდება</div>") : '') +
+    (M.closed ? ("<div class='scp-banner ok'>" + scpIc_('lock') + "ცვლა დახურულია" + (closedAt ? (' · ' + esc(closedAt)) : '') + ". გამოცხადებულ ტვირთებს ვეღარ მოხსნი.</div>") : '') +
+    scpWeek_(M.allDrv) +
+    "<section class='scp-card scp-drivers' aria-label='მძღოლები'><div class='scp-sechd'>მძღოლები</div>" +
+      (drivers || "<p class='scp-muted scp-pad'>ბოლო 30 დღეში აქტიური მძღოლი არ არის</p>") +
+      "<div class='scp-addrow'><button type='button' class='scp-add' aria-expanded='" + addOpen + "' onclick='scpAddToggle()'>" + scpIc_('plus') + "ტვირთის დამატება</button></div>" +
+      (addOpen ? ("<div class='scp-addbox'>" + addBox_(tday, list) + "</div>") : '') +
+      rest + "</section>" +
+    "<h3 class='scp-h3'>ცვლის შემოწმება</h3>" +
+    "<div class='card scp-gates' id='closeCard'>" + scpGates_(M) + scPanel_(tday) +
+      "<div class='closebar scp-closebar'><div class='scp-coinfo'><span class='close-company' id='closeCompany'>" + esc(coName) + "</span>" +
+        "<span id='gateCount' class='chip " + (M.rem ? 'r' : 'g') + "'><span class='dot'></span>" + (M.rem ? ('დარჩა ' + M.rem + ' საკითხი') : 'ყველა gate გავლილია') + "</span></div>" +
+        "<button class='bigbtn scp-closebtn" + ((M.rem === 0 && !M.closed) ? ' ready' : '') + "' id='logoutBtn' data-company-code='" + scpAttr_(COCODE() || '—') + "' aria-describedby='closeCompany'" +
+          ((M.rem > 0 || M.closed) ? ' disabled' : '') + " onclick='closeShift()'>" + scpIc_('lock') + (M.closed ? 'ცვლა დახურულია ✓' : 'ცვლის დახურვა') + "</button>" +
+        (M.closed && closedAt ? ("<span class='scp-muted'>" + esc(closedAt) + "</span>") : '') +
+      "</div></div></div>";
+
+  /* after a close, removal is shown as unavailable in the add box too (the server enforces it — M61) */
+  if (M.closed) {
+    var fz = scpFrozen_();
+    document.querySelectorAll("#view .scp-addbox button[onclick^='planDrop']").forEach(function (b) {
+      var m = /planDrop\('([^']*)'\)/.exec(b.getAttribute('onclick') || ''), on = m ? decodeURIComponent(m[1]) : '';
+      if (!fz || fz.indexOf(on) >= 0) { b.disabled = true; b.title = 'ცვლა დახურულია — ეს ტვირთი აღარ მოიხსნება'; }
+    });
+  }
+  if (M.stdAllOff && M.rem === 0 && !M.closed) autoCloseAllOff_(tday);
+}
+/* keep the page bell's count in step with the header bell (reading changes only the seen list) */
+setInterval(function () {
+  try {
+    var b = document.querySelector('#view .scp-bell'); if (!b) return;
+    var n = notifUnseen_().length, c = b.querySelector('.scp-cnt');
+    if (n && !c) { c = document.createElement('span'); c.className = 'scp-cnt'; b.appendChild(c); }
+    if (c) { if (n) c.textContent = String(n); else c.remove(); }
+    b.setAttribute('aria-label', 'შეტყობინებები' + (n ? (', ' + n + ' წაუკითხავი') : ''));
+  } catch (e) {}
+}, 1000);
+
+try{ if(USER) scPilotSync_(); }catch(e){}
+</script>
