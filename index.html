@@ -9200,7 +9200,7 @@ body.mg001 .mg-table small{display:block;color:var(--muted);font-size:10px}
  function available(){return SYNC.have&&SYNC.co===COID();}
  function currentLoads(){return available()?(LIVE||[]).filter(function(l){return !l.deleted_at&&!l.is_canceled&&['canceled','cancelled'].indexOf(String(l.status||'').toLowerCase())<0;}):[];}
  function title(t,sub){return '<div class="mg-topline"><span class="mg-eyebrow">'+esc(CO&&(CO.legal_name||CO.code)||'')+'</span><span class="mg-eyebrow">სამუშაო დღე · '+esc(gdFull(workToday_()))+'</span></div><h2 class="mg-title">'+esc(t)+'</h2><p class="mg-subtitle">'+esc(sub)+'</p>';}
- function pending(){return Object.keys(WAIV||{}).map(function(k){return WAIV[k];}).filter(function(w){return w.status==='pending';}).sort(function(a,b){return String(a.requested_at||'').localeCompare(String(b.requested_at||''));});}
+ function pending(){if(typeof mgiPending_==='function'){var q=mgiPending_();if(q)return q;}return Object.keys(WAIV||{}).map(function(k){return WAIV[k];}).filter(function(w){return w.status==='pending';}).sort(function(a,b){return String(a.requested_at||'').localeCompare(String(b.requested_at||''));});}
  function nav(){
   if(!active())return;
   var g=group(),box=$('tabsMgmt');
@@ -9275,10 +9275,10 @@ body.mg001 .mg-table small{display:block;color:var(--muted);font-size:10px}
   var gross=priced.reduce(function(s,l){return s+grossOf_(l);},0),kind={calls:'ზარი',calls_all:'ზარები',invoice:'ინვოისი',bol:'BOL',check:'ჩეკი',standard:'დღის გეგმა'};
   $('view').innerHTML=title('მთავარი','საერთო სურათი და საკითხები, რომლებიც ჩვენს ყურადღებას მოითხოვს.')+
    '<section class="mg-section"><div class="mg-section-head"><div><h3>ახლა ჩვენი მოქმედებაა საჭირო</h3><p>მფლობელი და ოპერაციების მენეჯერი ერთსა და იმავე საკითხებს ხედავენ.</p></div></div><div class="mg-grid">'+
-   '<div class="mg-card"><div class="mg-card-title">'+icon('users')+'ახსნები პასუხის მოლოდინში</div><div class="mg-stat">'+p.length+'</div><p>მენეჯმენტის გადაწყვეტილებაა საჭირო.</p><button class="mg-button text" type="button" data-mg-pending>განხილვა →</button></div>'+
+   '<div class="mg-card"><div class="mg-card-title">'+icon('users')+'ახსნები პასუხის მოლოდინში</div><div class="mg-stat">'+(p._loading?'…':p.length)+'</div><p>მენეჯმენტის გადაწყვეტილებაა საჭირო.</p><button class="mg-button text" type="button" data-mg-pending>განხილვა →</button></div>'+
    '<div class="mg-card"><div class="mg-card-title">'+icon('car')+'მომდევნო დღის გეგმა</div><div class="mg-stat">'+wr.filter(function(r){return r.state==='missing';}).length+'</div><p>დადასტურებულად მომუშავე მძღოლს გეგმა არ უჩანს · '+esc(gd(day))+'</p>'+button('mgwork','გეგმის ნახვა →','text')+'</div>'+
    '<div class="mg-card"><div class="mg-card-title">'+icon('receipt')+'ჩეკის მტკიცებულება აკლია</div><div class="mg-stat">'+missing.length+'</div><p>აღება / ჩაბარება დაფიქსირებულია; ფოტო ან განმარტება შესამოწმებელია.</p><button class="mg-button text" type="button" data-mg-missing>ჩეკების ნახვა →</button></div></div>'+
-   (p.length?'<div class="mg-card mg-list" style="margin-top:12px">'+p.slice(0,4).map(function(w){return '<div class="mg-row"><div><b>'+esc(w.dispatcher_name)+'</b><small>'+esc(kind[w.kind]||w.kind)+' · '+esc(w.order_number||'საერთო ახსნა')+' · '+esc(gd(w.work_day))+'</small><small>'+esc(w.reason||'ახსნის დეტალები გახსენი განსახილველად')+'</small></div><button class="mg-button" type="button" data-mg-pending>განხილვა</button></div>';}).join('')+(p.length>4?'<small class="muted">სულ '+p.length+' საკითხი — სრული სია განხილვაშია.</small>':'')+'</div>':'')+'</section>'+
+   (p.length?'<div class="mg-card mg-list" style="margin-top:12px">'+p.slice(0,4).map(function(w){return '<div class="mg-row"><div><b>'+(w._co?esc(w._co)+' · ':'')+esc(w.dispatcher_name)+'</b><small>'+esc(kind[w.kind]||w.kind)+' · '+esc(w.order_number||'საერთო ახსნა')+' · '+esc(gd(w.work_day))+'</small><small>'+esc(w.reason||'ახსნის დეტალები გახსენი განსახილველად')+'</small></div><button class="mg-button" type="button" data-mg-pending>განხილვა</button></div>';}).join('')+(p.length>4?'<small class="muted">სულ '+p.length+' საკითხი — სრული სია განხილვაშია.</small>':'')+'</div>':'')+'</section>'+
    '<section class="mg-section"><div class="mg-section-head"><div><h3>მძღოლები და მომდევნო სამუშაო დღე</h3><p>'+esc(gdFull(day))+' · სამუშაო სტატუსი და გეგმის არსებობა</p></div>'+button('mgwork','ყველა მძღოლი →','text')+'</div><div class="mg-card">'+workSummary(wr)+'<p>„გეგმა ჩანს“ მხოლოდ ტვირთის არსებობას ნიშნავს. დახურვის პირობები ცალკე მოწმდება. მომდევნო დღის გზაში ყოფნა არსებული წესით არის შეფასებული.</p></div></section>'+
    '<section class="mg-section"><div class="mg-section-head"><div><h3>შედეგი და ფული</h3><p>შესრულებული სამუშაო, გადახდის ჩანაწერი და ბანკში ჩარიცხვა განსხვავებული მონაცემებია.</p></div></div><div class="mg-grid">'+
    '<div class="mg-card"><div class="mg-card-title">დღეს აღებული ტვირთების Gross</div><div class="mg-stat">'+(priced.length===grossLoads.length?money(gross):'დასაზუსტებელია')+'</div><p>'+grossLoads.length+' ტვირთი · SD-ის აღების თარიღით. ეს არ არის კომპანიის მოგება ან ბანკში მიღებული თანხა.</p>'+button('analysis','შედეგების ნახვა →','text')+'</div>'+
@@ -9392,5 +9392,253 @@ loadPlanContacts = async function () {
   } catch (e) { console.error(e); }
   return out;
 };
-/* (part C only: the management inbox, part M, is released separately) */
+
+/* ---------------------------------------------------------------- M · one management inbox for all permitted companies */
+var MGI = { user: null, gen: 0, loading: null, loadedAt: 0, error: '', cos: null, waivers: [], closes: [], plans: {}, loads: {},
+            roster: [], activity: {}, scope: 'ALL', tab: 'pending' };
+var MGI_KIND = { standard: 'ტვირთის სტანდარტი', calls: 'ზარი', calls_all: 'ზარები (ყველა)', bol: 'BOL', invoice: 'ინვოისი', check: 'ჩეკი' };
+function mgiActive_() { return !!(typeof USER !== 'undefined' && USER && USER.role === 'mgmt' && ROLE === 'mgmt' && !VIEWAS); }
+function mgiReset_() {
+  MGI.gen++; MGI.user = USER ? USER.email : null; MGI.loading = null; MGI.loadedAt = 0; MGI.error = ''; MGI.cos = null;
+  MGI.waivers = []; MGI.closes = []; MGI.plans = {}; MGI.loads = {}; MGI.roster = []; MGI.activity = {};
+}
+function mgiReady_() { return !!(MGI.loadedAt && !MGI.error && MGI.cos && MGI.user === (USER && USER.email)); }
+function mgiCo_(id) { return (MGI.cos || []).filter(function (c) { return c.company_id === id; })[0] || null; }
+function mgiCode_(id) { var c = mgiCo_(id); return c ? (c.code || c.legal_name || '') : '?'; }
+function mgiChunks_(a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
+async function mgiLoad_(force) {
+  if (!mgiActive_()) return;
+  if (MGI.user !== USER.email) mgiReset_();
+  if (MGI.loading) return MGI.loading;
+  if (!force && MGI.loadedAt && Date.now() - MGI.loadedAt < 15000) return;
+  var gen = ++MGI.gen, email = USER.email;
+  var current = function () { return gen === MGI.gen && USER && USER.email === email; };
+  MGI.loading = (async function () {
+    try {
+      var since = addDays_(ymd_(new Date()), -21), today = workToday_();
+      var ids = await sb.rpc('my_company_ids');
+      if (ids.error) throw ids.error;
+      var allowed = Array.isArray(ids.data) ? ids.data : [];
+      var cos = (COLIST || []).filter(function (c) { return allowed.indexOf(c.company_id) >= 0; });
+      var per = await Promise.all(cos.map(async function (c) {
+        var co = c.company_id;
+        var w = await selAll_(function () { return sb.from('load_waivers').select('*').eq('company_id', co).gte('work_day', since); }, 'id');
+        var s = await selAll_(function () { return sb.from('shift_close').select('company_id,dispatcher_name,work_day,closed_at,closed_by').eq('company_id', co).gte('work_day', since); }, ['work_day', 'dispatcher_name']);
+        var names = {}, days = {}, orders = {};
+        w.forEach(function (x) { names[x.dispatcher_name] = 1; days[x.work_day] = 1; if (x.order_number && x.kind !== 'standard') orders[x.order_number] = 1; });
+        var plans = [], loads = [], active = [];
+        var dn = Object.keys(names).filter(Boolean), dd = Object.keys(days).filter(Boolean);
+        if (dn.length && dd.length) {
+          plans = await selAll_(function () { return sb.from('day_plan').select('order_number,action,work_day,dispatcher_name,driver_name,created_at').eq('company_id', co).in('dispatcher_name', dn).in('work_day', dd); }, ['work_day', 'order_number', 'created_at']);
+        }
+        for (var ch of mgiChunks_(Object.keys(orders), 100)) {
+          var lr = await sb.from('loads').select('order_number,driver_name,dispatcher_name').eq('company_id', co).in('order_number', ch);
+          if (lr.error) throw lr.error;
+          loads = loads.concat(lr.data || []);
+        }
+        active = await selAll_(function () { return sb.from('day_plan').select('dispatcher_name').eq('company_id', co).gte('work_day', today); }, ['dispatcher_name']);
+        return { c: c, w: w, s: s, plans: plans, loads: loads, active: active };
+      }));
+      var ro = await sb.from('access_allowlist').select('dispatcher_name,role,active,company_codes').eq('role', 'dispatcher');
+      if (ro.error) throw ro.error;
+      if (!current()) return;
+      var waivers = [], closes = [], plans = {}, loadsBy = {}, activity = {};
+      per.forEach(function (p) {
+        var co = p.c.company_id, act = activity[co] = {};
+        p.w.forEach(function (x) { if (x.company_id === co) { waivers.push(x); act[x.dispatcher_name] = 1; } });   /* own company only */
+        p.s.forEach(function (x) { if (x.company_id === co) { closes.push(x); act[x.dispatcher_name] = 1; } });
+        p.active.forEach(function (x) { if (x.dispatcher_name) act[x.dispatcher_name] = 1; });
+        p.loads.forEach(function (l) { loadsBy[co + '|' + l.order_number] = l; });
+        /* the scoped manual day plan: the latest action per order decides (add = on the plan) */
+        p.plans.slice().sort(function (a, b) { return String(a.created_at || '').localeCompare(String(b.created_at || '')); }).forEach(function (r) {
+          var k = co + '|' + r.dispatcher_name + '|' + r.work_day, m = plans[k] = plans[k] || {};
+          if (r.action === 'add') m[r.order_number] = r; else delete m[r.order_number];
+        });
+      });
+      MGI.cos = cos; MGI.waivers = waivers; MGI.closes = closes; MGI.plans = plans; MGI.loads = loadsBy;
+      MGI.roster = ro.data || []; MGI.activity = activity; MGI.loadedAt = Date.now(); MGI.error = '';
+      if (MGI.scope !== 'ALL' && !mgiCo_(MGI.scope)) MGI.scope = 'ALL';
+    } catch (e) {
+      console.error('MGMT inbox read failed', e);
+      if (current()) MGI.error = 'მოთხოვნები ვერ ჩაიტვირთა — ცარიელი სია არ ნიშნავს, რომ მოთხოვნა არ არის. სცადე განახლება.';
+    } finally { if (gen === MGI.gen) MGI.loading = null; }
+  })();
+  return MGI.loading;
+}
+/* affected driver(s) — company + order + work day/dispatcher; never a guess */
+function mgiDrivers_(w) {
+  var co = w.company_id, subj = w.order_number || '', P = MGI.plans[co + '|' + w.dispatcher_name + '|' + w.work_day] || {};
+  if (w.kind === 'standard') return subj ? [subj] : [];                /* a standard request names the driver as its subject */
+  if (subj && w.kind !== 'calls_all') {
+    var L = MGI.loads[co + '|' + subj];
+    if (L && L.driver_name) return [L.driver_name];                   /* the authoritative load assignment */
+    return P[subj] && P[subj].driver_name ? [P[subj].driver_name] : []; /* else the dispatcher's plan for that day */
+  }
+  var set = {};                                                       /* a whole-shift request covers the plan's drivers */
+  Object.keys(P).forEach(function (on) { var L2 = MGI.loads[co + '|' + on], d = (L2 && L2.driver_name) || P[on].driver_name; if (d) set[d] = 1; });
+  return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'ka'); });
+}
+function mgiDriversHtml_(w) {
+  var d = mgiDrivers_(w);
+  if (!d.length) return "<span class='muted'>მძღოლი დაუზუსტებელია</span>";
+  if (d.length <= 2) return esc(d.join(', '));
+  return "<details><summary>" + d.length + " მძღოლი</summary><div class='muted' style='font-size:11.5px'>" + esc(d.join(', ')) + "</div></details>";
+}
+function mgiInScope_(x) { return MGI.scope === 'ALL' || x.company_id === MGI.scope; }
+function mgiPendingAll_() {
+  return MGI.waivers.filter(function (w) { return w.status === 'pending'; })
+    .map(function (w) { var o = Object.assign({}, w); o._co = mgiCode_(w.company_id); return o; })
+    .sort(function (a, b) { return String(a.requested_at || '').localeCompare(String(b.requested_at || '')); });
+}
+/* management home card (MG-001 pending()): the same all-company list; '…' while it is not known yet */
+function mgiPending_() {
+  if (!mgiActive_()) return null;
+  if (!mgiReady_()) {
+    if (!MGI.loading) mgiLoad_(true).then(function () { if (MTAB === 'overview' || MTAB === 'closes') render(); });
+    var p = []; p._loading = true; return p;
+  }
+  return mgiPendingAll_();
+}
+/* company shifts for a work day: (company, dispatcher) pairs. A dispatcher listed for specific companies counts there;
+   an all-company dispatcher counts only where they actually work (plan, request or close) — never every company. */
+function mgiShifts_(day) {
+  var out = [];
+  (MGI.cos || []).forEach(function (c) {
+    var code = String(c.code || '').trim().toUpperCase(), act = MGI.activity[c.company_id] || {}, names = {};
+    MGI.roster.forEach(function (r) {
+      if (!r.active || !r.dispatcher_name) return;
+      if (Array.isArray(r.company_codes)) { if (r.company_codes.some(function (x) { return String(x).trim().toUpperCase() === code; })) names[r.dispatcher_name] = 1; }
+      else if (act[r.dispatcher_name]) names[r.dispatcher_name] = 1;
+    });
+    MGI.closes.forEach(function (s) { if (s.company_id === c.company_id && s.work_day === day) names[s.dispatcher_name] = 1; });
+    Object.keys(names).sort(function (a, b) { return a.localeCompare(b, 'ka'); }).forEach(function (d) {
+      var cl = MGI.closes.filter(function (s) { return s.company_id === c.company_id && s.dispatcher_name === d && s.work_day === day; })[0] || null;
+      out.push({ company_id: c.company_id, code: c.code, dispatcher: d, closed: cl });
+    });
+  });
+  return out;
+}
+async function mgiDecide_(id, co, status) {
+  if (!mgiActive_()) return;
+  if (!mgiCo_(co)) { toast('ამ კომპანიის მოთხოვნის განხილვის უფლება არ გაქვს'); return; }
+  var w = MGI.waivers.filter(function (x) { return x.id === id && x.company_id === co; })[0];
+  if (!w) { toast('მოთხოვნა ვერ მოიძებნა — სია განახლდა'); await mgiLoad_(true); render(); return; }
+  if (w.status !== 'pending') { toast('ეს მოთხოვნა უკვე განხილულია'); return; }
+  var note = '';
+  if (status === 'rejected') {
+    note = prompt('რატომ არ დასტურდება? (დისპეჩერი ამას დაინახავს)') || '';
+    if (!note.trim()) { toast('მიზეზი საჭიროა'); return; }
+  }
+  try {
+    var res = await sb.from('load_waivers')
+      .update({ status: status, decided_at: new Date().toISOString(), decided_by: USER.email, decision_note: note || null })
+      .eq('id', id).eq('company_id', co).eq('status', 'pending')     /* this request, its company, only while still pending */
+      .select('id,status,company_id');
+    if (res.error) throw res.error;
+    var row = (res.data || [])[0];
+    if (!row) toast('ეს მოთხოვნა ამასობაში შეიცვალა — სია განახლდა');
+    else if (row.id !== id || row.company_id !== co || row.status !== status) throw new Error('Waiver decision was not saved');
+    else toast(status === 'approved' ? 'დადასტურდა ✓' : 'დაბრუნდა');
+  } catch (e) { console.error(e); toast('ვერ შეინახა'); }
+  await mgiLoad_(true);
+  if (co === COID()) { try { await loadWaivers(); } catch (e) { console.error(e); } }   /* keep this company's screens in step */
+  render();
+}
+/* the older single-company decision entry point: always by the request's own company, never the global selector */
+waivDecide = async function (id, status) {
+  if (!mgiReady_()) await mgiLoad_(true);
+  var w = MGI.waivers.filter(function (x) { return x.id === id; })[0];
+  if (!w) { var k = Object.keys(WAIV || {}).filter(function (k2) { return WAIV[k2] && WAIV[k2].id === id; })[0]; w = k ? WAIV[k] : null; }
+  if (!w || !w.company_id) { toast('მოთხოვნა ვერ მოიძებნა — განაახლე'); return; }
+  return mgiDecide_(id, w.company_id, status);
+};
+function mgiSetScope(v) { MGI.scope = v; rCloses(); }
+function mgiSetTab(v) { MGI.tab = v; CLF = v; rCloses(); }
+var __rClosesSingleCompany = rCloses;
+rCloses = function () {
+  if (!mgiActive_()) return __rClosesSingleCompany.apply(this, arguments);
+  if (MGI.user !== USER.email) mgiReset_();
+  if (!MGI.loadedAt && !MGI.loading && !MGI.error) mgiLoad_(true).then(function () { if (MTAB === 'closes') rCloses(); });
+  if (['pending', 'closes', 'history', 'shift-history'].indexOf(CLF) >= 0) MGI.tab = CLF;
+  var tab = MGI.tab, tday = ymd_(nextWorkDay_()), ready = mgiReady_();
+  var W = ready ? MGI.waivers.filter(mgiInScope_) : [];
+  var pend = W.filter(function (w) { return w.status === 'pending'; }).sort(function (a, b) { return String(b.requested_at).localeCompare(String(a.requested_at)); });
+  var done = W.filter(function (w) { return w.status !== 'pending'; }).sort(function (a, b) { return String(b.decided_at || '').localeCompare(String(a.decided_at || '')); });
+  var shifts = ready ? mgiShifts_(tday).filter(mgiInScope_) : [];
+  var closedN = shifts.filter(function (s) { return s.closed; }).length, open = shifts.filter(function (s) { return !s.closed; });
+  var wrow = function (w, withAct) {
+    var age = Math.round((Date.now() - Date.parse(w.requested_at)) / 36e5);
+    return "<tr data-co='" + esc(mgiCode_(w.company_id)) + "' data-id='" + esc(w.id) + "'>" +
+      "<td style='white-space:nowrap'><span class='chip'>" + esc(mgiCode_(w.company_id)) + "</span><div class='muted' style='font-size:11.5px'>" + gd(w.work_day) + "</div></td>" +
+      "<td><b>" + esc(w.dispatcher_name) + "</b><div style='font-size:12px'>" + mgiDriversHtml_(w) + "</div></td>" +
+      "<td><span class='chip " + (w.kind === 'standard' ? 'y' : '') + "'>" + (MGI_KIND[w.kind] || esc(w.kind)) + "</span>" +
+        (w.order_number && w.kind !== 'standard' ? "<div style='font-size:12px;margin-top:3px'><b>" + esc(w.order_number) + "</b></div>" : '') + "</td>" +
+      "<td style='max-width:290px'>" + esc(w.reason) +
+        (w.decision_note ? ("<div class='muted' style='font-size:11.5px;color:var(--crit)'>პასუხი: " + esc(w.decision_note) + "</div>") : '') + "</td>" +
+      "<td class='muted' style='font-size:12px;white-space:nowrap'>" + (age < 24 ? (age + ' სთ წინ') : (Math.round(age / 24) + ' დღის წინ')) + "<br>" + esc(String(w.requested_by || '').split('@')[0]) + "</td>" +
+      (withAct
+        ? ("<td><div style='display:flex;flex-direction:column;gap:4px'><button class='fixbtn' style='background:var(--good);color:#fff;border-color:var(--good)' onclick=\"mgiDecide_('" + esc(w.id) + "','" + esc(w.company_id) + "','approved')\">დადასტურება</button>" +
+           "<button class='fixbtn' onclick=\"mgiDecide_('" + esc(w.id) + "','" + esc(w.company_id) + "','rejected')\">დაბრუნება</button></div></td>")
+        : ("<td>" + (w.status === 'approved' ? "<span class='chip g'><span class='dot'></span>დადასტურებული</span>" : "<span class='chip r'><span class='dot'></span>დაბრუნებული</span>") +
+           "<div class='muted' style='font-size:11.5px'>" + esc(String(w.decided_by || '').split('@')[0]) + "</div></td>")) + "</tr>";
+  };
+  var head = "<thead><tr><th>კომპანია · დღე</th><th>დისპეტჩერი · მძღოლი</th><th>ველი · ობიექტი</th><th>ახსნა</th><th>გაგზავნილი</th><th>" + (tab === 'pending' ? 'გადაწყვეტილება' : 'სტატუსი') + "</th></tr></thead>";
+  var body;
+  if (!ready) {
+    body = "<div class='card p' role='status' data-mgi-state='" + (MGI.error ? 'error' : 'loading') + "'>" +
+      esc(MGI.error || 'ყველა კომპანიის მოთხოვნები იტვირთება…') + "</div>";
+  } else if (tab === 'closes') {
+    body = "<div class='tablewrap'><table style='min-width:600px'><thead><tr><th>კომპანია</th><th>დისპეტჩერი</th><th>სტატუსი</th><th>დახურვის დრო</th><th class='num'>მოთხოვნა</th></tr></thead><tbody>" +
+      (shifts.map(function (s) {
+        return "<tr><td><span class='chip'>" + esc(s.code) + "</span></td><td><b>" + esc(s.dispatcher) + "</b></td>" +
+          (s.closed ? ("<td><span class='chip g'><span class='dot'></span>დახურულია</span></td><td>" + new Date(s.closed.closed_at).toLocaleString('ka-GE') + "</td>")
+                    : ("<td><span class='chip r'><span class='dot'></span>ღიაა</span></td><td class='muted'>—</td>")) +
+          "<td class='num'>" + MGI.waivers.filter(function (w) { return w.company_id === s.company_id && w.dispatcher_name === s.dispatcher && w.work_day === tday; }).length + "</td></tr>";
+      }).join('') || "<tr><td colspan='5' class='muted'>ამ დღეს კომპანიის ცვლა არ ჩანს</td></tr>") + "</tbody></table></div>";
+  } else if (tab === 'shift-history') {
+    var rec = MGI.closes.filter(mgiInScope_).slice().sort(function (a, b) { return String(b.closed_at || '').localeCompare(String(a.closed_at || '')); });
+    body = "<div class='tablewrap'><table style='min-width:560px'><thead><tr><th>კომპანია</th><th>დღე</th><th>დისპეჩერი</th><th>დახურვის დრო</th></tr></thead><tbody>" +
+      (rec.map(function (c) { return '<tr><td><span class="chip">' + esc(mgiCode_(c.company_id)) + '</span></td><td>' + esc(gd(c.work_day)) + '</td><td>' + esc(c.dispatcher_name) + '</td><td>' + esc(new Date(c.closed_at).toLocaleString('ka-GE')) + '</td></tr>'; }).join('')
+       || "<tr><td colspan='4' class='muted'>ბოლო 21 დღეში დახურული ცვლა არ არის.</td></tr>") + '</tbody></table></div>';
+  } else {
+    var list = tab === 'pending' ? pend : done.slice(0, 200);
+    body = "<div class='tablewrap'><table style='min-width:840px'>" + head + "<tbody>" +
+      (list.map(function (w) { return wrow(w, tab === 'pending'); }).join('') ||
+       "<tr><td colspan='6' class='muted'>" + (tab === 'pending' ? 'პასუხის მოლოდინში მოთხოვნა არ არის ✓' : 'ისტორია ცარიელია') + "</td></tr>") + "</tbody></table></div>";
+  }
+  var chip = function (k, l, n) { return "<span class='chip" + (tab === k ? ' g' : '') + "' style='cursor:pointer' onclick=\"mgiSetTab('" + k + "')\">" + l + (n == null ? '' : ' (' + n + ')') + "</span>"; };
+  var scopeChip = function (k, l, n) { return "<span class='chip" + (MGI.scope === k ? ' g' : '') + "' style='cursor:pointer' onclick=\"mgiSetScope('" + esc(k) + "')\">" + esc(l) + (n ? ' · ' + n : '') + "</span>"; };
+  var allPend = ready ? MGI.waivers.filter(function (w) { return w.status === 'pending'; }) : [];
+  var scopes = scopeChip('ALL', 'ყველა კომპანია', ready ? allPend.length : null) +
+    (MGI.cos || []).map(function (c) { return scopeChip(c.company_id, c.code, ready ? allPend.filter(function (w) { return w.company_id === c.company_id; }).length : null); }).join('');
+  var dash = function (v) { return ready ? v : '—'; };
+  $('view').innerHTML = ph('დახურვები და მოთხოვნები', 'ყველა კომპანია, რომლის მართვაც შეგიძლია — ზედა არჩევანი (' + esc(COCODE() || '') + ') ამ სიას არ ზღუდავს · ' + gdFull(tday)) +
+    "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px' data-mgi-scope>" + scopes + "</div>" +
+    "<div class='kpis'>" +
+      kpi('პასუხის მოლოდინში', dash(pend.length), ready && pend.length ? 'r' : (ready ? 'g' : ''), 'მოთხოვნა შენს დადასტურებას ელოდება', '') +
+      kpi('დახურული კომპანიის ცვლა', dash(closedN), '', ready ? (shifts.length + ' კომპანიის ცვლიდან (კომპანია × დისპეტჩერი)') : 'იტვირთება') +
+      kpi('ჯერ ღიაა', dash(open.length), ready && open.length ? 'w' : (ready ? 'g' : ''), open.slice(0, 3).map(function (s) { return s.code + ' · ' + s.dispatcher; }).join(', ') + (open.length > 3 ? ' და სხვ.' : '')) +
+      kpi('დადასტურებული (21 დღე)', dash(done.filter(function (w) { return w.status === 'approved'; }).length), 'g', dash(done.filter(function (w) { return w.status === 'rejected'; }).length) + ' დაბრუნებული') +
+    "</div>" +
+    "<div class='card p'><div style='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px'>" +
+      chip('pending', 'პასუხის მოლოდინში', ready ? pend.length : null) + chip('closes', 'კომპანიის ცვლები', ready ? closedN + '/' + shifts.length : null) +
+      chip('history', 'ისტორია', ready ? done.length : null) + chip('shift-history', 'დახურული ცვლები (21 დღე)', null) +
+      "<span class='chip' style='cursor:pointer' onclick='mgiRefresh()'>განახლება</span>" +
+      "<span class='chip' style='cursor:pointer' onclick=\"goM('dispatchers')\">დისპეჩერების მართვა</span></div>" +
+    body +
+    "<div class='muted' style='font-size:12px;margin-top:10px'>თითო მოთხოვნა თავის კომპანიაშია: დადასტურება/დაბრუნება ზუსტად იმ კომპანიის ჩანაწერს ეხება. დისპეჩერი ცვლას ვერ ხურავს, სანამ ყველა gate მწვანე არ არის.</div></div>";
+};
+async function mgiRefresh() { await mgiLoad_(true); rCloses(); }
+var __refreshWithInbox = refreshLive_;
+refreshLive_ = async function (manual) {
+  var out = await __refreshWithInbox.apply(this, arguments);
+  try {
+    if (mgiActive_()) {
+      await mgiLoad_(!!manual);
+      if ((MTAB === 'closes' || MTAB === 'overview') && !(typeof viewTyping_ === 'function' && viewTyping_())) render();
+    }
+  } catch (e) { console.error(e); }
+  return out;
+};
+try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' || MTAB === 'overview') render(); }); } catch (e) {}
 </script>
