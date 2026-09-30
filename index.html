@@ -381,12 +381,26 @@ function noPaperName_(cust){
 }
 /* ბროკერს თავისი აპი აქვს — BOL/ინვოისი SD-დან არ სჭირდება */
 function noPaper_(l){ return !!(l && noPaperName_(l.customer)); }
+/* DISPATCH-OVERNIGHT-010 — მფლობელის გადაწყვეტილება (2026-09-30), ყველა კომპანიაში: ACV-ზე დისპეტჩერს
+   ინვოისის/BOL-ის გაგზავნა არ ევალება. ვინაობა = დამტკიცებული სახელი (ACV; ACV Auctions) orgKey_-ით
+   ნორმალიზებული (რეგისტრი, დაშორება, პუნქტუაცია, Inc/LLC) — ზუსტად, არა ქვე-სტრიქონით:
+   'ACV Auctions Inc' → ACV, 'ACV Transport' → არა. მხოლოდ დოკუმენტი: წინასწარი მიმაგრება (assignExpected_),
+   გადახდა, ჩეკი, ზარი და სხვა პირობები უცვლელია. სერვერზე იგივე წესი: no_paper_name().
+   Montway და CarsArrive უკვე NOPAPER-შია. */
+var DOCSEND_EXEMPT_ORG={'acv':'ACV','acvauctions':'ACV'};
+function docExemptName_(cust){
+  var k=orgKey_(cust).replace(/ /g,'');
+  return (k && Object.prototype.hasOwnProperty.call(DOCSEND_EXEMPT_ORG,k)) ? DOCSEND_EXEMPT_ORG[k] : null;
+}
+function docExempt_(l){ return !!(l && docExemptName_(l.customer)); }
 function noPaperChip_(l){
   var n=l&&noPaperName_(l.customer);
-  return n ? "<span class='chip' title='"+esc(n)+" — თავისი აპლიკაცია აქვს, SD-დან BOL/ინვოისი არ სჭირდება'>თავისი აპი</span>" : "";
+  if(n) return "<span class='chip' title='"+esc(n)+" — თავისი აპლიკაცია აქვს, SD-დან BOL/ინვოისი არ სჭირდება'>თავისი აპი</span>";
+  var x=l&&docExemptName_(l.customer);
+  return x ? "<span class='chip' title='"+esc(x)+" — დოკუმენტები ბროკერის პროცესით მიდის; დისპეტჩერს ინვოისის/BOL-ის გაგზავნა არ სჭირდება'>ბროკერის პროცესი</span>" : "";
 }
 /* ინვოისი საჭიროა? არა — თუ ადგილზე იხდიან ან ბროკერს თავისი აპი აქვს */
-function invNeeded_(l){ return !!l && !TERM_ONSITE[l.payment_terms] && !noPaper_(l); }
+function invNeeded_(l){ return !!l && !TERM_ONSITE[l.payment_terms] && !noPaper_(l) && !docExempt_(l); }
 function actOf_(o){ return ACT[o]||{}; }
 /* რომელ დღეს გახდა ჩეკი ასატვირთი — ფიქაფის ან ჩაბარების ფაქტით.
    ცარიელი = ჩეკი არ ეკუთვნის ან ჯერ არ მომხდარა. */
@@ -532,7 +546,7 @@ function is74AutoSikeston_(customer, location){
   return String(customer==null?'':customer).replace(/[^a-zA-Z0-9]/g,'').toLowerCase()==='74auto'
     && /(^|[^a-z0-9])sikeston[\s,.]+(mo|missouri)[\s,.]+63801(-[0-9]{4})?([^a-z0-9-]|$)/i.test(String(location==null?'':location));
 }
-function callSkip_(l, side){
+function callSkipLocal_(l, side){   /* QRD-DIANA-001: callSkip_ (end of file) adds the server's exemptions */
   if(!l) return null;
   var legLocation=side==='pu'?l.pickup_location:l.delivery_location;
   if((side==='pu'||side==='del') && is74AutoSikeston_(l.customer,legLocation))
@@ -2071,7 +2085,7 @@ function rBoard(){
 
   /* ზარები — გამოცხადებული სიის ყველა ტვირთი, ფიქაფი/დელივერი ცალ-ცალკე */
   var callCell_=function(missing, ok, phone, skip, waiting, rang, sms){
-    if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>";
+    if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>"+(skip.text?"<div class='muted' style='font-size:11px;font-weight:500;white-space:normal'>"+esc(skip.text)+"</div>":"");   /* QRD-DIANA-001: the reason is visible, not only a tooltip */
     /* 2026-08-11: წითლად — დისპეტჩერმა უნდა მიხვდეს, რატომ ვერ ხურავს gate-ს. */
     if(missing) return "<span class='ccell no' title='SD-ში კონტაქტის ნომერი არ არის შეყვანილი — მის გარეშე ზარი ვერ მოწმდება და gate ვერ დაიხურება'>✗ ნომერი არ წერია</span>";
     if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+"</span>";
@@ -4003,6 +4017,7 @@ function chkCell_(l){
   var a=actOf_(l.order_number);
   if(a.check_path) return "<a class='fixbtn' href='#' onclick=\"openCheck('"+encodeURIComponent(a.check_path)+"');return false\" style='text-decoration:none'>ნახვა</a>";
   if(a.check_uploaded_at) return "<span class='chip y' title='ძველი ჩანაწერი — მხოლოდ მონიშვნაა, ფაილი არ არის'><span class='dot'></span>მონიშნულია</span>";
+  if(a.check_resolution==='owner_hist_exempt') return "<span class='chip' title='მფლობელის გადაწყვეტილება (DISPATCH-OVERNIGHT-010): QRD-ის ჩეკები, რომლებიც 2026-09-30 00:45-ზე (თბილისის დროით) უკვე არსებობდა, მიწოდებულად ითვლება. ფაილი არ ატვირთულა; ეს არ ნიშნავს ჩეკის განაღდებას ან თანხის მიღებას.'>ისტორიული — გამონაკლისი</span>";
   if(a.check_resolution && CHKRES[a.check_resolution]) return "<span class='chip y' title='"+esc(a.check_resolution_by||'')+"'><span class='dot'></span>"+esc(CHKRES[a.check_resolution])+"</span>";
   if(needs) return "<span class='chip r'><span class='dot'></span>არ არის</span>";
   return "<span class='muted'>—</span>";
@@ -4021,7 +4036,7 @@ function rRecv(){
   var broker=A.filter(function(l){ return !ONSITE_[l.payment_terms]; });
   var onsite=A.filter(function(l){ return ONSITE_[l.payment_terms]; });
   var late=broker.filter(function(l){ return l._late>0; });
-  var noInv=broker.filter(function(l){ return !l.invoice_sent_at && !noPaper_(l); });
+  var noInv=broker.filter(function(l){ return !l.invoice_sent_at && !noPaper_(l) && !docExempt_(l); });
   var chkUp=chkUploaded_();
   var F=broker.slice();
   if(RECVF==='late') F=late.slice();
@@ -4034,7 +4049,7 @@ function rRecv(){
   var rows=F.slice(0,SHOW).map(function(l){
     return '<tr><td>'+esc(l.order_number||'')+'</td><td>'+esc(l.customer||'—')+'</td><td>'+esc(l.dispatcher_name||'—')+'</td>'+
       '<td>'+gd(String(l.delivery_completed).slice(0,10))+'</td>'+
-      '<td>'+(l.invoice_sent_at?gd(String(l.invoice_sent_at).slice(0,10)):(noPaper_(l)?noPaperChip_(l):'<span style="color:var(--crit)">არ არის</span>'))+'</td>'+
+      '<td>'+(l.invoice_sent_at?gd(String(l.invoice_sent_at).slice(0,10)):((noPaper_(l)||docExempt_(l))?noPaperChip_(l):'<span style="color:var(--crit)">არ არის</span>'))+'</td>'+
       '<td>'+(l._due?gd(new Date(l._due).toISOString().slice(0,10)):'—')+'</td>'+
       '<td class="num" style="color:'+col(l._late)+';font-weight:'+(l._late>0?750:400)+'">'+(l._late>0?(l._late+' დღე'):'—')+'</td>'+
       '<td>'+esc(String(l.payment_terms||'—').replace(/_/g,' '))+'</td>'+
@@ -9319,4 +9334,63 @@ body.mg001 .mg-table small{display:block;color:var(--muted);font-size:10px}
  if(window.DISPATCH_OS_CONFIG&&window.DISPATCH_OS_CONFIG.mode==='test')window.MG001_TEST={workRows:workRows,checkRows:checkRows};
  try{if(USER&&ROLE==='mgmt')render();}catch(e){console.error('Management view initialization',e);}
 })();
+</script>
+<script id="qrd-diana-001">
+/* =====================================================================================================================
+   QRD-DIANA-001 (C) + MGMT-SHIFT-INBOX-001 · owner-authorised outcomes 2026-09-30 (Tbilisi).
+   Loaded LAST, so every earlier definition and wrapper stays in place and is only extended.
+   C  The call table, load legs, Help-side screens and the manager views render a leg as "not required" when the SERVER
+      exempts it (call_skip_pu / call_skip_delivery — the rule close_gates_co and Help apply, incl. the SC-009 venue
+      alias: Capital City AA at 600 Winfield Rd 25177 = Capital City Auto Auction). The screen keeps every exemption
+      of its own and only ADDS a server exemption it does not know; it never removes one, and a failed read adds none.
+   M  "დახურვები და მოთხოვნები" for management = ONE inbox over every company this manager is authorised for
+      (my_company_ids(): the same list in_my_companies() and RLS use), independent of the global company selector.
+      Separate store (MGI); dispatcher caches (WAIV, SCLOSES, PCONT) and every dispatcher screen are untouched.
+      A decision targets the request's own id AND company and only a still-pending row (stale-safe).
+   ===================================================================================================================== */
+/* ---------------------------------------------------------------- C · server leg exemptions */
+var LEGSKIP = {};
+function legSkipKey_(co, on) { return String(co || '') + '|' + String(on || ''); }
+function legSkipText_(code, side) {
+  var c = String(code || ''), leg = side === 'pu' ? 'ფიქაფის' : 'დელივერის';
+  if (c === 'auction:auction') return leg + ' გადამოწმება არ მოითხოვება — აუქციონი';
+  var m = /^auction:(.+)$/.exec(c);
+  if (m) return leg + ' გადამოწმება არ მოითხოვება — ' + ({ iaa: 'IAA/IAAI', copart: 'Copart', manheim: 'Manheim', adesa: 'ADESA' }[m[1]] || m[1]);
+  if (c === 'venue:carmax') return 'CarMax — ' + leg + ' გადამოწმების ზარი არ მოეთხოვება';
+  if (c === 'shipper') return leg + ' გადამოწმება არ მოითხოვება — shipper';
+  if (/[Ⴀ-ჿ]/.test(c)) return c;                     /* the server's own Georgian wording (74 Auto, Manheim) */
+  return leg + ' გადამოწმება არ მოითხოვება (სერვერის წესი: ' + c + ')';
+}
+function callSkip_(l, side) {
+  var own = callSkipLocal_(l, side);
+  if (own || !l) return own;
+  var co = l.company_id || (typeof COID === 'function' ? COID() : '');
+  var e = LEGSKIP[legSkipKey_(co, l.order_number)];
+  var code = e && (side === 'pu' ? e.pu : e.del);
+  return code ? { why: 'server', kind: code, src: 'server', venue: side === 'pu' ? l.pu_venue : l.del_venue, text: legSkipText_(code, side) } : null;
+}
+async function loadLegSkips_(company, ons) {
+  if (!company || !ons || !ons.length) return false;
+  try {
+    var r = await sb.rpc('leg_skip_co', { p_company_id: company, p_orders: ons });
+    if (r.error) throw r.error;
+    if (company !== COID()) return false;                      /* the manager switched company meanwhile */
+    var added = false;
+    (r.data || []).forEach(function (x) {
+      var k = legSkipKey_(company, x.order_number), v = { pu: x.pu_skip || null, del: x.del_skip || null }, o = LEGSKIP[k];
+      if (!o || o.pu !== v.pu || o.del !== v.del) { LEGSKIP[k] = v; added = added || !!(v.pu || v.del); }
+    });
+    return added;
+  } catch (e) { return false; }                                /* before the RPC exists (PGRST202) or offline: nothing added */
+}
+var __planContactsWithLegSkips = loadPlanContacts;
+loadPlanContacts = async function () {
+  var out = await __planContactsWithLegSkips.apply(this, arguments);
+  try {
+    var ons = (PCONT || []).map(function (r) { return r.order_number; }).filter(Boolean);
+    if (await loadLegSkips_(COID(), ons)) { if (!(typeof viewTyping_ === 'function' && viewTyping_())) render(); }
+  } catch (e) { console.error(e); }
+  return out;
+};
+/* (part C only: the management inbox, part M, is released separately) */
 </script>
