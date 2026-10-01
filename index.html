@@ -439,6 +439,145 @@ async function loadEmpPhone(){ return auxLoad_('empphone', async function(co){
     if(r && r.error && /PGRST202|Could not find the function/i.test(String(r.error.code||'')+' '+String(r.error.message||''))) return [];
     return auxRes_(r); },
   function(data){ EMPPH = data || []; }, function(){ EMPPH = []; }, true); }
+/* CALL-PIPELINE-005 · what the processing of a not-yet-checked contact call is ACTUALLY doing
+   (read-only RPC call_processing_state_v1). It never changes a gate: a pending leg stays pending.
+   It only replaces the old "wait a few minutes" promise with the real state: in progress, queued,
+   a scheduled automatic retry (time and attempt), a technical delay (last processed time), or a call
+   that cannot be processed (missing recording, no speech, attempts used up). Scoped to company +
+   dispatcher + plan day; a failed or missing RPC falls back to a neutral text without any promise. */
+var PCST = { gen: 0, co: null, me: null, day: null, rows: {}, ok: false, at: 0 };
+function pcstKey_(on, side) { return String(on) + '|' + side; }
+function pcstValid_() {
+  try { return !!(PCST.ok && PCST.co === COID() && PCST.me === MYD() && PCST.day === ymd_(nextWorkDay_())); } catch (e) { return false; }
+}
+function pcstHm_(t) {
+  try { return new Date(t).toLocaleTimeString('ka-GE', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Tbilisi' }); } catch (e) { return ''; }
+}
+var PCST_TXT = {
+  transcribing: 'ჩანაწერი ახლა მუშავდება',
+  analyzing: 'შინაარსი ახლა მოწმდება',
+  queued_transcription: 'ჩანაწერი რიგშია დასამუშავებლად',
+  queued_analysis: 'ტექსტი მზადაა, შინაარსის შემოწმება რიგშია',
+  waiting_recording: 'ზარის ჩანაწერი ჯერ არ მოსულა',
+  retry_scheduled: 'ჩანაწერი ვერ დამუშავდა — ტექნიკური შეფერხება',
+  analysis_retry: 'შინაარსის შემოწმება შეფერხდა — ტექნიკური შეფერხება',
+  recording_missing: 'ზარის ჩანაწერი არ არსებობს',
+  transcription_failed: 'ჩანაწერი ვერ დამუშავდა',
+  no_speech: 'ჩანაწერში საუბარი არ ისმის',
+  analysis_failed: 'შინაარსი ვერ შემოწმდა',
+  short_call: 'ზარი ძალიან მოკლეა შესამოწმებლად',
+  not_monitored: 'ეს ხაზი არ მოწმდება'
+};
+var PCST_STALL_MS = 20 * 60000;            /* no stored result for 20 min while a call waits in the queue = delay */
+function pcstStalled_(x) {
+  var ref = x.state === 'queued_transcription' ? x.last_transcribed_at : x.state === 'queued_analysis' ? x.last_analyzed_at : null;
+  if (x.state !== 'queued_transcription' && x.state !== 'queued_analysis') return false;
+  return !ref || (Date.now() - new Date(ref).getTime()) > PCST_STALL_MS;
+}
+function pcstLine_(x) {
+  var s = 'ზარი ' + pcstHm_(x.started_at) + ' · ' + (PCST_TXT[x.state] || 'მუშავდება');
+  if (x.state === 'retry_scheduled' || x.state === 'analysis_retry') {
+    var due = x.next_retry_at && new Date(x.next_retry_at).getTime() > Date.now();
+    s += due ? (' · ავტომატური ხელახალი ცდა ' + pcstHm_(x.next_retry_at)) : ' · ხელახალი ცდა უახლოეს გაშვებაზე';
+    if (x.attempts && x.max_attempts) s += ' (ცდა ' + x.attempts + '/' + x.max_attempts + ')';
+  } else if (pcstStalled_(x)) {
+    var ref = x.state === 'queued_transcription' ? x.last_transcribed_at : x.last_analyzed_at;
+    s += ' · დამუშავება ამჟამად შეფერხებულია' + (ref ? (' (ბოლო დამუშავება ' + pcstHm_(ref) + ')') : '');
+  } else if (x.terminal) {
+    if (x.attempts && (x.state === 'transcription_failed' || x.state === 'analysis_failed' || x.state === 'no_speech')) s += ' (' + x.attempts + ' ცდა)';
+    s += ' — ამ ზარით ვერ დადასტურდება';
+  }
+  return s;
+}
+function pcstLines_(on, side) {
+  if (!pcstValid_()) return [];
+  var a = PCST.rows[pcstKey_(on, side)] || [], out = a.slice(0, 3).map(pcstLine_);
+  if (a.length > 3) out.push('… და კიდევ ' + (a.length - 3) + ' ზარი');
+  return out;
+}
+/* pilot screen: the items of a pending leg (class, text) — processing state first, then the server's criteria */
+function pcstItems_(on, side, why) {
+  var items = [];
+  var a = pcstValid_() ? (PCST.rows[pcstKey_(on, side)] || []) : [];
+  if (!a.length) items.push(['wait', 'შინაარსი ჯერ არ არის შემოწმებული']);
+  pcstLines_(on, side).forEach(function (t, i) { var x = a[i]; items.push([(x && x.terminal) ? 'un' : 'wait', t]); });
+  if (a.length && a.every(function (x) { return x.terminal; })) items.push(['un', 'საჭიროა ახალი დადასტურება (ზარი ან SMS)']);
+  try { scpCriteria_(why).forEach(function (c) { items.push(['un', c.raw]); }); } catch (e) {}
+  return items;
+}
+/* the calls gate line while legs are pending: counts by real state, never a time promise */
+function pcstGateReason_(waitN, rows, isWait) {
+  var base = waitN + ' ტვირთზე ზარის შინაარსი ჯერ არ არის შემოწმებული';
+  if (!pcstValid_()) return base;
+  var n = { act: 0, rec: 0, retry: 0, stall: 0, term: 0 }, next = null, lastRef = null;
+  (rows || []).forEach(function (r) {
+    ['pu', 'del'].forEach(function (side) {
+      if (!isWait(r, side)) return;
+      (PCST.rows[pcstKey_(r.order_number, side)] || []).forEach(function (x) {
+        if (x.terminal) n.term++;
+        else if (x.state === 'retry_scheduled' || x.state === 'analysis_retry') {
+          n.retry++; var t = x.next_retry_at ? new Date(x.next_retry_at).getTime() : 0;
+          if (t > Date.now() && (!next || t < next)) next = t;
+        }
+        else if (x.state === 'waiting_recording') n.rec++;
+        else if (pcstStalled_(x)) { n.stall++; var ref = x.state === 'queued_transcription' ? x.last_transcribed_at : x.last_analyzed_at; if (ref && (!lastRef || ref > lastRef)) lastRef = ref; }
+        else n.act++;
+      });
+    });
+  });
+  var p = [];
+  if (n.act) p.push(n.act + ' ზარი მუშავდება');
+  if (n.rec) p.push(n.rec + ' ზარის ჩანაწერი ჯერ არ მოსულა');
+  if (n.retry) p.push(n.retry + ' ზარზე ტექნიკური შეფერხებაა' + (next ? (' — ხელახალი ცდა ' + pcstHm_(next)) : ''));
+  if (n.stall) p.push('დამუშავება შეფერხებულია' + (lastRef ? (' (ბოლო დამუშავება ' + pcstHm_(lastRef) + ')') : ''));
+  if (n.term) p.push(n.term + ' ზარი ვერ დამუშავდა — საჭიროა ახალი დადასტურება');
+  return p.length ? (base + ' · ' + p.join(' · ')) : base;
+}
+/* the calls gate status word: "checking" only while something is actually in progress or scheduled */
+function pcstGateStatus_(rows, isWait) {
+  if (!pcstValid_()) return 'მოწმდება';
+  var any = false, live = false;
+  (rows || []).forEach(function (r) { ['pu', 'del'].forEach(function (side) {
+    if (!isWait(r, side)) return;
+    var a = PCST.rows[pcstKey_(r.order_number, side)] || [];
+    if (!a.length) live = true;                       /* pending for another reason (e.g. an SMS): keep "checking" */
+    a.forEach(function (x) { any = true; if (!x.terminal && !pcstStalled_(x)) live = true; });
+  }); });
+  return (any && !live) ? 'შეფერხებულია' : 'მოწმდება';
+}
+/* legacy screen: one small muted line under "◔ მოწმდება…" */
+function pcstCellHtml_(on, side) {
+  if (on == null) return '';
+  var a = pcstLines_(on, side);
+  return a.length ? ("<div class='muted' style='font-size:11px;font-weight:500;white-space:normal'>" + esc(a.join(' · ')) + "</div>") : '';
+}
+async function loadCallStates_() {
+  var gen = ++PCST.gen, co = COID(), me = MYD(), day = ymd_(nextWorkDay_());
+  var cur = function () { return gen === PCST.gen && co === COID() && me === MYD() && day === ymd_(nextWorkDay_()); };
+  var ons = (Array.isArray(PCONT) ? PCONT : []).filter(function (r) {
+    return r && (r.pu_pending === true || r.del_pending === true || r.pu_content_unknown === true || r.del_content_unknown === true);
+  }).map(function (r) { return r.order_number; }).filter(Boolean);
+  var was = JSON.stringify([PCST.ok, PCST.co, PCST.me, PCST.day, PCST.rows]);
+  if (!co || !ons.length) {
+    if (cur()) PCST = { gen: gen, co: co, me: me, day: day, rows: {}, ok: true, at: Date.now() };
+    return was !== JSON.stringify([PCST.ok, PCST.co, PCST.me, PCST.day, PCST.rows]);
+  }
+  try {
+    var r = await sb.rpc('call_processing_state_v1', { p_company_id: co, p_orders: ons.slice(0, 60) });
+    if (!cur()) return false;
+    if (r.error) throw r.error;
+    var rows = {};
+    (Array.isArray(r.data) ? r.data : []).forEach(function (x) {
+      if (!x || !x.order_number) return;
+      var k = pcstKey_(x.order_number, x.leg === 'pickup' ? 'pu' : 'del'); (rows[k] = rows[k] || []).push(x);
+    });
+    PCST = { gen: gen, co: co, me: me, day: day, rows: rows, ok: true, at: Date.now() };
+  } catch (e) {
+    if (!cur()) return false;
+    PCST = { gen: gen, co: co, me: me, day: day, rows: {}, ok: false, at: Date.now() };   /* neutral fallback, no promise */
+  }
+  return was !== JSON.stringify([PCST.ok, PCST.co, PCST.me, PCST.day, PCST.rows]);
+}
 /* გამოცხადებულ სიაზე — ზარები ზუსტად იმ ტვირთებზე მოწმდება, რაც დისპეტჩერმა აირჩია */
 let PCONT = [];
 let PCONT_ERR = false;
@@ -2138,12 +2277,12 @@ function rBoard(){
   }).join('');
 
   /* ზარები — გამოცხადებული სიის ყველა ტვირთი, ფიქაფი/დელივერი ცალ-ცალკე */
-  var callCell_=function(missing, ok, phone, skip, waiting, rang, sms){
+  var callCell_=function(missing, ok, phone, skip, waiting, rang, sms, on, side){
     if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>"+(skip.text?"<div class='muted' style='font-size:11px;font-weight:500;white-space:normal'>"+esc(skip.text)+"</div>":"");   /* QRD-DIANA-001: the reason is visible, not only a tooltip */
     /* 2026-08-11: წითლად — დისპეტჩერმა უნდა მიხვდეს, რატომ ვერ ხურავს gate-ს. */
     if(missing) return "<span class='ccell no' title='SD-ში კონტაქტის ნომერი არ არის შეყვანილი — მის გარეშე ზარი ვერ მოწმდება და gate ვერ დაიხურება'>✗ ნომერი არ წერია</span>";
     if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+"</span>";
-    if(waiting) return "<span class='ccell' style='color:var(--warn)' title='ზარი ან SMS მიმოწერა მოწმდება შინაარსზე — ჩვეულებრივ რამდენიმე წუთი'>◔ მოწმდება…</span>";
+    if(waiting) return "<span class='ccell' style='color:var(--warn)' title='ზარი ან SMS მიმოწერა ჯერ არ არის შემოწმებული შინაარსზე'>◔ მოწმდება…</span>"+pcstCellHtml_(on, side);   /* CALL-PIPELINE-005 */
     /* CV-006: SMS-ის მიღება კონტაქტია, არა დადასტურება */
     if(sms && !rang) return "<span class='ccell no' title='SMS მიღებულია, მაგრამ მასში საჭირო ფაქტები (მზადყოფნა/საათები/თანხა) არ დადასტურდა'>✗ "+esc(fmtPhone_(phone)||'—')+" · SMS მიღებულია</span>";
     if(rang) return "<span class='ccell no' title='ზარი შედგა, მაგრამ ეს ავტომოპასუხე ან ხმოვანი ფოსტა იყო — ცოცხალი საუბარი არ დაფიქსირებულა'>✗ ავტომოპასუხე</span>";
@@ -2167,7 +2306,7 @@ function rBoard(){
   var callOkAll=(waitN===0) && (callWaived || ((callP.length===0) && unknownOns.length===0)) && !scHas('calls');
   var callGate_="<div class='gate "+(callOkAll?'ok':(waitN&&!callP.length?'wait':'no'))+"'><div class='ic'>"+(callOkAll?'✓':(waitN&&!callP.length?'◔':'!'))+
     "</div><div class='t'><b>ზარები · Pickup / Delivery</b>"+
-    (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+waitN+" ზარი მოწმდება, დაელოდე რამდენიმე წუთს</span>"):'')+
+    (waitN?("<span class='muted' style='font-weight:600;font-size:12px'> · "+esc(pcstGateReason_(waitN, CC, function(r,s){ return s==='pu'?puWait_(r):delWait_(r); }))+"</span>"):'')+   /* CALL-PIPELINE-005 */
     (unknownOns.length?("<span style='color:var(--crit);font-weight:600;font-size:12px'> · "+unknownOns.length+" ტვირთზე ზარების მონაცემი ვერ ჩაიტვირთა — განაახლე გვერდი</span>"):'')+"</div>"+
     (callP.length?waivChip_('calls_all','','ზარები — '+callP.length+' ტვირთი',tday):'')+"</div>"+
     (callList.length
@@ -2176,8 +2315,8 @@ function rBoard(){
          callList.map(function(r){
            var L1=loadOf_(r.order_number);
            return "<tr><td><b>"+esc(r.order_number)+"</b></td><td>"+esc(rDrv_(r))+"</td>"+
-             "<td>"+callCell_(r.pu_missing,r.pu_verified,r.pickup_phone,callSkip_(L1,'pu'),r.pu_pending,r.pu_call,r.pu_sms)+"</td>"+
-             "<td>"+callCell_(r.del_missing,r.del_verified,r.delivery_phone,callSkip_(L1,'del'),r.del_pending,r.del_call,r.del_sms)+"</td></tr>";
+             "<td>"+callCell_(r.pu_missing,r.pu_verified,r.pickup_phone,callSkip_(L1,'pu'),r.pu_pending,r.pu_call,r.pu_sms,r.order_number,'pu')+"</td>"+
+             "<td>"+callCell_(r.del_missing,r.del_verified,r.delivery_phone,callSkip_(L1,'del'),r.del_pending,r.del_call,r.del_sms,r.order_number,'del')+"</td></tr>";
          }).join('')+"</tbody></table></div>")
       : (exemptAll
           ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px;color:var(--good)'>ხვალინდელ სიაშია <b>"+contactN+"</b> ტვირთი და ყველა მათგანზე ზარი <b>არ მოეთხოვება</b> — ბროკერის წესი, აუქციონი ან shipper = ვენიუ. შესამოწმებელი არაფერია ✓</div>"
@@ -2339,7 +2478,7 @@ function scItems_(r){
     if(base==='evaluator_inconsistent' || rest==='unknown'){ add('unknown','', (SC_GATE_LBL[base]||base)+' — სერვერმა ვერ შეაფასა, სცადე ხელახლა'); return; }
     if(base==='calls' && rest==='pending'){
       var wn=Number(g.calls && g.calls.detail && g.calls.detail.wait_n)||0;
-      add('calls','', (wn?wn+' ':'')+'ზარი ჯერ მოწმდება — დაელოდე რამდენიმე წუთს'); return;
+      add('calls','', (wn?wn+' ':'')+'ზარის შინაარსი ჯერ არ არის შემოწმებული — მდგომარეობა ზარების ბლოკშია'); return;   /* CALL-PIPELINE-005 */
     }
     if(base==='invoice'){
       var inv=g.invoice||{}, det=inv.detail||{}, mi=scOrders_(det.missing_invoice), mb=scOrders_(det.missing_bol);
@@ -8956,8 +9095,9 @@ function scpGates_(M) {
     if (skip) { cls = 'ok'; items.push(["ok", "ზარი არ სჭირდება" + (skip.text ? (' — ' + skip.text) : '')]); }
     else if (miss) { cls = 'no'; items.push(["no", "SD-ში ნომერი არ წერია"]); }
     else if (ver) { cls = 'ok'; items.push(["ok", "დადასტურებულია" + (tex ? ' (ტექნიკური გამონაკლისი)' : '')]); }
-    else if (pend) { cls = 'wait'; items.push(["wait", "მოწმდება…"]); }
-    else if (unk) { cls = 'un'; scpCriteria_(why).forEach(function (c) { items.push(["un", c.raw]); }); if (!items.length) items.push(["un", "შინაარსი ვერ შემოწმდა"]); }
+    else if (pend) { cls = 'wait'; items = pcstItems_(r.order_number, side, why); }   /* CALL-PIPELINE-005: real state, no time promise */
+    else if (unk) { cls = 'un'; scpCriteria_(why).forEach(function (c) { items.push(["un", c.raw]); }); if (!items.length) items.push(["un", "შინაარსი ვერ შემოწმდა"]);
+      pcstLines_(r.order_number, side).forEach(function (t) { items.push(["un", t]); }); }
     else {
       cls = 'no';
       var crit = scpCriteria_(why);
@@ -8994,7 +9134,8 @@ function scpGates_(M) {
     cReason = firstBad ? ('Order ID ' + firstBad.order_number + (M.callP.length > 1 ? (' და კიდევ ' + (M.callP.length - 1)) : '') + ' · ნასაუბრები ზარი არ დადასტურდა') : 'სერვერი: ზარების gate წითელია'; }
   else if (M.unknownOns.length || PCONT_ERR) { cState = 'unavail'; cStatus = 'ვერ ჩაიტვირთა';
     cReason = (M.unknownOns.length ? (M.unknownOns.length + ' ტვირთზე ') : '') + 'ზარების მონაცემი ვერ ჩაიტვირთა — ეს არ ნიშნავს, რომ დადასტურებულია'; }
-  else if (M.waitN) { cState = 'wait'; cStatus = 'მოწმდება'; cReason = M.waitN + ' ზარი მოწმდება — დაელოდე რამდენიმე წუთს'; }
+  else if (M.waitN) { var pcW_ = function (r, s) { return s === 'pu' ? M.puWait_(r) : M.delWait_(r); };   /* CALL-PIPELINE-005 */
+    cState = 'wait'; cStatus = pcstGateStatus_(M.CC, pcW_); cReason = pcstGateReason_(M.waitN, M.CC, pcW_); }
   else { cState = 'no'; cStatus = 'დასაზუსტებელია'; cReason = 'ზარების gate წითელია'; }
   out += scpGate_('calls', { title: 'ფიქაფი / დელივერი', icon: 'phone', sym: 'calls', state: cState, status: cStatus, reason: esc(cReason),
     group: scpGroup_('calls_all', M.callP.length, 'ტვირთის ზარზე', 'ზარები — ' + M.callP.length + ' ტვირთი', tday), rows: cRows });
@@ -9448,6 +9589,15 @@ loadPlanContacts = async function () {
     var ons = (PCONT || []).map(function (r) { return r.order_number; }).filter(Boolean);
     if (await loadLegSkips_(COID(), ons)) { if (!(typeof viewTyping_ === 'function' && viewTyping_())) render(); }
   } catch (e) { console.error(e); }
+  return out;
+};
+
+/* CALL-PIPELINE-005 · after every contacts refresh: read the processing state of the pending calls
+   (same company/dispatcher/day scope) and repaint only when it changed. */
+var __planContactsWithCallStates = loadPlanContacts;
+loadPlanContacts = async function () {
+  var out = await __planContactsWithCallStates.apply(this, arguments);
+  try { if (await loadCallStates_()) { if (!(typeof viewTyping_ === 'function' && viewTyping_())) render(); } } catch (e) { console.error(e); }
   return out;
 };
 
