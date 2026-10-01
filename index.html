@@ -2279,6 +2279,7 @@ function rBoard(){
   /* ზარები — გამოცხადებული სიის ყველა ტვირთი, ფიქაფი/დელივერი ცალ-ცალკე */
   var callCell_=function(missing, ok, phone, skip, waiting, rang, sms, on, side){
     if(skip) return "<span class='ccell ok' title='"+esc(skip.text)+"'>✓ ზარი არ სჭირდება</span>"+(skip.text?"<div class='muted' style='font-size:11px;font-weight:500;white-space:normal'>"+esc(skip.text)+"</div>":"");   /* QRD-DIANA-001: the reason is visible, not only a tooltip */
+    if(side==='pu' && ok && typeof window.gr6PickupDone_==='function' && window.gr6PickupDone_(loadOf_(on))) return "<span class='ccell ok' title='Super Dispatch-ში აღება დასრულებულია — ძველი ზარის ხარვეზი ისტორიაში რჩება და ამ ცვლას აღარ ბლოკავს'>✓ აღება დასრულებულია</span>";   /* GATE-RELIABILITY-006 R7 */
     /* 2026-08-11: წითლად — დისპეტჩერმა უნდა მიხვდეს, რატომ ვერ ხურავს gate-ს. */
     if(missing) return "<span class='ccell no' title='SD-ში კონტაქტის ნომერი არ არის შეყვანილი — მის გარეშე ზარი ვერ მოწმდება და gate ვერ დაიხურება'>✗ ნომერი არ წერია</span>";
     if(ok) return "<span class='ccell ok'>✓ "+esc(fmtPhone_(phone)||'—')+"</span>";
@@ -7467,6 +7468,7 @@ loadPlanContacts = async function(){
       if (res.status === 401) return { kind: "auth", json: j };
       if (res.status === 403 && !(j && j.outcome === "refused" && typeof j.message === "string")) return { kind: "auth", json: j };
       if (!j || typeof j.message !== "string" || !j.outcome) return { kind: res.ok ? "uncertain" : "failed" };
+      try { if (j && j.gate_recheck && typeof window.__gr6AfterRecheck === "function") window.__gr6AfterRecheck(j.gate_recheck); } catch (e) {}   /* GATE-RELIABILITY-006 */
       return { kind: "ok", json: j };
     } catch (e) {
       // The request may or may not have reached the server.
@@ -7644,6 +7646,7 @@ loadPlanContacts = async function(){
         // dispatcher got no usable answer and a plain resend would replay it.
         item.progress = "";
         pushStoredAnswer(item, fin);
+        try { if (/ხელახალი შემოწმება \(სერვერზე/.test(String(fin.body || "")) && typeof window.__gr6AfterRecheck === "function") window.__gr6AfterRecheck(null); } catch (e) {}   /* GATE-RELIABILITY-006 */
         item.serverFinal = true;
         if (resKind({ outcome: fin.outcome, kind: fin.kind, final: true }) === "failed") {
           item.phase = "error_stored";
@@ -9092,7 +9095,8 @@ function scpGates_(M) {
     var unk = side === 'pu' ? r.pu_content_unknown : r.del_content_unknown, tex = side === 'pu' ? r.pu_technical_exception : r.del_technical_exception;
     var a = ATT[r.order_number] || {}, tries = side === 'pu' ? (a.pu_try || 0) : (a.del_try || 0), smsOut = side === 'pu' ? a.pu_sms_out : a.del_sms_out;
     var lbl = side === 'pu' ? 'ფიქაფი' : 'დელივერი', cls, items = [];
-    if (skip) { cls = 'ok'; items.push(["ok", "ზარი არ სჭირდება" + (skip.text ? (' — ' + skip.text) : '')]); }
+    if (!skip && side === 'pu' && ver && typeof window.gr6PickupDone_ === 'function' && window.gr6PickupDone_(L0)) { cls = 'ok'; items.push(["ok", "აღება დასრულებულია (Super Dispatch) — ძველი ზარის ხარვეზი ისტორიაში რჩება"]); }   /* GATE-RELIABILITY-006 R7 */
+    else if (skip) { cls = 'ok'; items.push(["ok", "ზარი არ სჭირდება" + (skip.text ? (' — ' + skip.text) : '')]); }
     else if (miss) { cls = 'no'; items.push(["no", "SD-ში ნომერი არ წერია"]); }
     else if (ver) { cls = 'ok'; items.push(["ok", "დადასტურებულია" + (tex ? ' (ტექნიკური გამონაკლისი)' : '')]); }
     else if (pend) { cls = 'wait'; items = pcstItems_(r.order_number, side, why); }   /* CALL-PIPELINE-005: real state, no time promise */
@@ -10254,5 +10258,38 @@ try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' 
 
   if (TEST) window.D3_CLOSE_ALERTS_TEST = { A: A, CFG: CFG, tick: tick, poll: function () { return poll('test'); }, line: line, erg: erg, evId: evId };
   try { if (eligible()) init(); } catch (e) {}
+})();
+</script>
+<script id="gate-reliability-006">
+/* =====================================================================================================================
+   GATE-RELIABILITY-006 · owner-authorised 2026-10-02. Loaded LAST; earlier code is extended, never replaced.
+   (1) After the assistant's server recheck (gate_recheck_v1 = the canonical evaluator Shift Close uses) the page re-reads
+       its gates from the server - dispatcher and management views alike. It never paints a gate from the chat reply, and
+       only the newest request's re-read runs, so an older, slower answer cannot overwrite a newer state.
+   (2) gr6PickupDone_: Super Dispatch recorded the pickup as completed on an EARLIER business day (America/Chicago) - the
+       same rule the database applies (R7). Used only to LABEL a pickup the server already reports as verified.
+   ===================================================================================================================== */
+(function () {
+  var seq = 0;
+  function bizDay(t) {
+    try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t); }
+    catch (e) { return null; }
+  }
+  window.gr6PickupDone_ = function (L) {
+    try {
+      if (!L || !L.pickup_completed) return false;
+      var t = new Date(L.pickup_completed); if (isNaN(t.getTime()) || t.getTime() > Date.now()) return false;
+      var a = bizDay(t), b = bizDay(new Date());
+      return !!(a && b && a < b);
+    } catch (e) { return false; }
+  };
+  window.__gr6AfterRecheck = function (rc) {
+    var my = ++seq;
+    window.__gr6LastRecheck = { at: Date.now(), rc: rc || null };
+    setTimeout(async function () {
+      if (my !== seq) return;                                   /* a newer recheck owns the re-read */
+      try { if (typeof refreshLive_ === 'function') await refreshLive_(false); } catch (e) { console.error(e); }
+    }, 400);
+  };
 })();
 </script>
