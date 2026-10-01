@@ -863,11 +863,26 @@ function actReapply_(m, seq, co){
   ACT_WRITES.forEach(function(w){ m[w.on]=Object.assign(m[w.on]||{company_id:co, order_number:w.on}, w.fields); });
 }
 var CRIT_BASE=['drivers','roster','flags','settings'];   /* P0-R3: settings decide the work day */
-var CRIT_CYCLE=['assign','plan','waivers','actions','loads'];   /* commit order: loads last (normalises with fresh roster) */
-var LOAD_COLS_='order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin,booking_dispatcher';
+var CRIT_CYCLE=['assign','plan','waivers','actions','doc_hist','loads'];   /* commit order: loads last (normalises with fresh roster) */
+var LOAD_COLS_='order_number,status,price,gross,broker_fee,vehicle_count,driver_id_sd,driver_name,dispatcher_name,pickup_location,delivery_location,pickup_phone,delivery_phone,vehicle,miles,pickup_week,pickup_scheduled,pickup_completed,delivery_scheduled,delivery_completed,payment_terms,payment_method,invoice_sent_at,paid_at,bol,customer,is_inoperable,pu_venue,del_venue,pu_contact,del_contact,vin,booking_dispatcher,first_seen';
+/* QRD-DIANA-003: delivered before the app first saw the load (e.g. QRD before 29 Sept) - the app has no record of whether its
+   invoice/BOL was sent then. A label only: the gate, the SD evidence and every action are unchanged. */
+function histDoc_(l){ var d=l&&Date.parse(String(l.delivery_completed||'').replace(' ','T')), f=l&&Date.parse(String(l.first_seen||'').replace(' ','T')); return !!(d && f && d < f); }
+var HISTDOC_TIP='ეს ტვირთი აპში შემოსვლამდე ჩაბარდა. Super Dispatch-ში ინვოისის გაგზავნის ჩანაწერი არ ჩანს, მაგრამ შეიძლება სხვა გზით გაიგზავნა. ჯერ შეამოწმე: თუ უკვე გაგზავნილია, ხელახლა ნუ გააგზავნი — მონიშნე ან ახსნა მოითხოვე; თუ არ გაგზავნილა, გააგზავნე.';
+function histDocChip_(l){ return histDoc_(l) ? " <span class='chip y' title='"+HISTDOC_TIP+"'>აპამდე ჩაბარებული · გაგზავნის ჩანაწერი არ გვაქვს</span>" : ''; }
+/* SC-GIORGI-002-X1R2: durable owner-approved document duties, never evidence of sending.
+   Read with the critical company snapshot; failed reads keep sync stale and cannot clear a gate. */
+var DOC_HIST={co:null,rows:Object.create(null)};
+function histDocEx_(l){
+  var co=COID();
+  if(!l || !co || DOC_HIST.co!==co || (l.company_id && l.company_id!==co)) return false;
+  var r=DOC_HIST.rows[l.order_number];
+  return !!(r && r.company_id===co && r.scope==='invoice_bol' && !r.revoked_at);
+}
 function critFetch_(name, co){
   if(!co) return Promise.reject(new Error('no_company'));
   switch(name){
+    case 'doc_hist': return selAll_(function(){ return sb.from('doc_hist_exemption').select('company_id,order_number,scope,revoked_at').eq('company_id',co).eq('scope','invoice_bol').is('revoked_at',null); },'order_number');
     case 'loads':   return selAll_(function(){ return sb.from('loads').select(LOAD_COLS_).eq('company_id', co).is('deleted_at', null); },'order_number');
     case 'actions': return selAll_(function(){ return sb.from('load_actions').select('*').eq('company_id', co); },'order_number');
     case 'plan':    return selAll_(function(){ return sb.from('day_plan').select('*').eq('company_id', co).gte('work_day', addDays_(ymd_(new Date()),-21)); },'id');
@@ -892,6 +907,7 @@ function critFetch_(name, co){
 function critCommit_(name, v, seq, co){
   if(name==='loads'){ LIVE=v; normalizeDriverNames_(); dedupeLoads_(); rebuildLoadIndex_(); }
   else if(name==='actions'){ var m={}; (v||[]).forEach(function(a){ m[a.order_number]=a; }); actReapply_(m, seq||0, co||COID()); ACT=m; }
+  else if(name==='doc_hist'){ var dh=Object.create(null); (v||[]).forEach(function(r){ if(r.company_id===co && r.scope==='invoice_bol' && !r.revoked_at) dh[r.order_number]=r; }); DOC_HIST={co:co,rows:dh}; }
   else if(name==='plan'){ DPLAN=v||[]; PDRVC=null; }
   else if(name==='waivers'){ var w={}; (v||[]).forEach(function(x){ w[wkey_(x.dispatcher_name,x.work_day,x.kind,x.order_number)]=x; }); WAIV=w; }
   else if(name==='assign'){ DASG=v.dasg||[]; DIR=v.dir||[]; DIRBY={}; DIR.forEach(function(x){ DIRBY[x.name]=x; }); }
@@ -1107,7 +1123,7 @@ function coSwitch(code){
   /* SC-STABILIZE-001-P0: no complete data for the new company yet; any read
      still in flight for the old one is dropped when it lands */
   SYNC.gen++; SYNC.have=false; SYNC.co=null; SYNC.base=null; SYNC.okAt=null; LAST_SYNC=null;
-  SYNC.failAt=null; SYNC.failWhat=[]; SYNC.failMsg=''; SYNC.contactsErr=false; SC_REF=null;
+  SYNC.failAt=null; SYNC.failWhat=[]; SYNC.failMsg=''; SYNC.contactsErr=false; SC_REF=null; DOC_HIST={co:null,rows:Object.create(null)};
   try{ render(); }catch(e){ console.error(e); }
   toast('კომპანია: '+CO.legal_name);
   loadData().then(function(){ render(); }).catch(function(e){ console.error(e); try{ render(); }catch(e2){} toast('ვერ ჩაიტვირთა'); });
@@ -1979,7 +1995,7 @@ function rBoard(){
        Appointment-სა და Gate Pass-ზე. მიზეზი: SD-ში Terms ხშირად ცარიელია
        (მხოლოდ Payment Method = Check, Terms = Other), ე.ი. სისტემა სამართლიანად
        ეჭვობს დოკუმენტს, მაგრამ დისპეტჩერს ახსნის საშუალება უნდა ჰქონდეს. */
-    if(waivOk_('invoice',l.order_number,tday)) return false;
+    if(histDocEx_(l) || waivOk_('invoice',l.order_number,tday)) return false;
     return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
   var chkP=LD.filter(function(l){ return chkOpen_(l) && chkDueDay_(l)>=CHK_FROM; })
             .sort(function(a,b){ return chkDueDay_(b).localeCompare(chkDueDay_(a)); });
@@ -2009,7 +2025,7 @@ function rBoard(){
           "<button class='fixbtn' style='margin-right:6px' title='ჩეკი მძღოლმა თვითონ გაანაღდა — ფული მასთანაა' onclick=\"chkResolve('"+e0+"','driver_cashed')\">მძღოლმა გაანაღდა</button>"+
           "<button class='fixbtn' title='ჩეკის ნაცვლად ადგილზე ქეში დაგვახვედრეს' onclick=\"chkResolve('"+e0+"','cash_on_site')\">ქეში იყო</button>"; }
       var dz=(kind==='chk')?(" ondragover=\"event.preventDefault()\" ondrop=\"chkDrop('"+encodeURIComponent(l.order_number)+"',event)\" title='ჩეკის ფოტო აქ ჩააგდე ან დააჭირე „ჩასმა Ctrl+V“'"):"";
-      return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
+      return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+(kind==='bol'?histDocChip_(l):'')+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
     }).join('') + (items.length>(lim||8) ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-(lim||8))+"</div>" : '');
   }
   var CC=(PCONT||[]).filter(function(r){ return !r.not_required && callNeeded_(r.order_number); });
@@ -2326,7 +2342,7 @@ function scFp_(gate, order, day){
   try{
     var l=order?(loadOf_(order)||null):null, a=order?actOf_(order):{};
     var L=l?[l.status,l.pickup_completed,l.delivery_completed,l.payment_terms,l.invoice_sent_at,l.booking_dispatcher,l.dispatcher_name,l.driver_name,l.pu_venue,l.is_canceled]:null;
-    if(gate==='invoice') return JSON.stringify([L,a.bol_sent_at||null,scWaivFp_('invoice',order,day),scWaivFp_('invoice','',day)]);
+    if(gate==='invoice') return JSON.stringify([L,histDocEx_(l),a.bol_sent_at||null,scWaivFp_('invoice',order,day),scWaivFp_('invoice','',day)]);
     if(gate==='check') return JSON.stringify([L,a.check_uploaded_at||null,a.check_resolution||null,scWaivFp_('check',order,day),scWaivFp_('check','',day)]);
     if(gate==='appt') return JSON.stringify([L,a.appt_at||null,scWaivFp_('appt',order,day),scWaivFp_('appt_all','',day)]);
     if(gate==='gatepass') return JSON.stringify([L,a.gate_pass_path||null,scWaivFp_('gatepass',order,day),scWaivFp_('gatepass_all','',day)]);
@@ -8649,7 +8665,7 @@ function scpModel_() {
   var byNew = function (a, b) { return String(b.delivery_completed || '').localeCompare(String(a.delivery_completed || '')); };
   var invP = delivered.filter(function (l) {
     if (l.is_canceled || l.deleted_at) return false;
-    if (waivOk_('invoice', l.order_number, tday)) return false;
+    if (histDocEx_(l) || waivOk_('invoice', l.order_number, tday)) return false;
     return invNeeded_(l) && !docsDone_(l); }).sort(byNew);
   var chkP = LD.filter(function (l) { return chkOpen_(l) && chkDueDay_(l) >= CHK_FROM; })
             .sort(function (a, b) { return chkDueDay_(b).localeCompare(chkDueDay_(a)); });
@@ -8978,12 +8994,14 @@ function scpGates_(M) {
   /* one invoice + BOL section; SD invoice-send evidence decides, no self-attestation here */
   var iRows = M.invP.slice(0, 12).map(function (l) {
     return scpRow_(l.order_number, esc(l.driver_name || '—') + " · " + esc(locShort(l.pickup_location)) + " → " + esc(locShort(l.delivery_location)) +
-      " · " + money(grossOf_(l)) + " · <span class='scp-c no'>ინვოისის გაგზავნა SD-ში არ ჩანს</span>",
+      " · " + money(grossOf_(l)) + " · <span class='scp-c no'>ინვოისის გაგზავნა SD-ში არ ჩანს</span>" +
+      (histDoc_(l) ? " · <span class='scp-tag' title='" + HISTDOC_TIP + "'>აპამდე ჩაბარებული · გაგზავნის ჩანაწერი არ გვაქვს</span>" : ''),
       "<button type='button' class='scp-btn rfbtn' data-ord='" + scpAttr_(l.order_number) + "' title='SD-ში ინვოისი და BOL გააგზავნე, მერე შეამოწმე' onclick=\"return window.sdRefresh(decodeURIComponent('" + scpEnc_(l.order_number) + "'),this,true)\">SD-ში შემოწმება</button>" +
       waivChip_('invoice', l.order_number, 'ინვოისი და BOL — ' + l.order_number, tday));
   });
   if (M.invP.length > 12) iRows.push("<div class='gate' style='padding-left:34px'><div class='t'><span>…და კიდევ " + (M.invP.length - 12) + "</span></div></div>");
-  if (M.invP.length) iRows.unshift("<div class='gate' style='padding-left:34px'><div class='t'><span class='scp-note'>ინვოისი და BOL ერთად გააგზავნე Super Dispatch-იდან. აქ ცალკე „გავაგზავნე“ მონიშვნა აღარ არის — ითვლება SD-ის ინვოისის გაგზავნა.</span></div></div>");
+  if (M.invP.length) iRows.unshift("<div class='gate' style='padding-left:34px'><div class='t'><span class='scp-note'>ინვოისი და BOL ერთად გააგზავნე Super Dispatch-იდან. აქ ცალკე „გავაგზავნე“ მონიშვნა აღარ არის — ითვლება SD-ის ინვოისის გაგზავნა." +
+    (M.invP.some(histDoc_) ? " აპამდე ჩაბარებულ ტვირთებზე ჯერ შეამოწმე, ხომ არ არის უკვე გაგზავნილი — ხელახლა ნუ გააგზავნი; თუ გაგზავნილია, ახსნა მოითხოვე." : '') + "</span></div></div>");
   var fi = M.invP[0];
   out += scpGate_('invoice', { title: 'ინვოისი და BOL', icon: 'doc', sym: 'docs', state: M.gInv ? 'ok' : 'no', status: M.gInv ? 'რიგზეა' : 'არ დასტურდება',
     reason: esc(M.invP.length ? ('Order ID ' + fi.order_number + (M.invP.length > 1 ? (' და კიდევ ' + (M.invP.length - 1)) : '') + ' · ინვოისის გაგზავნა') : 'ყველაფერი დახურულია'),
@@ -9422,7 +9440,13 @@ async function mgiLoad_(force) {
       var cos = (COLIST || []).filter(function (c) { return allowed.indexOf(c.company_id) >= 0; });
       var per = await Promise.all(cos.map(async function (c) {
         var co = c.company_id;
-        var w = await selAll_(function () { return sb.from('load_waivers').select('*').eq('company_id', co).gte('work_day', since); }, 'id');
+        /* QRD-DIANA-003: a PENDING request is listed whatever its age (full pagination, stable order); decided history
+           stays inside the 21-day window. One row per company+id (a row that changed state between the two reads keeps
+           its pending copy until the next refresh; a decision still targets id+company+status=pending only). */
+        var wp = await selAll_(function () { return sb.from('load_waivers').select('*').eq('company_id', co).eq('status', 'pending'); }, 'id');
+        var wh = await selAll_(function () { return sb.from('load_waivers').select('*').eq('company_id', co).gte('work_day', since); }, 'id');
+        var wseen = {}, w = [];
+        wp.concat(wh).forEach(function (x) { var k = x.company_id + '|' + x.id; if (!wseen[k]) { wseen[k] = 1; w.push(x); } });
         var s = await selAll_(function () { return sb.from('shift_close').select('company_id,dispatcher_name,work_day,closed_at,closed_by').eq('company_id', co).gte('work_day', since); }, ['work_day', 'dispatcher_name']);
         var names = {}, days = {}, orders = {};
         w.forEach(function (x) { names[x.dispatcher_name] = 1; days[x.work_day] = 1; if (x.order_number && x.kind !== 'standard') orders[x.order_number] = 1; });
@@ -9567,9 +9591,10 @@ rCloses = function () {
   var shifts = ready ? mgiShifts_(tday).filter(mgiInScope_) : [];
   var closedN = shifts.filter(function (s) { return s.closed; }).length, open = shifts.filter(function (s) { return !s.closed; });
   var wrow = function (w, withAct) {
-    var age = Math.round((Date.now() - Date.parse(w.requested_at)) / 36e5);
+    var age = Math.round((Date.now() - Date.parse(w.requested_at)) / 36e5), old21 = w.status === 'pending' && String(w.work_day || '') < addDays_(ymd_(new Date()), -21);
     return "<tr data-co='" + esc(mgiCode_(w.company_id)) + "' data-id='" + esc(w.id) + "'>" +
-      "<td style='white-space:nowrap'><span class='chip'>" + esc(mgiCode_(w.company_id)) + "</span><div class='muted' style='font-size:11.5px'>" + gd(w.work_day) + "</div></td>" +
+      "<td style='white-space:nowrap'><span class='chip'>" + esc(mgiCode_(w.company_id)) + "</span><div class='muted' style='font-size:11.5px'>" + gd(w.work_day) + "</div>" +
+        (old21 ? "<span class='chip r' title='21 დღეზე ძველი, ჯერ კიდევ პასუხის მოლოდინში' style='margin-top:3px'>ძველი</span>" : '') + "</td>" +
       "<td><b>" + esc(w.dispatcher_name) + "</b><div style='font-size:12px'>" + mgiDriversHtml_(w) + "</div></td>" +
       "<td><span class='chip " + (w.kind === 'standard' ? 'y' : '') + "'>" + (MGI_KIND[w.kind] || esc(w.kind)) + "</span>" +
         (w.order_number && w.kind !== 'standard' ? "<div style='font-size:12px;margin-top:3px'><b>" + esc(w.order_number) + "</b></div>" : '') + "</td>" +
@@ -9641,4 +9666,403 @@ refreshLive_ = async function (manual) {
   return out;
 };
 try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' || MTAB === 'overview') render(); }); } catch (e) {}
+</script>
+<script id="qrd-diana-003">
+/* =====================================================================================================================
+   QRD-DIANA-003 · owner-authorised 2026-09-30 (Tbilisi). Loaded LAST; earlier code is extended, never replaced.
+   (1) Management inbox: a PENDING request is listed whatever its age (patched in mgiLoad_ above).
+   (2) Invoice/BOL rows: a load delivered before the app first saw it is labelled "sending history unknown" (patched above).
+   (3) Desktop shift-close alerts for management — below.
+
+   Desktop alerts, what they are and are not:
+   * Source of truth = a committed row in public.shift_close. Only a successful close creates one (shift_close_submit
+     inserts it with closed_at = now(); checked 2026-09-30: no other database function and no screen writes that table).
+     Button clicks, refused attempts (close_event.allowed = false), requests, waivers and failed writes never create such a
+     row, so they never alert. An update of an existing row keeps its closed_at (no new alert); if a row were ever removed
+     and the day closed again, the new closed_at would be a new close (one new alert).
+   * One narrow read: shift_close rows with closed_at >= cursor - 10 min (overlap), full pagination, stable order; RLS limits
+     them to the manager's companies and the list is intersected with my_company_ids() — independent of the company
+     selected on screen. A failed or partial read never moves the cursor. Each close has a stable identity
+     company|dispatcher|work day|closed_at; the seen-set makes polling, refresh, reconnect and overlap duplicate-free.
+   * One poller per signed-in account per browser (Web Locks; localStorage lease as fallback); the other tabs follow through
+     the shared per-account state (storage events). Only the poller plays the sound and raises the OS notification.
+   * Nothing runs until the manager clicks "შეტყობინებების ჩართვა" (that click asks the browser for notification permission
+     once, and unlocks audio). The first enable reads the last 24 h silently (history, no sound). A backlog = one sound.
+   * State lives in localStorage per account (dos_close_alerts_v1:<email>), is cleared on sign-out, and never leaves the
+     browser. No database object, no server worker, no external service. Nothing here writes a table.
+   * Limits (stated to the owner): the app must be open and signed in on an awake computer; a background tab may be slowed
+     by the browser and a closed browser gets nothing; the operating system may silence notifications. Catch-up happens
+     when the page runs again.
+   ===================================================================================================================== */
+(function () {
+  'use strict';
+  var NS = 'dos_close_alerts_v1:', LEASE = 'dos_close_alerts_lease_v1:';
+  var CFG = { poll: 25000, overlap: 10 * 60000, baseline: 24 * 3600000, keep: 150, cosEvery: 10 * 60000, toastMs: 15000, lease: 60000 };
+  var TEST = !!(window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test');
+  if (TEST && window.D3_ALERTS_CFG) Object.assign(CFG, window.D3_ALERTS_CFG);
+  var A = { email: null, st: null, leader: false, release: null, polling: false, ticker: null, worker: null, cos: null, cosAt: 0,
+            lastOkAt: 0, err: '', audio: null, toasted: {}, tabId: Math.random().toString(36).slice(2), open: false, hooked: false };
+
+  /* ------------------------------------------------------------------ helpers */
+  function escA(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function ms(s) { if (!s) return NaN; var t = String(s).replace(/(\.\d{3})\d+/, '$1').replace(' ', 'T'); if (/[+-]\d{2}$/.test(t)) t += ':00'; return Date.parse(t); }
+  function iso(n) { return new Date(n).toISOString(); }
+  function eligible() { return !!(typeof USER !== 'undefined' && USER && USER.role === 'mgmt' && USER.email); }
+  function stKey(e) { return NS + String(e || A.email || '').toLowerCase(); }
+  function blank() { return { v: 1, enabled: false, muted: false, cursor: null, baseline: false, seen: {}, read: {}, entries: [], asked: false, deniedSeen: false, lastOkAt: 0, err: '' }; }
+  function load() { try { var s = JSON.parse(localStorage.getItem(stKey()) || 'null'); if (s && s.v === 1) return s; } catch (e) {} return blank(); }
+  function save() { try { A.st.lastOkAt = A.lastOkAt; A.st.err = A.err; localStorage.setItem(stKey(), JSON.stringify(A.st)); } catch (e) {} }
+  function coCode(id) { var c = (typeof COLIST !== 'undefined' ? COLIST : []).filter(function (x) { return x.company_id === id; })[0]; return c ? (c.code || c.legal_name || '?') : '?'; }
+  function evId(r) { return r.company_id + '|' + r.dispatcher_name + '|' + r.work_day + '|' + ms(r.closed_at); }
+  function hhmm(n) { var d = new Date(n); var p = function (x) { return (x < 10 ? '0' : '') + x; }; return p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function dayLbl(d) { try { return (typeof gd === 'function' ? gd(d) : String(d)) + '.'; } catch (e) { return String(d); } }
+  /* "დიანა აბრამიანი" -> "დიანა აბრამიანმა", "ნოდარ შარაბიძე" -> "ნოდარ შარაბიძემ" (Georgian ergative on the surname) */
+  function erg(name) {
+    var n = String(name || '').trim(); if (!/[ა-ჿ]$/.test(n)) return null;
+    if (/ი$/.test(n)) return n.slice(0, -1) + 'მა';
+    if (/[აეოუ]$/.test(n)) return n + 'მ';
+    return n + 'მა';
+  }
+  function line(e) {
+    var who = erg(e.dispatcher);
+    return (who ? who + ' ცვლა დახურა' : (e.dispatcher + ' — ცვლა დაიხურა')) + ' · ' + e.code + ' · ' + dayLbl(e.work_day) + ' · ' + hhmm(e.at);
+  }
+  function unread() { return (A.st && A.st.entries || []).filter(function (e) { return !A.st.read[e.id]; }).length; }
+
+  /* ------------------------------------------------------------------ sound (WebAudio, unlocked only by a user gesture) */
+  function audioUnlock() {
+    try {
+      var C = window.AudioContext || window.webkitAudioContext; if (!C) return false;
+      if (!A.audio) A.audio = new C();
+      if (A.audio.state === 'suspended' && A.audio.resume) A.audio.resume();
+      return true;
+    } catch (e) { return false; }
+  }
+  function beep() {
+    try {
+      if (!A.audio || A.audio.state !== 'running') return false;
+      var t = A.audio.currentTime, o = A.audio.createOscillator(), g = A.audio.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.setValueAtTime(660, t + 0.12);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.connect(g); g.connect(A.audio.destination); o.start(t); o.stop(t + 0.3);
+      return true;
+    } catch (e) { return false; }
+  }
+  function osNotify(title, body, tag, silent) {
+    try {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return false;
+      var n = new Notification(title, { body: body, tag: tag, silent: !!silent });
+      n.onclick = function () { try { window.focus(); } catch (e) {} var id = tag && tag.indexOf('dos-close:') === 0 ? tag.slice(10) : null; if (id) openDetails(id); try { n.close(); } catch (e) {} };
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* ------------------------------------------------------------------ permitted companies (the same list RLS uses) */
+  async function permitted(force) {
+    if (!force && A.cos && Date.now() - A.cosAt < CFG.cosEvery) return A.cos;
+    var r = await sb.rpc('my_company_ids');
+    if (r.error || !Array.isArray(r.data)) throw new Error('company list unavailable');
+    A.cos = r.data.slice(); A.cosAt = Date.now();
+    var keep = {}; A.cos.forEach(function (c) { keep[c] = 1; });
+    var before = A.st.entries.length;
+    A.st.entries = A.st.entries.filter(function (e) { return keep[e.company_id]; });   /* access removed -> its entries go */
+    if (A.st.entries.length !== before) save();
+    return A.cos;
+  }
+
+  /* ------------------------------------------------------------------ the poll (leader only, never overlapping) */
+  async function poll(reason) {
+    if (!eligible() || !A.st || !A.st.enabled || !A.leader || A.polling) return;
+    if (USER.email !== A.email) { reset(); return; }
+    A.polling = true;
+    var email = A.email;
+    try {
+      var cos = await permitted(false), allow = {};
+      cos.forEach(function (c) { allow[c] = 1; });
+      /* the cursor only ever holds a SERVER time (a closed_at already read); until one exists the window is the last 24 h
+         by this computer's clock, so a wrong local clock can never skip a close (the seen-set removes repeats) */
+      var now = Date.now(), cur = A.st.baseline ? now - CFG.baseline : (ms(A.st.cursor) || now - CFG.baseline);
+      var since = iso(Math.max(0, cur - CFG.overlap));
+      var rows = await selAll_(function () {
+        return sb.from('shift_close').select('company_id,dispatcher_name,work_day,closed_at,closed_by').gte('closed_at', since);
+      }, ['closed_at', 'company_id', 'dispatcher_name', 'work_day']);            /* throws on any failed page: cursor stays */
+      if (!eligible() || USER.email !== email || !A.st.enabled) return;
+      var fresh = [], maxAt = ms(A.st.cursor) || 0, silent = !!A.st.baseline;
+      rows.forEach(function (r) {
+        if (!r || !allow[r.company_id] || !r.closed_at) return;
+        var at = ms(r.closed_at); if (!isFinite(at)) return;
+        if (at > maxAt) maxAt = at;
+        var id = evId(r);
+        if (A.st.seen[id]) return;
+        A.st.seen[id] = at;
+        var e = { id: id, company_id: r.company_id, code: coCode(r.company_id), dispatcher: r.dispatcher_name, work_day: r.work_day, at: at, by: r.closed_by || '' };
+        if (silent) A.st.read[id] = 1; else fresh.push(e);
+        A.st.entries.push(e);
+      });
+      A.st.entries.sort(function (a, b) { return b.at - a.at || String(a.id).localeCompare(String(b.id)); });
+      var drop = A.st.entries.slice(CFG.keep); A.st.entries = A.st.entries.slice(0, CFG.keep);
+      drop.forEach(function (e) { delete A.st.read[e.id]; });
+      var floor = (maxAt || now) - 2 * 24 * 3600000;                              /* bounded seen-set, far outside the overlap */
+      Object.keys(A.st.seen).forEach(function (k) { if (A.st.seen[k] < floor) delete A.st.seen[k]; });
+      if (maxAt) A.st.cursor = iso(maxAt);
+      A.st.baseline = false; A.lastOkAt = Date.now(); A.err = '';
+      save();
+      if (fresh.length) announce(fresh, true);
+      paint();
+    } catch (e) {
+      A.err = 'კავშირი არ არის'; save(); paint();
+      if (TEST) console.warn('close alerts poll failed', e && e.message);
+    } finally { A.polling = false; }
+  }
+  function announce(list, leader) {
+    list.forEach(function (e) { toast(e); });
+    if (!leader) return;
+    var played = !A.st.muted && beep();
+    /* one sound per batch: the page's own beep, or else the first system notification's sound */
+    if (list.length <= 3) list.forEach(function (e, i) { osNotify('ცვლა დაიხურა', line(e), 'dos-close:' + e.id, played || A.st.muted || i > 0); });
+    else osNotify(list.length + ' ცვლა დაიხურა', list.slice(0, 3).map(line).join('\n') + '\n…', 'dos-close-batch:' + list[0].id, played || A.st.muted);
+  }
+
+  /* ------------------------------------------------------------------ one poller per account and browser */
+  function lead() {
+    if (A.leader || A.release) return;
+    var name = 'dos-close-alerts:' + A.email;
+    if (navigator.locks && navigator.locks.request) {
+      var ac = (typeof AbortController === 'function') ? new AbortController() : null;
+      A.release = function () { if (ac) { try { ac.abort(); } catch (e) {} } A.release = null; };   /* still waiting: cancel */
+      navigator.locks.request(name, ac ? { signal: ac.signal } : {}, function () {
+        if (!A.st || !A.st.enabled || !eligible()) { A.release = null; return; }  /* let the lock go straight away */
+        A.leader = true; paint(); poll('lead');
+        return new Promise(function (res) { A.release = function () { A.leader = false; A.release = null; res(); }; });
+      }).catch(function () { A.leader = false; A.release = null; });
+    } else {
+      A.release = function () { A.leader = false; A.release = null; try { var l = JSON.parse(localStorage.getItem(LEASE + A.email) || 'null'); if (l && l.tab === A.tabId) localStorage.removeItem(LEASE + A.email); } catch (e) {} };
+      leaseTick();
+    }
+  }
+  function leaseTick() {
+    if (navigator.locks && navigator.locks.request) return;
+    try {
+      var k = LEASE + A.email, l = JSON.parse(localStorage.getItem(k) || 'null'), now = Date.now();
+      if (!l || l.until < now || l.tab === A.tabId) { localStorage.setItem(k, JSON.stringify({ tab: A.tabId, until: now + CFG.lease })); A.leader = true; }
+      else A.leader = false;
+    } catch (e) { A.leader = true; }
+  }
+  function unlead() { if (A.release) { try { A.release(); } catch (e) {} } A.leader = false; A.release = null; }
+
+  /* ------------------------------------------------------------------ ticker: a worker keeps ~25 s in a background tab */
+  function startTicker() {
+    if (A.ticker || A.worker) return;
+    try {
+      var src = 'var t=null;onmessage=function(e){if(e.data&&e.data.start){clearInterval(t);t=setInterval(function(){postMessage(1);},e.data.start);}if(e.data&&e.data.stop){clearInterval(t);t=null;}};';
+      A.worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      A.worker.onmessage = function () { tick('worker'); };
+      A.worker.postMessage({ start: CFG.poll });
+    } catch (e) { A.worker = null; A.ticker = setInterval(function () { tick('timer'); }, CFG.poll); }
+  }
+  function stopTicker() {
+    if (A.worker) { try { A.worker.postMessage({ stop: 1 }); A.worker.terminate(); } catch (e) {} A.worker = null; }
+    if (A.ticker) { clearInterval(A.ticker); A.ticker = null; }
+  }
+  function tick(why) {
+    try {
+      if (!eligible()) { if (A.email) { clearAccount(); reset(); } return; }
+      if (USER.email !== A.email) { reset(); init(); return; }
+      if (!A.st || !A.st.enabled) return;
+      leaseTick(); lead();
+      if (A.leader) poll(why);
+    } catch (e) { /* alerts never break the app */ }
+  }
+
+  /* ------------------------------------------------------------------ lifecycle */
+  function init() {
+    if (!eligible()) return;
+    A.email = String(USER.email).toLowerCase(); A.st = load(); A.toasted = {};
+    (A.st.entries || []).forEach(function (e) { A.toasted[e.id] = 1; });           /* a refresh never replays a toast or sound */
+    ensureBell(); paint();
+    /* best effort: Chrome lets the page start sound when this tab has already had a click on the site (a refresh keeps
+       that); a fresh tab stays silent until the first click on the page (the pointerdown hook below) - the browser's
+       rule, not a setting of this app */
+    if (A.st.enabled && !A.st.muted) audioUnlock();
+    if (A.st.enabled) { startTicker(); lead(); }
+    if (!A.hooked) {
+      A.hooked = true;
+      window.addEventListener('storage', function (ev) {                          /* follower tabs: the poller's updates */
+        if (!A.email || ev.key !== stKey()) return;
+        var prev = A.st; A.st = load();
+        var fresh = (A.st.entries || []).filter(function (e) { return !A.toasted[e.id] && !A.st.read[e.id]; });
+        if (fresh.length && document.visibilityState === 'visible') fresh.forEach(toast);
+        (A.st.entries || []).forEach(function (e) { A.toasted[e.id] = 1; });
+        if (A.st.enabled && !(prev && prev.enabled)) { startTicker(); lead(); }
+        if (!A.st.enabled) { unlead(); stopTicker(); }
+        paint();
+      });
+      var wake = function () { tick('wake'); };
+      document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') wake(); });
+      window.addEventListener('focus', wake); window.addEventListener('online', wake);
+      document.addEventListener('pointerdown', function () { if (A.st && A.st.enabled && !A.st.muted) audioUnlock(); }, true);
+    }
+  }
+  function reset() { unlead(); stopTicker(); A.email = null; A.st = null; A.cos = null; A.cosAt = 0; A.toasted = {}; A.err = ''; paint(); }
+  function clearAccount() { try { localStorage.removeItem(stKey()); } catch (e) {} }
+  var __signOut = window.signOutUser;
+  if (typeof __signOut === 'function') window.signOutUser = signOutUser = async function () { try { if (A.email) { clearAccount(); reset(); } } catch (e) {} return __signOut.apply(this, arguments); };
+  setInterval(function () { try { if (eligible() && (!A.email || A.email !== String(USER.email).toLowerCase())) { reset(); init(); } else if (!eligible() && A.email) { clearAccount(); reset(); } } catch (e) {} }, 2000);
+
+  /* ------------------------------------------------------------------ user actions */
+  window.d3AlertsEnable = function () {
+    if (!eligible()) return;
+    if (!A.st || A.email !== String(USER.email).toLowerCase()) { reset(); init(); }
+    audioUnlock();                                                                /* inside the click: autoplay allowed */
+    A.st.enabled = true; A.st.baseline = true; A.st.cursor = null; save();
+    startTicker(); lead(); paint(); tick('enable');                               /* alerts run at once, whatever the prompt does */
+    /* the browser is asked ONCE, from this click, and only while it has no answer; a denial is never re-asked */
+    if ('Notification' in window && Notification.permission === 'default' && !A.st.asked) {
+      A.st.asked = true; save();
+      try { var p = Notification.requestPermission(); if (p && p.then) p.then(function () { paint(); }, function () {}); } catch (e) {}
+    }
+  };
+  window.d3AlertsDisable = function () { if (!A.st) return; A.st.enabled = false; save(); unlead(); stopTicker(); paint(); };
+  window.d3AlertsMute = function () { if (!A.st) return; A.st.muted = !A.st.muted; if (!A.st.muted) audioUnlock(); save(); paint(); };
+  window.d3AlertsReadAll = function () { if (!A.st) return; A.st.entries.forEach(function (e) { A.st.read[e.id] = 1; }); save(); paint(); };
+  window.d3AlertsTest = function () {
+    audioUnlock();
+    var e = { id: 'test-' + Date.now(), company_id: '', code: (typeof COCODE === 'function' && COCODE()) || 'QRD', dispatcher: 'დიანა აბრამიანი', work_day: (typeof workToday_ === 'function' ? workToday_() : ''), at: Date.now(), test: true };
+    toast(e); var played = !(A.st && A.st.muted) && beep();
+    osNotify('ტესტი — Melos Dispatch', 'სატესტო შეტყობინება (ნამდვილი დახურვა არ არის): ' + line(e), 'dos-close-test', played);
+  };
+  window.d3AlertsToggle = function () { A.open = !A.open; paint(); };
+  window.d3AlertsOpen = function (id) { openDetails(id); };
+
+  /* ------------------------------------------------------------------ UI: bell, panel, toasts, read-only details */
+  var BELL = "<svg width='17' height='17' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/><path d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/><path d='M4 2.5 2.5 4M20 2.5 21.5 4'/></svg>";
+  function ensureBell() {
+    if (document.getElementById('d3Bell')) return;
+    var bar = document.querySelector('.topbar'), sync = document.getElementById('syncbtn');
+    if (!bar) return;
+    if (!document.getElementById('d3Style')) {
+      var css = document.createElement('style'); css.id = 'd3Style';
+      /* the existing 🔔 (answers to a dispatcher's own requests) stays as it is; this button carries its own label */
+      css.textContent = '#d3Bell{width:auto;padding:0 9px;gap:5px;align-items:center;justify-content:center}#d3Bell .d3lbl{font-size:11.5px;font-weight:700}@media(max-width:760px){#d3Bell .d3lbl{display:none}}';
+      document.head.appendChild(css);
+    }
+    var b = document.createElement('button');
+    b.id = 'd3Bell'; b.className = 'iconbtn'; b.type = 'button'; b.style.cssText = 'position:relative;display:none';
+    b.setAttribute('aria-label', 'ცვლის დახურვის შეტყობინებები'); b.title = 'ცვლის დახურვები (მენეჯმენტი)';
+    b.onclick = function (ev) { ev.stopPropagation(); window.d3AlertsToggle(); };
+    if (sync && sync.parentNode === bar) bar.insertBefore(b, sync); else bar.appendChild(b);
+    /* close the panel on a click outside it. The event path is fixed when the click starts, so a panel button that
+       re-renders the panel (and so detaches itself) still counts as a click inside. */
+    document.addEventListener('click', function (ev) {
+      var p = document.getElementById('d3Panel'); if (!A.open || !p) return;
+      var path = (ev.composedPath && ev.composedPath()) || [];
+      if (path.indexOf(p) >= 0 || p.contains(ev.target) || path.indexOf(document.getElementById('d3Bell')) >= 0) return;
+      A.open = false; paint();
+    });
+  }
+  function status() {
+    if (!A.st || !A.st.enabled) return { t: 'გამორთულია', c: 'var(--ink2)' };
+    if (A.err) return { t: A.err + (A.lastOkAt || A.st.lastOkAt ? ' — ბოლო შემოწმება ' + hhmm(A.lastOkAt || A.st.lastOkAt) : ''), c: 'var(--crit)' };
+    if (!A.leader) return { t: 'ჩართულია (სხვა ჩანართი ამოწმებს)', c: 'var(--good)' };
+    return { t: 'ჩართულია' + (A.lastOkAt ? ' — ბოლო შემოწმება ' + hhmm(A.lastOkAt) : ''), c: 'var(--good)' };
+  }
+  function perm() { return 'Notification' in window ? Notification.permission : 'unsupported'; }
+  function paint() {
+    try {
+      var b = document.getElementById('d3Bell');
+      if (!b) { if (eligible()) ensureBell(); b = document.getElementById('d3Bell'); if (!b) return; }
+      var show = eligible() && !!A.st; b.style.display = show ? 'inline-flex' : 'none';
+      var n = show ? unread() : 0, bad = show && A.st.enabled && !!A.err;
+      b.innerHTML = BELL + "<span class='d3lbl'>დახურვები</span>" + (n ? "<span data-d3-badge style='position:absolute;top:-4px;right:-4px;background:var(--crit);color:#fff;border-radius:999px;min-width:16px;height:16px;line-height:16px;font-size:10.5px;font-weight:800;padding:0 3px'>" + n + "</span>" : '') +
+        (bad ? "<span style='position:absolute;bottom:-3px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--crit)'></span>" : '') +
+        (show && !A.st.enabled ? "<span style='position:absolute;bottom:-3px;right:-3px;width:8px;height:8px;border-radius:50%;background:var(--ink2);opacity:.6'></span>" : '');
+      b.style.opacity = show && A.st.enabled ? '1' : '.75';
+      var p = document.getElementById('d3Panel');
+      if (!show || !A.open) { if (p) p.remove(); return; }
+      if (!p) { p = document.createElement('div'); p.id = 'd3Panel'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'ცვლის დახურვები'); document.body.appendChild(p); }
+      var r = b.getBoundingClientRect();
+      p.style.cssText = 'position:fixed;top:' + Math.round(r.bottom + 8) + 'px;right:' + Math.max(8, Math.round(window.innerWidth - r.right - 8)) + 'px;width:min(420px,calc(100vw - 16px));max-height:min(72vh,640px);overflow:auto;background:var(--card);color:var(--ink);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);z-index:9990;padding:14px';
+      var s = status(), pm = perm(), st = A.st;
+      var btn = function (label, fn, primary) { return "<button type='button' class='fixbtn' style='margin:0 6px 6px 0" + (primary ? ';background:var(--good);color:#fff;border-color:var(--good)' : '') + "' onclick=\"" + fn + "\">" + label + "</button>"; };
+      var acts = st.enabled
+        ? btn('სატესტო შეტყობინება', 'd3AlertsTest()') + btn(st.muted ? 'ხმის ჩართვა' : 'ხმის გამორთვა', 'd3AlertsMute()') + btn('ყველა წაკითხულია', 'd3AlertsReadAll()') + btn('გამორთვა', 'd3AlertsDisable()')
+        : btn('შეტყობინებების ჩართვა', 'd3AlertsEnable()', true) + btn('სატესტო შეტყობინება', 'd3AlertsTest()');
+      var note = pm === 'denied' ? "<div style='font-size:12px;color:var(--crit);margin:2px 0 8px'>ბრაუზერში შეტყობინებები დაბლოკილია — სია და ბარათი მაინც მუშაობს; ხმა ისმის მხოლოდ მაშინ, თუ ამ ჩანართში გვერდზე ერთხელ მაინც დააჭირე (ბრაუზერის წესი). ჩასართავად ბრაუზერის საიტის პარამეტრებში დაუშვი.</div>"
+               : pm === 'unsupported' ? "<div style='font-size:12px;color:var(--ink2);margin:2px 0 8px'>ეს ბრაუზერი სისტემურ შეტყობინებებს არ უჭერს მხარს — მუშაობს სია და ბარათი; ხმა — ამ ჩანართში გვერდზე ერთი დაჭერის შემდეგ.</div>"
+               : (st.enabled && pm === 'default' ? "<div style='font-size:12px;color:var(--ink2);margin:2px 0 8px'>სისტემური შეტყობინება ჯერ არ არის დაშვებული.</div>" : '');
+      var list = (st.entries || []).slice(0, 50).map(function (e) {
+        var u = !st.read[e.id];
+        return "<button type='button' data-d3-entry='" + escA(e.id) + "' onclick=\"d3AlertsOpen(this.getAttribute('data-d3-entry'))\" style='display:flex;gap:8px;align-items:flex-start;width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--border);padding:8px 2px;cursor:pointer;color:var(--ink)'>" +
+          "<span style='margin-top:6px;width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:" + (u ? 'var(--crit)' : 'transparent') + "'></span>" +
+          "<span style='font-size:13px;" + (u ? 'font-weight:700' : 'font-weight:500') + "'>" + escA(line(e)) + "</span></button>";
+      }).join('');
+      p.innerHTML = "<div style='display:flex;justify-content:space-between;align-items:baseline;gap:8px'><b style='font-size:14px'>ცვლის დახურვები</b>" +
+          "<span style='font-size:11.5px;color:" + s.c + "' data-d3-status>" + escA(s.t) + "</span></div>" +
+        "<div style='margin:10px 0 4px'>" + acts + "</div>" + note +
+        (list || "<div style='font-size:12.5px;color:var(--ink2);padding:8px 0'>" + (st.enabled ? 'ახალი დახურვა ჯერ არ არის.' : 'ჩართვის შემდეგ აქ გამოჩნდება ყველა ახალი დახურვა ყველა შენი კომპანიიდან.') + "</div>") +
+        "<div style='font-size:11px;color:var(--ink2);margin-top:10px;line-height:1.45'>მუშაობს მხოლოდ მაშინ, როცა აპი ამ კომპიუტერზე გახსნილია და შესული ხარ. ფონურ ჩანართში ბრაუზერმა შეიძლება დააგვიანოს; დახურული ბრაუზერი შეტყობინებას ვერ მიიღებს — გახსნისას სია თავისით შეივსება. გვერდის ხმას ბრაუზერი უშვებს მხოლოდ მას შემდეგ, რაც ამ ჩანართში გვერდზე ერთხელ მაინც დააჭერ; დაშვებული სისტემური შეტყობინება თავის ხმას ამის გარეშეც გამოსცემს.</div>";
+    } catch (e) { /* never break the page */ }
+  }
+  function toast(e) {
+    try {
+      if (!e || A.toasted[e.id]) return; A.toasted[e.id] = 1;
+      var box = document.getElementById('d3Toasts');
+      if (!box) { box = document.createElement('div'); box.id = 'd3Toasts'; box.setAttribute('aria-live', 'polite'); box.style.cssText = 'position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9995;max-width:min(380px,calc(100vw - 32px))'; document.body.appendChild(box); }
+      var c = document.createElement('div');
+      c.setAttribute('data-d3-toast', e.id);
+      c.style.cssText = 'background:var(--card);color:var(--ink);border:1px solid var(--border);border-left:4px solid ' + (e.test ? 'var(--ink2)' : 'var(--good)') + ';border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px 12px;cursor:pointer;font-size:13px';
+      c.innerHTML = "<div style='font-weight:700;margin-bottom:2px'>" + (e.test ? 'ტესტი — ნამდვილი დახურვა არ არის' : 'ცვლა დაიხურა') + "</div><div>" + escA(line(e)) + "</div>";
+      c.onclick = function () { c.remove(); if (!e.test) openDetails(e.id); };
+      box.appendChild(c);
+      setTimeout(function () { try { c.remove(); } catch (x) {} }, CFG.toastMs);
+    } catch (x) {}
+  }
+  async function openDetails(id) {
+    try {
+      if (!A.st) return;
+      var e = (A.st.entries || []).filter(function (x) { return x.id === id; })[0]; if (!e) return;
+      A.st.read[id] = 1; save(); A.open = false; paint();
+      var box = document.getElementById('d3Details');
+      if (!box) { box = document.createElement('div'); box.id = 'd3Details'; box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px'; box.onclick = function (ev) { if (ev.target === box) box.remove(); }; document.body.appendChild(box); }
+      box.innerHTML = "<div class='card p' style='max-width:560px;width:100%;max-height:82vh;overflow:auto'>იტვირთება…</div>";
+      var r = await sb.from('shift_close').select('company_id,dispatcher_name,work_day,closed_at,closed_by,gates').eq('company_id', e.company_id).eq('dispatcher_name', e.dispatcher).eq('work_day', e.work_day).limit(1);
+      var row = !r.error && r.data && r.data[0];
+      var body;
+      if (r.error) body = "<div style='color:var(--crit)'>ჩანაწერი ვერ ჩაიტვირთა — სცადე განახლება.</div>";
+      else if (!row) body = "<div>ამ დღის ცვლის დახურვა ახლა აღარ არსებობს (ცვლა ხელახლა გაიხსნა).</div>";
+      else {
+        var g = row.gates || {}, sg = (g.server && g.server.gates) || {}, same = ms(row.closed_at) === e.at;
+        var gl = { appt: 'Appointment', calls: 'ზარები', check: 'ჩეკი', roster: 'კვირის სია', invoice: 'ინვოისი და BOL', gatepass: 'Gate Pass', standard: 'ტვირთის სტანდარტი' };
+        var gates = Object.keys(sg).map(function (k) { var ok = sg[k] && sg[k].ok === true; return "<li style='color:" + (ok ? 'var(--good)' : 'var(--crit)') + "'>" + (ok ? '✓ ' : '✗ ') + escA(gl[k] || k) + "</li>"; }).join('');
+        body = "<div style='display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px'>" +
+          "<span style='color:var(--ink2)'>კომპანია</span><b>" + escA(coCode(row.company_id)) + "</b>" +
+          "<span style='color:var(--ink2)'>დისპეჩერი</span><b>" + escA(row.dispatcher_name) + "</b>" +
+          "<span style='color:var(--ink2)'>სამუშაო დღე</span><span>" + escA(typeof gdFull === 'function' ? gdFull(row.work_day) : row.work_day) + "</span>" +
+          "<span style='color:var(--ink2)'>დახურვის დრო</span><span>" + escA(new Date(ms(row.closed_at)).toLocaleString('ka-GE')) + " (UTC " + escA(iso(ms(row.closed_at)).slice(11, 16)) + ")</span>" +
+          "<span style='color:var(--ink2)'>დახურა</span><span>" + escA(String(row.closed_by || '').split('@')[0] || '—') + "</span>" +
+          "<span style='color:var(--ink2)'>ტვირთები</span><span>" + escA(String(g.count != null ? g.count : (Array.isArray(g.orders) ? g.orders.length : '—'))) + (Array.isArray(g.orders) && g.orders.length ? ' — ' + escA(g.orders.join(', ')) : '') + "</span>" +
+          "</div>" + (same ? '' : "<div style='font-size:12px;color:var(--crit);margin-top:8px'>ეს დღე შემდეგ ხელახლა დაიხურა; ნაჩვენებია ბოლო დახურვა.</div>") +
+          (gates ? "<div style='margin-top:10px;font-size:12.5px'><b>სერვერის შემოწმება დახურვისას</b><ul style='margin:6px 0 0;padding-left:18px'>" + gates + "</ul></div>" : '');
+      }
+      box.innerHTML = "<div class='card p' style='max-width:560px;width:100%;max-height:82vh;overflow:auto' data-d3-details='" + escA(e.company_id + '|' + e.work_day) + "'>" +
+        "<h4 style='margin-bottom:8px'>ცვლის დახურვა — მხოლოდ სანახავად</h4>" + body +
+        "<div style='display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap'>" +
+          "<button type='button' class='fixbtn' onclick=\"d3AlertsInbox('" + escA(e.company_id) + "')\">მართვის სიაში ნახვა</button>" +
+          "<button type='button' class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"var d=document.getElementById('d3Details'); if(d) d.remove();\">დახურვა</button></div></div>";
+    } catch (x) { /* read-only view; nothing to undo */ }
+  }
+  window.d3AlertsInbox = function (co) {
+    try {
+      var d = document.getElementById('d3Details'); if (d) d.remove();
+      if (typeof VIEWAS !== 'undefined' && VIEWAS && typeof enterViewAs === 'function') enterViewAs('');
+      if (ROLE !== 'mgmt' && typeof setRole === 'function') setRole('mgmt');
+      if (typeof MGI !== 'undefined') { MGI.scope = co || 'ALL'; MGI.tab = 'shift-history'; }
+      if (typeof CLF !== 'undefined') CLF = 'shift-history';
+      if (typeof goM === 'function') goM('closes');
+    } catch (x) {}
+  };
+
+  if (TEST) window.D3_CLOSE_ALERTS_TEST = { A: A, CFG: CFG, tick: tick, poll: function () { return poll('test'); }, line: line, erg: erg, evId: evId };
+  try { if (eligible()) init(); } catch (e) {}
+})();
 </script>
