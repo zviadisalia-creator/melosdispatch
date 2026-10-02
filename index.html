@@ -7338,6 +7338,8 @@ loadPlanContacts = async function(){
           bb.appendChild(dx);
         }
         if (it.recheck) bb.appendChild(el("div", "cv", it.recheck));
+        try { if (typeof window.__gr6rCard === "function") window.__gr6rCard(bb, it, { save: save, render: renderAll,
+              items: function () { return state.items; }, company: coId, alive: function () { return alive(scope); } }); } catch (e) {}   /* GATE-RELIABILITY-006R3 */
       } else {
         bb.textContent = it.text;
       }
@@ -10293,3 +10295,116 @@ try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' 
   };
 })();
 </script>
+<script id="gate-reliability-006r3">
+/* =====================================================================================================================
+   GATE-RELIABILITY-006R3 · owner-authorised 2026-10-02. Loaded LAST; earlier code is extended, never replaced.
+   The server recheck inside an assistant answer ("ხელახალი შემოწმება (სერვერზე ...") gets its own small status card:
+   - it shows the CURRENT canonical result per leg (gate_recheck_v1 = the evaluator Shift Close uses, the caller's own JWT,
+     same company/dispatcher scope; management and dispatchers alike), separate from the conversation's own badge;
+   - while the server says "processing", and the answer is not already re-checked by the chat itself, it re-reads at most
+     4 times, 2 minutes apart; afterwards (and for a completion after any window) one button reads the result again;
+   - a read never submits another explanation, never starts paid work by itself (the server deduplicates per call and
+     extractor version) and never paints a gate: after a changed result the page re-reads its gates from the server;
+   - an older read never overwrites a newer one (per-leg server time + request sequence); only the newest card is live.
+   ===================================================================================================================== */
+(function () {
+  var HDR = "ხელახალი შემოწმება (სერვერზე", LEG = { "აღება": "pickup", "ჩაბარება": "delivery" }, KA = { pickup: "აღება", delivery: "ჩაბარება" };
+  var POLL_MS = 120000, POLL_MAX = 4, timers = {}, seqs = {};
+  function hasHdr(it) { return !!(it && it.role === "a" && it.res && String(it.res.message || "").indexOf(HDR) >= 0); }
+  function parse(msg) {
+    var out = [];
+    String(msg || "").split("\n").forEach(function (line) {
+      var m = /^(.+?) · (აღება|ჩაბარება): (.*)$/.exec(line.trim());
+      if (m && out.length < 6 && !out.some(function (x) { return x.order === m[1] && x.leg === LEG[m[2]]; }))
+        out.push({ order: m[1], leg: LEG[m[2]], text: m[3] });
+    });
+    return out;
+  }
+  function stOf(text) {
+    if (/გეითი მწვანეა|აღება დასრულებულია|არ მოითხოვება/.test(text)) return "ok";
+    if (/მუშავდება/.test(text)) return "wait";
+    return "no";
+  }
+  function hm(t) { try { return new Date(t).toLocaleTimeString("ka-GE", { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
+  function e(tag, cls, text) { var x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; }
+  function newest(api) { var n = null; (api.items() || []).forEach(function (x) { if (hasHdr(x)) n = x; }); return n; }
+  function schedule(it, api) {
+    var st = it.gr6r; if (!st || timers[it.id]) return;
+    if (st.n >= POLL_MAX || !st.legs.some(function (l) { return l.st === "wait"; })) return;
+    if (it.res && it.res.outcome === "waiting") return;                 /* the chat itself re-checks this answer */
+    timers[it.id] = setTimeout(function () { delete timers[it.id]; refresh(it, api, false); }, POLL_MS);
+  }
+  async function refresh(it, api, manual) {
+    var st = it.gr6r; if (!st) return;
+    if (!api.alive() || newest(api) !== it) return;                       /* scope changed or a newer card owns it */
+    if (api.company() !== st.co) { st.note = "არჩეულია სხვა კომპანია — ეს შედეგი იმ კომპანიაშია."; api.render(); return; }
+    if (typeof sb === "undefined" || !sb || typeof sb.rpc !== "function") return;
+    var my = (seqs[it.id] = (seqs[it.id] || 0) + 1), changed = false, err = null;
+    st.busy = true; api.render();
+    var orders = []; st.legs.forEach(function (l) { if (orders.indexOf(l.order) < 0) orders.push(l.order); });
+    for (var i = 0; i < orders.length && i < 3; i++) {
+      var o = orders[i], mine = st.legs.filter(function (l) { return l.order === o; });
+      var r = null;
+      try { r = await sb.rpc("gate_recheck_v1", { p_company_id: st.co, p_order: o, p_leg: mine.length === 1 ? mine[0].leg : null,
+                                                  p_request_key: null, p_note: "chat status read" }); }
+      catch (x) { r = { error: x }; }
+      if (my !== seqs[it.id] || !api.alive()) return;                    /* a newer read or another scope owns the card */
+      var d = r && r.data;
+      if (!d || r.error || !d.ok) { err = (d && d.error === "rate_limited") ? "ძალიან ბევრი შემოწმება მოკლე დროში — სცადე რამდენიმე წუთში."
+                                        : "შედეგი ახლა ვერ წავიკითხე — ეკრანზე ბოლო ცნობილი მდგომარეობაა."; continue; }
+      (Array.isArray(d.legs) ? d.legs : []).forEach(function (L) {
+        var tg = mine.filter(function (x) { return x.leg === L.leg; })[0]; if (!tg) return;
+        if (tg.at && d.checked_at && Date.parse(d.checked_at) < Date.parse(tg.at)) return;   /* older answer: ignored */
+        var q = (Array.isArray(d.reanalysis) ? d.reanalysis : []).some(function (x) { return x.leg === L.leg && x.status === "queued"; });
+        var ns = L.gate_ok ? "ok" : (L.wait || q) ? "wait" : "no";
+        if (ns !== tg.st || (L.reason || "") !== (tg.reason || "")) changed = true;
+        tg.st = ns; tg.reason = L.gate_ok ? "" : String(L.reason || ""); tg.at = d.checked_at || new Date().toISOString(); tg.exempt = L.exempt || null;
+      });
+    }
+    st.busy = false; st.err = err; st.checkedAt = new Date().toISOString(); if (!manual) st.n++;
+    try { api.save(); } catch (x) {} api.render();
+    if (changed) { try { if (typeof window.__gr6AfterRecheck === "function") window.__gr6AfterRecheck(null); } catch (x) {} }
+    schedule(it, api);
+  }
+  window.__gr6rCard = function (bb, it, api) {
+    if (!hasHdr(it) || newest(api) !== it) return;
+    if (!it.gr6r) {
+      var legs = parse(it.res.message); if (!legs.length) return;
+      it.gr6r = { co: api.company(), n: 0, legs: legs.map(function (l) { return { order: l.order, leg: l.leg, st: stOf(l.text), reason: "", at: null }; }) };
+    }
+    var st = it.gr6r, box = e("div", "cv gr6r");
+    box.appendChild(e("div", "gr6r-t", "გეითის მიმდინარე მდგომარეობა (სერვერი):"));
+    st.legs.forEach(function (l) {
+      var mark = l.st === "ok" ? "✓ " : l.st === "wait" ? "⏳ " : "✗ ";
+      var txt = l.st === "ok" ? "დადასტურებულია — გეითი მწვანეა" : l.st === "wait" ? "მუშავდება — ჯერ მწვანე არ არის"
+              : "ჯერ არ დასტურდება" + (l.reason ? ": " + l.reason : "");
+      box.appendChild(e("div", "gr6r-l " + l.st, mark + l.order + " · " + (KA[l.leg] || l.leg) + " — " + txt + (l.at ? " (" + hm(l.at) + ")" : "")));
+    });
+    if (st.err) box.appendChild(e("div", "gr6r-n bad", st.err));
+    if (st.note) box.appendChild(e("div", "gr6r-n", st.note));
+    box.appendChild(e("div", "gr6r-n", "ცვლის დახურვა ყველა gate-ის მწვანეს მოითხოვს — ეს მხოლოდ ზემოთ ნახსენები მონაკვეთებია."));
+    var waiting = st.legs.some(function (l) { return l.st === "wait"; }), live = !!timers[it.id];
+    if (st.busy) box.appendChild(e("div", "gr6r-n", "მოწმდება…"));
+    else if (live) box.appendChild(e("div", "gr6r-n", "ავტომატურად შევამოწმებ 2 წუთში (" + (st.n + 1) + "/" + POLL_MAX + ")."));
+    if (!st.busy && !live && st.legs.some(function (l) { return l.st !== "ok"; })) {
+      var b = e("button", "gr6r-b", "შედეგის განახლება"); b.type = "button";
+      b.title = "მხოლოდ კითხულობს სერვერის მიმდინარე შედეგს — ახსნას აღარ აგზავნის და ახალ ანალიზს არ იწყებს";
+      b.addEventListener("click", function () { b.disabled = true; refresh(it, api, true); });
+      box.appendChild(b);
+    }
+    bb.appendChild(box);
+    if (waiting) schedule(it, api);
+  };
+})();
+</script>
+<style id="gate-reliability-006r3-css">
+#aiChat .gr6r{margin-top:8px;padding:8px 10px;border-radius:8px;border:1px solid rgba(127,127,127,.35)}
+#aiChat .gr6r-t{font-weight:600;margin-bottom:4px}
+#aiChat .gr6r-l{margin:2px 0}
+#aiChat .gr6r-l.ok{color:#2e7d32}
+#aiChat .gr6r-l.no{color:#c62828}
+#aiChat .gr6r-n{opacity:.85;font-size:.92em;margin-top:4px}
+#aiChat .gr6r-n.bad{color:#c62828;opacity:1}
+#aiChat .gr6r-b{margin-top:6px;padding:4px 10px;border-radius:6px;border:1px solid rgba(127,127,127,.5);background:transparent;color:inherit;cursor:pointer}
+#aiChat .gr6r-b[disabled]{opacity:.5;cursor:default}
+</style>
