@@ -10616,11 +10616,22 @@ body.uim .u-section-t span{font-size:12px;color:var(--u-muted)}
 /* ---------- registry (drivers) ---------- */
 body.uim #u-drivers{max-width:1430px}
 body.uim .u-registry{border:1px solid var(--u-line);border-radius:12px;overflow:clip;background:var(--u-panel)}
-body.uim .u-row,body.uim .u-rowhead{display:grid;grid-template-columns:minmax(215px,1.2fr) 218px minmax(98px,.6fr) 92px 106px minmax(165px,.9fr);align-items:center;gap:15px;padding:13px 20px}
+body.uim .u-row,body.uim .u-rowhead{display:grid;grid-template-columns:minmax(190px,1.2fr) 104px 200px minmax(64px,.45fr) 88px 100px minmax(165px,.9fr);align-items:center;gap:14px;padding:13px 20px}
 body.uim .u-rowhead{background:var(--u-strip);color:var(--u-muted);font-size:10px;padding-top:12px;padding-bottom:12px}
 body.uim .u-row{border-top:1px solid var(--u-line);font-size:12px}
 body.uim .u-row.u-expanded{background:var(--u-editor)}
 body.uim .u-row.u-off{opacity:.62}
+body.uim .u-row.u-hist{opacity:1;background:var(--u-detail)}
+body.uim .u-row.u-hist .u-personname,body.uim .u-row.u-hist .u-avatar{color:var(--u-muted)}
+body.uim .u-row.u-hist .u-namelink{display:block}
+body.uim .u-histnow{font-size:11px;color:var(--u-muted);line-height:1.5;display:block}
+body.uim .u-histnow.u-ok{color:var(--u-good)}
+body.uim .u-histnow.u-warn{color:var(--u-warm)}
+body.uim .u-cell-co select{width:100%;font-size:11px;font-weight:500;padding:9px 8px;background:var(--u-chip);border-color:var(--u-line)}
+body.uim .u-scope{font-size:11px;color:var(--u-muted);line-height:1.7;margin:-8px 0 16px}
+body.uim .u-scope b{color:var(--u-text);font-weight:600}
+body.uim .u-fields>.u-check.u-wide{grid-column:1/-1}
+body.uim .u-editor.u-add{margin:0 0 16px;width:100%}
 body.uim .u-person{display:flex;align-items:center;gap:10px;min-width:0}
 body.uim .u-avatar{width:29px;height:29px;border-radius:50%;background:var(--u-icon-sq);display:grid;place-items:center;font-size:10px;font-weight:600;flex:none;color:var(--u-icon-ink)}
 body.uim .u-namelink{border:0;text-align:left;background:transparent;padding:0;min-width:0}
@@ -10874,7 +10885,7 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
 /* ---------- responsive ---------- */
 @media(min-width:1700px){body.uim #view{padding:34px 40px 96px}body.uim .u-cards{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
 @media(max-width:1360px){
- body.uim .u-row,body.uim .u-rowhead{grid-template-columns:minmax(170px,1.1fr) 207px 85px 76px 94px minmax(153px,.9fr);gap:12px;padding-left:15px;padding-right:15px}
+ body.uim .u-row,body.uim .u-rowhead{grid-template-columns:minmax(150px,1.1fr) 96px 186px 58px 76px 94px minmax(150px,.9fr);gap:10px;padding-left:15px;padding-right:15px}
  body.uim .u-row .u-avatar{display:none}
  body.uim .u-calwrap{grid-template-columns:minmax(0,1fr) 265px}
  body.uim .u-closed-head,body.uim .u-closed-row{grid-template-columns:minmax(205px,1.2fr) 100px minmax(195px,1fr) 22px;gap:18px}
@@ -10888,10 +10899,11 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
  body.uim #tabsMgmt button{font-size:11px;padding:10px}
  body.uim #view{padding:24px 22px 96px}
  body.uim .u-rowhead{display:none}
- body.uim .u-row{grid-template-columns:minmax(175px,1.2fr) 210px 100px;grid-template-rows:auto auto;row-gap:10px}
- body.uim .u-row .u-cell-name{grid-column:1;grid-row:1}body.uim .u-row .u-cell-disp{grid-column:2;grid-row:1}body.uim .u-row .u-cell-gear{grid-column:3;grid-row:1}
- body.uim .u-row .u-cell-status{grid-column:1;grid-row:2}body.uim .u-row .u-cell-active{grid-column:2;grid-row:2}body.uim .u-row .u-cell-winch{grid-column:3;grid-row:2}
+ body.uim .u-row{grid-template-columns:minmax(160px,1.2fr) 100px minmax(170px,210px) minmax(60px,110px);grid-template-rows:auto auto;row-gap:10px}
+ body.uim .u-row .u-cell-name{grid-column:1;grid-row:1}body.uim .u-row .u-cell-co{grid-column:2;grid-row:1}body.uim .u-row .u-cell-disp{grid-column:3;grid-row:1}body.uim .u-row .u-cell-gear{grid-column:4;grid-row:1}
+ body.uim .u-row .u-cell-status{grid-column:1;grid-row:2}body.uim .u-row .u-cell-active{grid-column:2;grid-row:2}body.uim .u-row .u-cell-winch{grid-column:3/-1;grid-row:2}
  body.uim .u-row .u-cell-winch::before{content:'ჯალამბარი';color:var(--u-muted);font-size:10px;margin-right:2px}
+ body.uim .u-row .u-cell-gear::before{content:'მისაბმელი ';color:var(--u-muted);font-size:10px}
  body.uim .u-calwrap{grid-template-columns:1fr}
  body.uim .u-agenda .u-tasks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
  body.uim .u-agenda .u-task{margin-bottom:0}
@@ -10939,9 +10951,10 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
  body.uim .u-free .u-freelist{display:block}
  body.uim .u-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto;row-gap:9px;padding:13px 12px}
  body.uim .u-row .u-avatar{display:grid}
- body.uim .u-row .u-cell-name{grid-column:1/-1;grid-row:1}body.uim .u-row .u-cell-disp{grid-column:1/-1;grid-row:2;max-width:260px}
- body.uim .u-row .u-cell-gear{grid-column:1;grid-row:3}body.uim .u-row .u-cell-winch{grid-column:2;grid-row:3}
- body.uim .u-row .u-cell-active{grid-column:1;grid-row:4}body.uim .u-row .u-cell-status{grid-column:2;grid-row:4}
+ body.uim .u-row .u-cell-name{grid-column:1/-1;grid-row:1}body.uim .u-row .u-cell-co{grid-column:1;grid-row:2}body.uim .u-row .u-cell-gear{grid-column:2;grid-row:2}
+ body.uim .u-row .u-cell-disp{grid-column:1/-1;grid-row:3;max-width:260px}
+ body.uim .u-row .u-cell-winch{grid-column:1;grid-row:4}body.uim .u-row .u-cell-active{grid-column:2;grid-row:4}
+ body.uim .u-row .u-cell-status{grid-column:1/-1;grid-row:5}
  body.uim .u-statusbtn{min-height:40px;padding:9px 7px}
  body.uim .u-editor{padding:18px 13px;width:calc(100% - 20px);margin:10px}
  body.uim .u-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
@@ -10993,7 +11006,7 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
 'use strict';
 if (window.__uimgmt001) return;
 if (typeof render !== 'function' || typeof goM !== 'function' || typeof buildTabs !== 'function' || typeof rOverview !== 'function' || typeof refreshLive_ !== 'function' || typeof MGI === 'undefined' || typeof mgiShifts_ !== 'function' || typeof mgiDecide_ !== 'function' || typeof selAll_ !== 'function' || typeof scItems_ !== 'function') { try { console.error('UIMGMT-001: expected application functions are missing - the new management layer stays off'); } catch (e) {} return; }
-window.__uimgmt001 = '2026-10-07';
+window.__uimgmt001 = '2026-10-08';
 
 /* ---- pure helpers (no DOM, no network, no globals): unit-tested in node against the real database functions ---- */
 var U_TZ = 'Asia/Tbilisi';
@@ -11153,7 +11166,14 @@ function uShortEmail(e) { return String(e || '').split('@')[0]; }
 function uInitials(name) { var p = String(name || '').trim().split(/\s+/); return ((p[0] || '').slice(0, 1) + (p[1] || '').slice(0, 1)) || '—'; }
 function uCoCode(id) { var c = (U.cos || []).filter(function (x) { return x.company_id === id; })[0] || (typeof COLIST !== 'undefined' ? COLIST : []).filter(function (x) { return x.company_id === id; })[0]; return c ? (c.code || c.legal_name || '?') : '?'; }
 function uNameOfEmail(e) { var m = (U.people || []).filter(function (a) { return String(a.email || '').toLowerCase() === String(e || '').toLowerCase(); })[0]; return m ? m.dispatcher_name : uShortEmail(e); }
-function uErr(e) { return String((e && (e.message || e.code)) || e || 'უცნობი შეცდომა').slice(0, 220); }
+/* the database rule "one driver - one current company" answers with one of two index names (or with its own Georgian
+   sentence); every screen of this layer shows the same readable text for it */
+var U_ONE_CO = 'ეს მძღოლი უკვე აქტიურია სხვა კომპანიაში — ერთ მძღოლს ერთი მიმდინარე კომპანია აქვს. გადასაყვანად გამოიყენე „კომპანია“ სვეტი მის მიმდინარე სტრიქონში.';
+function uErr(e) {
+  var s = String((e && (e.message || e.code)) || e || 'უცნობი შეცდომა');
+  if (/drivers_one_active_per_(name|person)/.test(s)) return U_ONE_CO;
+  return s.slice(0, 220);
+}
 function uMissing(e) { var s = String((e && e.code) || '') + ' ' + String((e && e.message) || ''); return /PGRST202|PGRST205|42P01|42883|Could not find the (function|table)|does not exist/i.test(s); }
 
 /* ---- feedback: one visible strip; success hides by itself, an error stays until dismissed ---- */
@@ -11171,7 +11191,7 @@ function feedback(msg, isErr) {
 /* ---- the all-company store. Never touches LIVE or any single-company cache of the app. ---- */
 var U = { email: null, gen: 0, loading: null, loadedAt: 0, error: '', cos: null, ids: [], drivers: [], assign: [], loads: [], plans: [], people: [], by: {} };
 var U_COLS = (typeof LOAD_COLS_ === 'string' ? LOAD_COLS_ : '*') + ',company_id,is_canceled';
-function uReset() { U.gen++; U.email = USER ? USER.email : null; U.loading = null; U.loadedAt = 0; U.error = ''; U.cos = null; U.ids = []; U.drivers = []; U.assign = []; U.loads = []; U.plans = []; U.people = []; U.by = {}; }
+function uReset() { U.gen++; U.email = USER ? USER.email : null; U.loading = null; U.loadedAt = 0; U.error = ''; U.cos = null; U.ids = []; U.drivers = []; U.assign = []; U.loads = []; U.plans = []; U.people = []; U.by = {}; U._mem = null; }
 function uReady() { return !!(U.loadedAt && U.cos && U.email === (USER && USER.email)); }
 function uLoad(force) {
   if (!uiActive()) return Promise.resolve();
@@ -11225,6 +11245,42 @@ function uOff(co, name, day) {
   return a.length ? a[a.length - 1] : null;
 }
 function uIsRepair(off) { return !!(off && /^\s*შეკეთება/.test(String(off.reason || ''))); }
+/* ---- current membership. A registry row is one membership (company + name); "works" = it is the driver's CURRENT company.
+   The server keeps one current company per driver (person_id, and the name as a fail-closed fallback). Rows of one person
+   share person_id only where the server linked them on evidence; a same-name row without that link is shown as
+   "identity not confirmed", never merged here. Before the server part is installed every row is its own person. ---- */
+function uNameKey(n) { return String(n == null ? '' : n).trim().toLocaleLowerCase(); }
+function uPid(d) { return d && d.person_id ? String(d.person_id) : (d ? d.company_id + '|' + d.name : ''); }
+function uIdentityOn() { return (U.drivers || []).some(function (d) { return !!d.person_id; }); }
+function uMembers() {
+  if (U._mem && U._mem.at === U.loadedAt) return U._mem;
+  var m = { at: U.loadedAt, byPid: {}, byName: {} };
+  (U.drivers || []).forEach(function (d) { (m.byPid[uPid(d)] = m.byPid[uPid(d)] || []).push(d); (m.byName[uNameKey(d.name)] = m.byName[uNameKey(d.name)] || []).push(d); });
+  U._mem = m; return m;
+}
+/* the active row that makes this row "history": the same person first (linked), else the same name in another company */
+function uCurrentFor(d) {
+  var m = uMembers(), a = (m.byPid[uPid(d)] || []).filter(function (x) { return x !== d && x.active !== false; })[0];
+  if (a) return { row: a, linked: true };
+  a = (m.byName[uNameKey(d.name)] || []).filter(function (x) { return x !== d && x.active !== false && x.company_id !== d.company_id; })[0];
+  return a ? { row: a, linked: false } : null;
+}
+/* other rows of the same person (linked only) */
+function uSiblings(d) { return (uMembers().byPid[uPid(d)] || []).filter(function (x) { return x !== d; }); }
+/* one company filter for Home, Drivers and Dispatchers: what the page shows is this filter, never the top switch */
+var SCOPE = { co: 'ALL' };
+function uScopeIn(co) { return SCOPE.co === 'ALL' || SCOPE.co === co; }
+function uScopeSelect(id) {
+  if (SCOPE.co !== 'ALL' && !(U.cos || []).some(function (c) { return c.company_id === SCOPE.co; })) SCOPE.co = 'ALL';
+  return '<select id="' + id + '" data-u-scope aria-label="რომელი კომპანიის მძღოლები ჩანს" style="max-width:190px"><option value="ALL">ყველა კომპანია</option>' + (U.cos || []).map(function (c) { return '<option value="' + h(c.company_id) + '"' + (SCOPE.co === c.company_id ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>';
+}
+function uScopeNote() {
+  var top = (typeof CO !== 'undefined' && CO && (CO.legal_name || CO.code)) || '', n = {}, cur = (U.drivers || []).filter(function (d) { return d.active !== false; });
+  cur.forEach(function (d) { n[d.company_id] = (n[d.company_id] || 0) + 1; });
+  return '<p class="u-scope" id="u-scope-note"><b>ნაჩვენებია: ' + h(SCOPE.co === 'ALL' ? 'ყველა კომპანია' : uCoCode(SCOPE.co)) + '</b> · მიმდინარე მძღოლები რეესტრში: ' + cur.length + ' (' +
+    (U.cos || []).map(function (c) { return h(c.code) + ' ' + (n[c.company_id] || 0); }).join(' · ') + ')' +
+    (top ? ' · ზედა გადამრთველი („' + h(top) + '“) ამ გვერდს არ ფილტრავს — ის მხოლოდ ძველ, ერთკომპანიიან გვერდებზე მოქმედებს' : '') + '</p>';
+}
 function uPlan(co, disp, day) { var B = U.by[co]; if (!B) return []; return uPlanSelect(B.loads, B.plans, function (n) { return uOwner(co, n, day); }, disp, day); }
 function uStateHtml() {
   if (U.error && !uReady()) return '<div class="u-state u-err" role="alert">' + h(U.error) + ' <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>';
@@ -11235,17 +11291,22 @@ function uStateHtml() {
 
 /* ---- navigation ---- */
 var PAGES = {};                                     /* route key -> { paint(), click(e, el), change(e, el), input(e, el), key(e) } */
-var ALIAS = { mghome: 'overview', drvstats: 'drivers', dispadmin: 'dispatchers' };   /* retained screens painted by the existing code */
+var ALIAS = { mghome: 'overview', drvstats: 'drivers' };   /* retained screens painted by the existing code */
+/* The dispatcher cards have their OWN route key ("team"). "dispatchers" stays what it always was: the account-access page of
+   the existing code. That page repaints itself whenever MTAB === 'dispatchers' (after a return to the tab, a refresh or a late
+   answer); while the cards shared that key, those repaints put the access table over them. "dispadmin" is the old name of
+   the link to that page and is still accepted. */
+var MOVED = { dispadmin: 'dispatchers' };
 var AR = ['receivables', 'invoices', 'overdue', 'debt'];
 var NAV = [
   { k: 'overview', l: 'მთავარი', i: 'layout-dashboard' },
   { k: 'shifts', l: 'ცვლები', i: 'calendar-check-2', badge: true },
   { k: 'drivers', l: 'მძღოლების დაფა', s: 'მძღოლები', i: 'truck' },
-  { k: 'dispatchers', l: 'დისპეჩერები', i: 'users' },
+  { k: 'team', l: 'დისპეჩერები', i: 'users' },
   { k: 'calendar', l: 'კალენდარი', i: 'calendar-days' },
   { k: 'gross', l: 'GROSS', i: 'chart', sub: [['gross', 'GROSS'], ['analysis', 'ანალიზი'], ['leaderboard', 'რეიტინგი'], ['paymix', 'გადახდის მეთოდები'], ['mgsummary', 'SD-ის შეჯამება']] },
   { k: 'finance', l: 'ფინანსები', i: 'receipt', sub: [['finance', 'მიმოხილვა'], ['mgchecks', 'ჩეკები'], ['receivables', 'ინვოისები და მისაღები'], ['payroll', 'მძღოლების ანგარიშსწორება'], ['disppay', 'დისპეჩერების ანაზღაურება'], ['expenses', 'ხარჯები']] },
-  { k: 'mgwork', l: 'ოპერაციები', i: 'route', sub: [['mgwork', 'დღის გეგმა'], ['liveboard', 'ცოცხალი დაფა'], ['liveloads', 'ტვირთები'], ['coverage', 'მიმაგრება და დასვენება'], ['exceptions', 'სხვა საკითხები'], ['mghome', 'საკითხების მიმოხილვა'], ['closes', 'ახსნები და დახურვები — ძველი ხედი'], ['drvstats', 'მძღოლების სტატისტიკა და გადაბარება'], ['dispadmin', 'დისპეჩერების წვდომა']] }
+  { k: 'mgwork', l: 'ოპერაციები', i: 'route', sub: [['mgwork', 'დღის გეგმა'], ['liveboard', 'ცოცხალი დაფა'], ['liveloads', 'ტვირთები'], ['coverage', 'მიმაგრება და დასვენება'], ['exceptions', 'სხვა საკითხები'], ['mghome', 'საკითხების მიმოხილვა'], ['closes', 'ახსნები და დახურვები — ძველი ხედი'], ['drvstats', 'მძღოლების სტატისტიკა და გადაბარება'], ['dispatchers', 'დისპეჩერების წვდომა']] }
 ];
 function legacyKnown(k) { return ['mgwork', 'mgchecks', 'mgsummary', 'health'].indexOf(k) >= 0 || (typeof MTABS !== 'undefined' && MTABS.some(function (t) { return t[0] === k; })); }
 function navGroup(k) { return NAV.filter(function (g) { return g.k === k || (g.sub || []).some(function (s) { return s[0] === k; }) || (g.k === 'finance' && AR.indexOf(k) >= 0); })[0] || null; }
@@ -11272,7 +11333,7 @@ function mobileSub() {                               /* the sub-items of the cur
 function place() { try { var bar = document.querySelector('.topbar'); if (bar && document.body.classList.contains('uim')) document.body.style.setProperty('--u-top', Math.max(0, Math.ceil(bar.getBoundingClientRect().bottom)) + 'px'); } catch (e) {} }
 function enter() { document.body.classList.add('uim'); }
 function leave() { if (document.body.classList.contains('uim')) { document.body.classList.remove('uim'); document.body.style.removeProperty('--u-top'); var b = document.getElementById('tabsMgmt'); if (b) b.__uimNav = null; var f = document.getElementById('u-feedback'); if (f) f.hidden = true; } }
-function go(k) { if (!known(k)) return; MTAB = k; render(); try { window.scrollTo(0, 0); } catch (e) {} }
+function go(k) { if (MOVED[k]) k = MOVED[k]; if (!known(k)) return; MTAB = k; render(); try { window.scrollTo(0, 0); } catch (e) {} }
 
 var prevRender = render, prevGo = goM, prevBuild = buildTabs, prevOverview = rOverview, prevRefresh = refreshLive_;
 function legacyAs(key) { var keep = MTAB; MTAB = key; try { prevRender(); } finally { MTAB = keep; } }
@@ -11306,7 +11367,7 @@ render = function () {
   try { var view = document.getElementById('view'); if (view && !view.querySelector('.u-mobilesub')) { var d = document.createElement('div'); d.innerHTML = mobileSub(); if (d.firstChild) view.insertBefore(d.firstChild, view.firstChild); } } catch (e) {}
   return r;
 };
-goM = function (k) { if (uiActive() && (PAGES[k] || ALIAS[k])) return go(k); return prevGo.apply(this, arguments); };
+goM = function (k) { if (uiActive() && (PAGES[k] || ALIAS[k] || MOVED[k])) return go(k); return prevGo.apply(this, arguments); };
 buildTabs = function () { var r = prevBuild.apply(this, arguments); try { if (uiActive()) { enter(); paintNav(); } } catch (e) {} return r; };
 /* late answers of the legacy overview readers must not paint the old home over the new one */
 rOverview = function () { if (uiActive() && MTAB === 'overview') return render(); return prevOverview.apply(this, arguments); };
@@ -11324,6 +11385,25 @@ refreshLive_ = async function (manual) {
   } catch (e) { console.error(e); }
   return out;
 };
+/* Second line of defence for "an older painter wrote over a new page". Every new page paints a .u-page element into #view;
+   the existing code never does. If a new page's route is current and #view has lost its .u-page (a late answer, a return to
+   the tab, a refresh of the existing code), the new page is painted again at once. On the retained screens the same watcher
+   only puts the narrow-screen sub-menu back after such a repaint. It never runs outside the management view. */
+var uGuard = { n: 0, t: 0 };
+function uViewGuard() {
+  if (!uiActive()) return;
+  var view = document.getElementById('view'); if (!view) return;
+  if (PAGES[MTAB]) {
+    if (view.querySelector('.u-page')) return;
+    var now = Date.now(); if (now - uGuard.t > 2000) { uGuard.t = now; uGuard.n = 0; }
+    if (++uGuard.n > 4) return;                                               /* never a repaint loop */
+    try { console.warn('UIMGMT: an older painter replaced the page "' + MTAB + '" - painted again'); } catch (e) {}
+    render();
+  } else if (document.body.classList.contains('uim') && !view.querySelector('.u-mobilesub')) {
+    var d = document.createElement('div'); d.innerHTML = mobileSub(); if (d.firstChild) view.insertBefore(d.firstChild, view.firstChild);
+  }
+}
+try { if (typeof MutationObserver === 'function') { var uViewEl = document.getElementById('view'); if (uViewEl) new MutationObserver(uViewGuard).observe(uViewEl, { childList: true }); } } catch (e) { console.error(e); }
 function busyEditing() { var P = PAGES[MTAB]; return !!(P && P.editing && P.editing()); }
 function selectOpen() { var a = document.activeElement, v = document.getElementById('view'); return !!(a && v && a.tagName === 'SELECT' && v.contains(a)); }
 
@@ -11472,6 +11552,15 @@ function shRemain(row) {
   if (E && E.allowed === false) return { ready: false, text: 'ბოლო მცდელობა ' + uTzTime(E.occurred_at) + ' — უარი: ' + shGateNames(E.reasons).join(' · '), sub: 'ჩანაწერი მცდელობიდან; მას შემდეგ შეიძლება შეიცვალა' };
   return { ready: null, text: 'ჯერ არ შეფასებულა', sub: SH.rpcMissing ? 'სერვერი ყველა პირობას დახურვისას ამოწმებს' : 'გახსენი სტრიქონი — გეგმა და პირობების შემოწმება' };
 }
+/* The shift's driver roster by the registry: the dispatcher's CURRENT drivers in that company for the plan day (the same
+   membership Home, Drivers and Dispatchers show; the server's standard starts from the same registry rows), plus any driver
+   who is on the plan. A current driver with nothing planned is named - a new driver is in the roster before the first load. */
+function shRoster(row, plan) {
+  var B = U.by[row.company_id], seen = {}, out = [];
+  if (B) B.drivers.forEach(function (d) { if (d.active === false || uOwner(row.company_id, d.name, row.work_day) !== row.dispatcher) return; seen[d.name] = 1; out.push({ name: d.name, reg: true, off: uOff(row.company_id, d.name, row.work_day), n: 0 }); });
+  (plan ? plan.items : []).forEach(function (x) { if (!x.driver) return; if (!seen[x.driver]) { seen[x.driver] = 1; out.push({ name: x.driver, reg: false, off: null, n: 0 }); } out.filter(function (o) { return o.name === x.driver; })[0].n++; });
+  return out.sort(function (a, b) { return a.name.localeCompare(b.name, 'ka'); });
+}
 function shPendingFor(row) { return (MGI.waivers || []).filter(function (w) { return w.status === 'pending' && w.company_id === row.company_id && w.dispatcher_name === row.dispatcher && w.work_day === row.work_day; }); }
 
 /* ---------- pieces ---------- */
@@ -11569,6 +11658,9 @@ function shOpenDetail(row) {
   var html = '<div class="u-worksum"><strong>მძღოლების გეგმა</strong><span><span>' + items.length + ' ტვირთი</span><span>დაგეგმილი GROSS · ' + h(money(sum)) + '</span></span></div>';
   html += '<p class="u-snapnote">' + (plan.canonical ? 'გეგმა სერვერის გათვლით · ' + h(uTzTime(plan.at)) : 'გეგმა ეკრანის გათვლით (' + h(uTzTime(plan.at)) + ') — დახურვისას სერვერი გეგმას თავიდან ითვლის.') + ' დაგეგმილი GROSS არ არის შესრულებული შემოსავალი ან ანაზღაურება.</p>';
   if (legs && legs.error && !legs.data) html += '<div class="u-state u-err" style="margin-bottom:12px">ზარების/SMS-ის შემოწმება ვერ ჩაიტვირთა (' + h(legs.error) + '). <button type="button" class="u-btn" data-u-legs="' + h(row.key) + '">ხელახლა ცდა</button></div>';
+  var ros = shRoster(row, plan), idle = ros.filter(function (o) { return o.reg && !o.n; });
+  html += '<p class="u-snapnote" id="u-sh-roster"><b>როსტერი რეესტრით · ' + ros.filter(function (o) { return o.reg; }).length + ' მიმდინარე მძღოლი ' + h(row.code) + '-ში:</b> ' + (ros.filter(function (o) { return o.reg; }).map(function (o) { return h(o.name) + (o.off ? ' (' + (uIsRepair(o.off) ? 'შეკეთება' : 'ისვენებს') + ')' : o.n ? '' : ' (გეგმაში ტვირთი არ აქვს)'); }).join(' · ') || 'არცერთი') +
+    (idle.some(function (o) { return !o.off; }) ? '. მძღოლი, რომელსაც გეგმაში ტვირთი არ აქვს და არც ისვენებს, დღიურ სტანდარტში ითვლება — საჭიროა ტვირთი, დამტკიცებული ახსნა ან დასვენების მონიშვნა.' : '.') + '</p>';
   if (!items.length) html += '<div class="u-planempty">ამ დღისთვის გეგმაში ტვირთი არ ჩანს. ცარიელი გეგმა თავისთავად დახურვის პირობებს არ ხსნის — სერვერი მაინც ამოწმებს.</div>';
   else html += shGroups(items).map(function (gr) { var d = (U.by[row.company_id] || { drv: {} }).drv[gr.name];
     return '<div class="u-plandrv"><div class="u-plandrv-h">' + ic('truck') + '<strong>' + h(gr.name === '—' ? 'მძღოლი მითითებული არ არის' : gr.name) + '</strong>' + (d ? '<small>' + h((Number(d.cap) || 1) + '-მანქანიანი') + '</small>' : '') + '</div><div class="u-loads">' +
@@ -11730,7 +11822,7 @@ function shBodyHtml() {
     count = orows.length + ' ცვლა · გეგმის დღე ' + uDay(tday);
     body = (SH.ev.error ? '<div class="u-state u-err" role="alert" style="margin-bottom:12px">დახურვის მცდელობების ჩანაწერი ვერ ჩაიტვირთა (' + h(SH.ev.error) + ').</div>' : '') +
       (orows.length ? '<div class="u-list"><div class="u-open-head"><span>დისპეჩერი</span><span>კომპანია</span><span>რა დარჩა</span><span>მზადყოფნა</span><span></span></div>' + orows.map(function (r, i) {
-        var op = SH.open === r.key, rem = shRemain(r), plan = shPlanOf(r), drv = {}; plan.items.forEach(function (x) { if (x.driver) drv[x.driver] = 1; });
+        var op = SH.open === r.key, rem = shRemain(r), plan = shPlanOf(r), drv = {}; shRoster(r, plan).forEach(function (o) { drv[o.name] = 1; });
         return '<button type="button" class="u-open-row" data-u-shift="' + h(r.key) + '" aria-expanded="' + op + '" aria-controls="u-shd-' + i + '"><span class="u-person2"><span class="u-dispicon">' + ic('headset') + '</span><strong>' + h(r.dispatcher) + '</strong></span><span class="u-chip">' + h(r.code) + '</span>' +
           '<span class="u-open-reason' + (rem.ready === true ? ' u-good' : rem.ready === null ? ' u-unk' : '') + '">' + h(rem.text) + (rem.sub ? '<br><small class="u-muted">' + h(rem.sub) + '</small>' : '') + '</span>' +
           '<span class="u-open-prog"><strong class="' + (rem.ready === true ? '' : rem.ready === false ? 'u-bad' : 'u-unk') + '">' + (rem.ready === true ? 'შეიძლება დახურვა' : rem.ready === false ? 'დასაზუსტებელია' : 'სერვერი ამოწმებს დახურვისას') + '</strong>' + Object.keys(drv).length + ' მძღოლი · ' + plan.items.length + ' ტვირთი</span><span class="u-chev">' + ic(op ? 'chevron-up' : 'chevron-down') + '</span></button>' +
@@ -11843,9 +11935,12 @@ PAGES.shifts = {
    the dispatcher board all use that window). A registry driver with no load in that window is not "standing idle" - such
    drivers are listed in their own folded group, never hidden.
    Idle time is shown only from a real timestamp: the driver's newest delivery_completed.                                   */
-var HM = { q: '', co: 'ALL', flip: null, off: false, dorm: false };
+/* One card per CURRENT driver: the registry row with "works" on (the server keeps one per driver). A switched-off row of a
+   driver who is current in another company is that driver's history - it is not a card here (the Drivers board lists it).
+   Switched-off rows of drivers with no current company are folded into one group, one entry per name. */
+var HM = { q: '', flip: null, off: false, dorm: false };
 function hmDrivers() {
-  var today = workToday_(), mon = mondayOf(today) || today, sun = addDays_(mon, 6), d30 = addDays_(today, -30), out = [], now = Date.now();
+  var today = workToday_(), mon = mondayOf(today) || today, sun = addDays_(mon, 6), d30 = addDays_(today, -30), out = [], now = Date.now(), gone = {};
   (U.cos || []).forEach(function (c) {
     var B = U.by[c.company_id], by = {};
     B.loads.forEach(function (l) { if (l.is_canceled || !l.driver_name) return; (by[l.driver_name] = by[l.driver_name] || []).push(l); });
@@ -11853,12 +11948,16 @@ function hmDrivers() {
     Object.keys(by).forEach(function (n) { if (!names[n] && by[n].some(function (l) { return l.status === 'picked_up' || l.status === 'new'; })) names[n] = { name: n, company_id: c.company_id, dispatcher_name: null, cap: null, active: true, _unreg: true }; });
     Object.keys(names).forEach(function (n) {
       var d = names[n], ls = by[n] || [], off = uOff(c.company_id, n, today), act = d.active !== false;
+      if ((d._unreg || !act) && uCurrentFor(d)) return;                       /* current in another company: not a second card */
+      if (!act) { var k = uNameKey(n); if (gone[k]) { gone[k].codes.push(c.code); return; } }
       var picked = ls.filter(function (l) { return l.status === 'picked_up' && !l.delivery_completed; }), next = ls.filter(function (l) { return l.status === 'new'; });
       var lastDel = null, lastPu = ''; ls.forEach(function (l) { var t = uMs(l.delivery_completed), p = puDay_(l); if (isFinite(t) && (!lastDel || t > lastDel.t)) lastDel = { t: t, l: l }; if (p && p > lastPu) lastPu = p; });
       var kind = !act ? 'off' : off ? (uIsRepair(off) ? 'repair' : 'rest') : picked.length ? 'loaded' : next.length ? 'pickup' : (lastPu && lastPu >= d30) ? 'idle' : 'dormant';
       var wk = ls.filter(function (l) { var p = puDay_(l); return p && p >= mon && p <= sun; }), m30 = ls.filter(function (l) { var p = puDay_(l); return p && p >= d30; });
-      out.push({ id: c.company_id + '|' + n, co: c.company_id, code: c.code, name: n, d: d, kind: kind, off: off, picked: picked, next: next, lastDel: lastDel, lastPu: lastPu, idleMs: kind === 'idle' && lastDel ? now - lastDel.t : null,
-        owner: uOwner(c.company_id, n, today) || d.dispatcher_name || '', wkGross: wk.reduce(function (s, l) { return s + grossOf_(l); }, 0), wkN: wk.length, wkCars: wk.reduce(function (s, l) { return s + cars_(l); }, 0), g30: m30.reduce(function (s, l) { return s + grossOf_(l); }, 0), n30: m30.length });
+      var x = { id: c.company_id + '|' + n, co: c.company_id, code: c.code, codes: [c.code], name: n, d: d, kind: kind, off: off, picked: picked, next: next, lastDel: lastDel, lastPu: lastPu, idleMs: kind === 'idle' && lastDel ? now - lastDel.t : null,
+        owner: uOwner(c.company_id, n, today) || d.dispatcher_name || '', wkGross: wk.reduce(function (s, l) { return s + grossOf_(l); }, 0), wkN: wk.length, wkCars: wk.reduce(function (s, l) { return s + cars_(l); }, 0), g30: m30.reduce(function (s, l) { return s + grossOf_(l); }, 0), n30: m30.length };
+      if (!act) gone[uNameKey(n)] = x;
+      out.push(x);
     });
   });
   var rank = { idle: 0, loaded: 1, pickup: 1, repair: 4, rest: 5, dormant: 6, off: 7 };
@@ -11893,7 +11992,7 @@ function hmCard(x) {
     vicon = 'truck'; tag = '<span class="u-tag u-neutral">ტვირთის გარეშე</span>'; status = '<b>' + (x.lastPu ? '30 დღეზე მეტია ტვირთი არ ჰქონია' : 'ტვირთი აპში არ ჩანს') + '</b>';
     r1 = x.lastDel ? locShort(x.lastDel.l.delivery_location) : 'მდებარეობა უცნობია'; r2 = x.lastPu ? 'ბოლო ტვირთი · ' + uDayShort(x.lastPu) : 'ჯერ არცერთი ტვირთი';
     small = 'თუ აქ აღარ მუშაობს — მძღოლების დაფაზე მოხსენი „მუშაობს“';
-  } else { vicon = 'moon'; tag = '<span class="u-tag u-neutral">პაუზა</span>'; status = '<b>არააქტიური</b>'; r1 = 'რეესტრში გამორთულია'; r2 = 'დისპეჩერების დაფაზე არ ჩანს'; small = 'სამუშაო სტატუსი'; }
+  } else { vicon = 'moon'; tag = '<span class="u-tag u-neutral">გამორთული</span>'; status = '<b>მიმდინარე კომპანია არ აქვს</b>'; r1 = 'რეესტრში გამორთულია · ' + x.codes.join(' · '); r2 = x.lastPu ? 'ბოლო ტვირთი · ' + uDayShort(x.lastPu) : 'ტვირთი აპში არ ჩანს'; small = 'დასაბრუნებლად — მძღოლების დაფა, „არააქტიური და ადრინდელი წევრობები“'; }
   var flipped = HM.flip === x.id;
   return '<article class="u-card u-k-' + x.kind + (flipped ? ' u-flipped' : '') + '" data-u-card="' + h(x.id) + '"><div class="u-turn">' +
     '<button type="button" class="u-front" data-u-flip="' + h(x.id) + '" aria-expanded="' + flipped + '"' + (flipped ? ' inert' : '') + '><span class="u-cardtop"><span>' + h(x.code) + (x.d._unreg ? ' · რეესტრში არ არის' : '') + '</span>' + tag + '</span>' +
@@ -11907,13 +12006,15 @@ function hmCard(x) {
 }
 function hmGridHtml(all) {
   var q = HM.q.trim().toLocaleLowerCase();
-  var list = all.filter(function (x) { return (HM.co === 'ALL' || x.co === HM.co) && (!q || (x.name + ' ' + x.owner).toLocaleLowerCase().indexOf(q) >= 0); });
+  var list = all.filter(function (x) { return uScopeIn(x.co) && (!q || (x.name + ' ' + x.owner).toLocaleLowerCase().indexOf(q) >= 0); });
   var on = list.filter(function (x) { return x.kind !== 'off' && x.kind !== 'dormant'; }), off = list.filter(function (x) { return x.kind === 'off'; }), dorm = list.filter(function (x) { return x.kind === 'dormant'; });
   var html = on.length ? '<div class="u-cards">' + on.map(hmCard).join('') + '</div>' : shEmpty('მძღოლი ვერ მოიძებნა', dorm.length || off.length ? 'ამ ფილტრში ბოლო 30 დღეში მომუშავე მძღოლი არ არის — იხილე ქვემოთ ჩაკეცილი ჯგუფები.' : 'შეცვალე ძიება ან კომპანია.');
   if (dorm.length) html += '<div class="u-section-t"><button type="button" class="u-btn" data-u-hm-dorm aria-expanded="' + HM.dorm + '">' + ic(HM.dorm ? 'chevron-up' : 'chevron-down') + 'ბოლო 30 დღეში ტვირთის გარეშე · ' + dorm.length + '</button><span>რეესტრში აქტიურია, მაგრამ ბოლო 30 დღეში ტვირთი არ ჰქონია — გაჩერებულებში არ ითვლება</span></div>' + (HM.dorm ? '<div class="u-cards">' + dorm.map(hmCard).join('') + '</div>' : '');
-  if (off.length) html += '<div class="u-section-t"><button type="button" class="u-btn" data-u-hm-off aria-expanded="' + HM.off + '">' + ic(HM.off ? 'chevron-up' : 'chevron-down') + 'რეესტრში გამორთული მძღოლები · ' + off.length + '</button></div>' + (HM.off ? '<div class="u-cards">' + off.map(hmCard).join('') + '</div>' : '');
-  return { html: html, n: on.length };
+  if (off.length) html += '<div class="u-section-t"><button type="button" class="u-btn" data-u-hm-off aria-expanded="' + HM.off + '">' + ic(HM.off ? 'chevron-up' : 'chevron-down') + 'მიმდინარე კომპანიის გარეშე · ' + off.length + '</button><span>რეესტრში გამორთულია და არცერთ კომპანიაში არ მუშაობს. სხვა კომპანიაში გადასული მძღოლის ძველი ჩანაწერი აქ არ ჩანს — ის მძღოლების დაფის ისტორიაშია.</span></div>' + (HM.off ? '<div class="u-cards">' + off.map(hmCard).join('') + '</div>' : '');
+  return { html: html, n: on.length, cur: on.length + dorm.length, unreg: on.concat(dorm).filter(function (x) { return x.d._unreg; }).length };
 }
+/* the same base number the Drivers board and the Dispatchers page state: current drivers of the shown companies */
+function hmCountText(g) { return g.cur + ' მიმდინარე მძღოლი' + (g.unreg ? ' · მათ შორის ' + g.unreg + ' რეესტრში არ არის' : '') + (g.cur !== g.n ? ' · ბარათებად ' + g.n : '') + ' · განახლდა ' + uTzTime(U.loadedAt); }
 function hmShiftsHtml() {
   var today = tbToday(), C = SH.closed[today], cn = C && C.rows ? C.rows.length : null, on = mgiReady_() && uReady() ? shOpenRows().length : null, pn = pendingCount();
   if (uReady() && (!C || (!C.rows && !C.error && !C.loading))) shClosedLoad(today).then(function () { if (MTAB === 'overview' && uiActive()) { var e = document.getElementById('u-hm-shifts'); if (e) e.outerHTML = hmShiftsHtml(); } });
@@ -11931,13 +12032,12 @@ PAGES.overview = {
   ownReload: false,
   jump: function () {},
   paint: function (view) {
-    var st = uStateHtml(), all = uReady() ? hmDrivers() : [], act = all.filter(function (x) { return x.kind !== 'off' && x.kind !== 'dormant'; }), cnt = function (k) { return act.filter(function (x) { return k.indexOf(x.kind) >= 0; }).length; };
-    var g = uReady() ? hmGridHtml(all) : { html: '', n: 0 }, today = tbToday();
+    var st = uStateHtml(), all = uReady() ? hmDrivers() : [], act = all.filter(function (x) { return uScopeIn(x.co) && x.kind !== 'off' && x.kind !== 'dormant'; }), cnt = function (k) { return act.filter(function (x) { return k.indexOf(x.kind) >= 0; }).length; };
+    var g = uReady() ? hmGridHtml(all) : { html: '', n: 0, cur: 0, unreg: 0 }, today = tbToday();
     view.innerHTML = '<div class="u-page" id="u-home"><div class="u-head"><div><h1>მთავარი</h1><p class="u-sub">ყველა მძღოლი ერთ ხედში · გაჩერებულები პირველ რიგში</p></div><span class="u-date">' + h(uDay(today)) + ', ' + h(uWeekday(today)) + '<br>სამუშაო დღე · ' + h(uDay(workToday_())) + '</span></div>' + st +
       (uReady() ? '<div class="u-summary"><span class="u-s-idle"><i class="u-dot"></i>' + cnt(['idle']) + ' გაჩერებული</span><span><i class="u-dot"></i>' + cnt(['loaded', 'pickup']) + ' მუშაობს</span><span class="u-s-mute">' + cnt(['repair']) + ' შეკეთებაზე</span><span class="u-s-mute">' + cnt(['rest']) + ' ისვენებს</span></div>' +
-        '<div class="u-toolbar"><label class="u-search" for="u-hm-q">' + ic('search') + '<input id="u-hm-q" type="search" value="' + h(HM.q) + '" placeholder="მოძებნე მძღოლი" aria-label="მოძებნე მძღოლი"></label>' +
-        '<select id="u-hm-co" aria-label="კომპანია" style="max-width:190px"><option value="ALL">ყველა კომპანია</option>' + U.cos.map(function (c) { return '<option value="' + h(c.company_id) + '"' + (HM.co === c.company_id ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>' +
-        '<span class="u-count" id="u-hm-count">' + g.n + ' მძღოლი · განახლდა ' + h(uTzTime(U.loadedAt)) + '</span></div><div id="u-hm-grid">' + g.html + '</div>' : '') +
+        '<div class="u-toolbar"><label class="u-search" for="u-hm-q">' + ic('search') + '<input id="u-hm-q" type="search" value="' + h(HM.q) + '" placeholder="მოძებნე მძღოლი" aria-label="მოძებნე მძღოლი"></label>' + uScopeSelect('u-hm-co') +
+        '<span class="u-count" id="u-hm-count">' + hmCountText(g) + '</span></div>' + uScopeNote() + '<div id="u-hm-grid">' + g.html + '</div>' : '') +
       hmShiftsHtml() + '<p class="u-note" style="margin-top:14px">სტატუსი ეფუძნება Super Dispatch-ის ტვირთებს და აპში ჩაწერილ დასვენება/შეკეთების პერიოდებს. „გაჩერებული“ — მძღოლი, რომელსაც ბოლო 30 დღეში ტვირთი ჰქონდა და ახლა არც აყვანილი, არც დაგეგმილი ტვირთი არ აქვს (იგივე ფარგლები, რაც ცოცხალ დაფაზე). გაჩერების დრო ითვლება ბოლო ჩაბარებიდან; თუ ჩაბარების დრო არ ჩანს, დრო არ გამოითვლება. ' +
       '<button type="button" class="u-btn u-link" data-u-route="mghome">ხვალინდელი გეგმა, ჩეკები და სხვა საკითხები →</button></p></div>';
   },
@@ -11949,8 +12049,8 @@ PAGES.overview = {
     if (el.closest('[data-u-hm-off]')) { HM.off = !HM.off; return render(); }
     if (el.closest('[data-u-hm-dorm]')) { HM.dorm = !HM.dorm; return render(); }
   },
-  change: function (e, el) { if (el.id === 'u-hm-co') { HM.co = el.value; HM.flip = null; var g = hmGridHtml(hmDrivers()); document.getElementById('u-hm-grid').innerHTML = g.html; document.getElementById('u-hm-count').textContent = g.n + ' მძღოლი · განახლდა ' + uTzTime(U.loadedAt); } },
-  input: function (e, el) { if (el.id === 'u-hm-q') { HM.q = el.value; HM.flip = null; var g = hmGridHtml(hmDrivers()); document.getElementById('u-hm-grid').innerHTML = g.html; document.getElementById('u-hm-count').textContent = g.n + ' მძღოლი · განახლდა ' + uTzTime(U.loadedAt); } },
+  change: function (e, el) { if (el.hasAttribute('data-u-scope')) { SCOPE.co = el.value; HM.flip = null; render(); } },
+  input: function (e, el) { if (el.id === 'u-hm-q') { HM.q = el.value; HM.flip = null; var g = hmGridHtml(hmDrivers()); document.getElementById('u-hm-grid').innerHTML = g.html; document.getElementById('u-hm-count').textContent = hmCountText(g); } },
   key: function (e) { if (e.key === 'Escape' && HM.flip) { var id = HM.flip; hmFlip(null); var f = document.querySelector('#u-home [data-u-card="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"] .u-front'); if (f) f.focus(); } }
 };
 PAGES.shifts.jump = function (tab) { if (['closed', 'open', 'pending', 'history'].indexOf(tab) >= 0) { SH.tab = tab; SH.open = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; if (tab === 'closed') SH.day = tbToday(); } };
@@ -12012,13 +12112,20 @@ function tkTick() {
 }
 TK.timer = setInterval(tkTick, 30000);
 
-/* ---- DRIVERS registry (all permitted companies). Writers are the existing ones, issued with the ROW's company:
-     drivers.upsert(company_id,name,field)            = saveDriver / setPermDisp
-     driver_assignment.insert(kind 'off')             = the rest dialog (offSend)        -> rest, and repair as a tagged reason
-     driver_assignment.update(canceled_at,canceled_by) = offEnd                           -> back to work
-   Follow-up date is a Calendar task (mgmt_task) and is offered only when that storage is installed. ---- */
-var DR = { q: '', co: 'ALL', edit: null, draft: null, busy: false, err: '' };
+/* ---- DRIVERS board (all permitted companies): ONE row per current driver; switched-off / earlier memberships apart.
+   Writers, each issued with the ROW's company:
+     drivers.upsert(company_id,name,field)             = saveDriver / setPermDisp      (dispatcher, winch, works, settings)
+     driver_transfer_v1 (server function)              = the "company" column          -> ONE atomic change of the current company
+     driver_add_v1 (server function)                   = "add driver"                  -> a driver that exists nowhere yet
+     driver_assignment.insert(kind 'off')              = the rest dialog (offSend)     -> rest, and repair as a tagged reason
+     driver_assignment.update(canceled_at,canceled_by) = offEnd                        -> back to work
+   The rule "one driver - one current company" is kept by the server for every write path; this page only shows it and offers the
+   validated actions. Follow-up date is a Calendar task (mgmt_task) and is offered only when that storage is installed. ---- */
+var DR = { q: '', edit: null, draft: null, busy: false, err: '', hist: false, move: null, add: null, rpcMissing: false };
 var DR_ST = { work: ['მუშაობს', 'truck'], rest: ['ისვენებს', 'moon'], repair: ['მანქანას აკეთებს', 'wrench'] };
+var DR_NO_RPC = 'ეს მოქმედება სერვერზე ჯერ არ არის ჩართული (საჭიროა მონაცემთა ბაზის განახლება). არაფერი შეცვლილა.';
+/* transfer and add exist on the server together with the identity column: without it both controls stay off and say why */
+function drServerOn() { return uIdentityOn() && !DR.rpcMissing; }
 function drRows() {
   var today = workToday_(), d30 = addDays_(today, -30), out = [];
   (U.cos || []).forEach(function (c) {
@@ -12026,7 +12133,10 @@ function drRows() {
     B.drivers.forEach(function (d) { names[d.name] = d; });
     B.loads.forEach(function (l) { var n = l.driver_name; if (!n || names[n] || l.is_canceled) return; var p = puDay_(l); if (p && p >= d30) names[n] = { name: n, company_id: c.company_id, dispatcher_name: null, cap: null, active: true, winch: false, _unreg: true }; });
     Object.keys(names).forEach(function (n) { var d = names[n], off = uOff(c.company_id, n, today), cov = B.assign.filter(function (a) { return a.driver_name === n && a.kind === 'cover' && (!a.from_day || a.from_day <= today) && (!a.to_day || a.to_day >= today); }).pop() || null;
-      out.push({ id: c.company_id + '|' + n, co: c.company_id, code: c.code, name: n, d: d, off: off, cover: cov, st: off ? (uIsRepair(off) ? 'repair' : 'rest') : 'work' }); });
+      /* current = this row is the driver's current company. A name that only appears on this company's loads (no registry row)
+         is current too - unless the same name is a current driver of another company: then it is that driver's load here. */
+      var ref = d._unreg || d.active === false ? uCurrentFor(d) : null, cur = d._unreg ? !ref : d.active !== false;
+      out.push({ id: c.company_id + '|' + n, co: c.company_id, code: c.code, name: n, d: d, off: off, cover: cov, cur: cur, ref: cur ? null : ref, sib: d._unreg ? [] : uSiblings(d), st: off ? (uIsRepair(off) ? 'repair' : 'rest') : 'work' }); });
   });
   return out.sort(function (a, b) { return a.name.localeCompare(b.name, 'ka') || a.code.localeCompare(b.code); });
 }
@@ -12035,14 +12145,17 @@ function drDispOptions(code, current) {
   if (current && list.indexOf(current) < 0) list.push(current);
   return list.filter(function (v, i, a) { return v && a.indexOf(v) === i; }).sort(function (a, b) { return a.localeCompare(b, 'ka'); });
 }
+function drLegacyPatch(co, name, patch) {              /* the single-company cache of the existing screens, when it shows that company */
+  try { if (co === COID() && typeof DRIVERS_BY_NAME !== 'undefined') { if (!DRIVERS_BY_NAME[name]) DRIVERS_BY_NAME[name] = { name: name }; Object.assign(DRIVERS_BY_NAME[name], patch); } } catch (e) {}
+}
 async function drPatch(x, patch) {
   var row = Object.assign({ company_id: x.co, name: x.name }, patch, { updated_at: new Date().toISOString(), updated_by: USER.email });
   var r = await sb.from('drivers').upsert(row, { onConflict: 'company_id,name' });
   if (r.error) throw r.error;
   var B = U.by[x.co], d = B.drv[x.name];
   if (!d) { d = { company_id: x.co, name: x.name, active: true }; B.drv[x.name] = d; B.drivers.push(d); U.drivers.push(d); }
-  Object.assign(d, patch);
-  try { if (x.co === COID() && typeof DRIVERS_BY_NAME !== 'undefined') { if (!DRIVERS_BY_NAME[x.name]) DRIVERS_BY_NAME[x.name] = { name: x.name }; Object.assign(DRIVERS_BY_NAME[x.name], patch); } } catch (e) {}
+  Object.assign(d, patch); U._mem = null;
+  drLegacyPatch(x.co, x.name, patch);
 }
 function drDraft(x) {
   var off = x.off, rep = x.st === 'repair', m = rep ? /^\s*შეკეთება\s*:\s*([^·—]*?)(?:\s*·\s*([^—]*?))?(?:\s*—\s*(.*))?$/.exec(String(off.reason || '')) : null, d = x.d;
@@ -12066,26 +12179,156 @@ function drEditorHtml(x) {
     '<label class="u-field" for="u-dr-target">კვირის სამიზნე GROSS ($)<input class="u-input" id="u-dr-target" inputmode="decimal" value="' + h(D.target) + '" placeholder="მაგ. 4200"></label>' +
     '<label class="u-check" for="u-dr-npa" title="ინსპექციის რისკი — ტვირთს წინასწარ არ ვაბამთ"><input type="checkbox" id="u-dr-npa"' + (D.npa ? ' checked' : '') + '>წინასწარ არ ვაბამთ</label></div>' +
     '<p style="margin-top:8px">„წინასწარ არ ვაბამთ“ არსებული პარამეტრია; მისი წესი უცვლელია.</p></details>' +
-    '<p class="u-detailnote">„მუშაობს“ სვეტში მონიშვნა სიაში აქტიურობას აღნიშნავს. დასვენება და შეკეთება ცალკე სამუშაო სტატუსებია: ამ პერიოდში მძღოლი დისპეჩერის დღიურ სტანდარტში არ ითვლება. შეკეთება ინახება როგორც დასვენების პერიოდი მიზეზით „შეკეთება: …“ — ცალკე სტატუსი ბაზაში არ არსებობს.</p>' +
+    '<p class="u-detailnote">„მუშაობს“ სვეტში მონიშვნა ნიშნავს, რომ ეს კომპანია მძღოლის მიმდინარე კომპანიაა. დასვენება და შეკეთება ცალკე სამუშაო სტატუსებია: ამ პერიოდში მძღოლი დისპეჩერის დღიურ სტანდარტში არ ითვლება. შეკეთება ინახება როგორც დასვენების პერიოდი მიზეზით „შეკეთება: …“ — ცალკე სტატუსი ბაზაში არ არსებობს.</p>' +
     (DR.err ? '<p class="u-err-text" role="alert">' + h(DR.err) + '</p>' : '') +
     '<div class="u-editorfoot"><button type="button" class="u-btn" data-u-dr-close' + (DR.busy ? ' disabled' : '') + '>გაუქმება</button><button type="button" class="u-btn u-primary" data-u-dr-save' + (DR.busy ? ' disabled' : '') + '>' + (DR.busy ? 'ინახება…' : 'შენახვა') + '</button></div></div>';
 }
+/* ---- transfer: the company column. The server decides; this panel only says beforehand what the manager is about to ask for ---- */
+function drMoveTarget(x, to) {
+  var B = U.by[to] || { drivers: [], drv: {} }, same = x.sib.filter(function (s) { return s.company_id === to; })[0] || null;
+  if (same) return { kind: 'own', row: same };
+  var nm = B.drv[x.name]; if (nm) return { kind: 'name', row: nm };
+  return { kind: 'new', row: null };
+}
+function drMoveHtml(x) {
+  var M = DR.move, toCode = uCoCode(M.to), T = drMoveTarget(x, M.to), busy = M.phase === 'busy';
+  var open = (U.by[x.co] ? U.by[x.co].loads : []).filter(function (l) { return l.driver_name === x.name && !l.is_canceled && !l.delivery_completed && (l.status === 'new' || l.status === 'picked_up'); }).length;
+  var keep = T.row ? (T.row.dispatcher_name || 'მიუნიჭებელი') : '';
+  var what = T.kind === 'own' ? toCode + '-ში ამ მძღოლის ადრინდელი ჩანაწერი უკვე არსებობს — ის ჩაირთვება და თავის პარამეტრებს ინარჩუნებს.'
+    : T.kind === 'name' ? toCode + '-ში უკვე არის ჩანაწერი იმავე სახელით (' + (T.row.active !== false ? 'აქტიური' : 'არააქტიური') + ', დისპეჩერი: ' + keep + '), მაგრამ დადასტურებული არ არის, რომ ეს იგივე ადამიანია.'
+    : toCode + '-ში ახალი ჩანაწერი შეიქმნება ამ სტრიქონის პარამეტრებით (მისაბმელი, პროცენტი, სამიზნე, ჯალამბარი).';
+  return '<div class="u-editor u-move" id="u-dr-move"><div class="u-editorhead"><h3>' + h(x.name) + ' · გადაყვანა ' + h(x.code) + ' → ' + h(toCode) + '</h3><button type="button" class="u-iconbtn" data-u-dr-move-close aria-label="გადაყვანის გაუქმება"' + (busy ? ' disabled' : '') + '>' + ic('x') + '</button></div>' +
+    '<p class="u-callout">' + h(what) + '<small>' + h(x.code) + '-ის ჩანაწერი არ იშლება: ის ისტორიაში რჩება თავისი დისპეჩერითა და პარამეტრებით' + (open ? '; იქ დარჩენილი ' + open + ' ღია ტვირთი, დოკუმენტებისა და ჩეკების მოვალეობები იმავე კომპანიაში რჩება' : '; იქ არსებული ტვირთები და მოვალეობები არ იცვლება') + (x.off ? '. დასვენების/შეკეთების მონიშვნა ახალ კომპანიაში არ გადადის' : '') + '.</small></p>' +
+    '<div class="u-fields" style="margin-top:14px"><label class="u-field" for="u-dr-move-disp">დისპეჩერი ' + h(toCode) + '-ში<select id="u-dr-move-disp"' + (busy ? ' disabled' : '') + '><option value=""' + (M.disp ? '' : ' selected') + '>' + h(T.row ? 'არ შეიცვალოს (' + keep + ')' : 'მიუნიჭებელი') + '</option>' +
+      drDispOptions(toCode, null).map(function (n) { return '<option value="' + h(n) + '"' + (n === M.disp ? ' selected' : '') + '>' + h(n) + '</option>'; }).join('') + '</select></label>' +
+    (T.kind === 'name' || M.phase === 'adopt' ? '<label class="u-check u-wide" for="u-dr-move-same"><input type="checkbox" id="u-dr-move-same"' + (M.same ? ' checked' : '') + (busy ? ' disabled' : '') + '>ვადასტურებ: ეს იგივე მძღოლია — გამოიყენე ' + h(toCode) + '-ის არსებული ჩანაწერი</label>' : '') + '</div>' +
+    (M.err ? '<p class="u-err-text" role="alert">' + h(M.err) + '</p>' : '') +
+    '<div class="u-editorfoot"><button type="button" class="u-btn" data-u-dr-move-close' + (busy ? ' disabled' : '') + '>გაუქმება</button><button type="button" class="u-btn u-primary" data-u-dr-move-go' + (busy ? ' disabled' : '') + '>' + (busy ? 'გადაყავს…' : 'გადაყვანა ' + h(toCode) + '-ში') + '</button></div></div>';
+}
+async function drMoveGo() {
+  var M = DR.move, x = M && drFind(M.id); if (!x || M.phase === 'busy') return;
+  drReadMove();
+  var T = drMoveTarget(x, M.to);
+  if ((T.kind === 'name' || M.phase === 'adopt') && !M.same) { M.err = 'ჯერ დაადასტურე, რომ ეს იგივე მძღოლია — ან გააუქმე და მძღოლს განსხვავებული სახელი მიეცი.'; return drRepaint(); }
+  M.phase = 'busy'; M.err = ''; drRepaint();
+  var r = null, fail = '';
+  try { r = await sb.rpc('driver_transfer_v1', { p_from_company_id: x.co, p_name: x.name, p_to_company_id: M.to, p_dispatcher: M.disp || null, p_adopt_same_name: !!M.same, p_note: null }); }
+  catch (e) { r = { error: e }; }
+  if (DR.move !== M) return;
+  if (r.error) { if (uMissing(r.error)) DR.rpcMissing = true; fail = uMissing(r.error) ? DR_NO_RPC : 'ვერ გადავიდა: ' + uErr(r.error) + ' · არაფერი შეცვლილა.'; }
+  else if (!r.data || r.data.ok !== true) {
+    var why = r.data && r.data.reason;
+    if (why === 'same_name_unlinked') { M.phase = 'adopt'; M.same = false; M.err = uCoCode(M.to) + '-ში უკვე არის ჩანაწერი იმავე სახელით. თუ ეს იგივე მძღოლია, მონიშნე დადასტურება და სცადე ხელახლა.'; return drRepaint(); }
+    fail = why === 'dispatcher_invalid' ? 'ეს დისპეჩერი ' + uCoCode(M.to) + '-ში აქტიური ანგარიშით არ ჩანს — აირჩიე სხვა.'
+      : why === 'name_active_elsewhere' ? 'იმავე სახელით მძღოლი აქტიურია კომპანიაში ' + (r.data.code || '?') + ' და დადასტურებული არ არის, რომ ეს იგივე ადამიანია. ჯერ იქ გამორთე „მუშაობს“ ან იქიდან გადაიყვანე.'
+      : why === 'not_found' ? 'ჩანაწერი ვეღარ მოიძებნა — სია განახლდა.' : 'ვერ გადავიდა (' + (why || 'უცნობი პასუხი') + ') · არაფერი შეცვლილა.';
+    if (why === 'not_found') { try { await uLoad(true); } catch (e2) {} }
+  }
+  if (fail) { M.phase = M.phase === 'busy' ? 'ask' : M.phase; M.err = fail; return render(); }
+  var v = r.data, drv = v.driver || {};
+  (v.deactivated || []).forEach(function (o) { drLegacyPatch(o.company_id, o.name, { active: false }); });
+  drLegacyPatch(drv.company_id, drv.name, drv);
+  DR.move = null; DR.edit = null; DR.draft = null;
+  try { await uLoad(true); } catch (e3) { console.error(e3); }
+  feedback(x.name + ' — გადაყვანილია: ' + x.code + ' → ' + uCoCode(M.to) + (v.created ? ' (შეიქმნა ახალი ჩანაწერი)' : ' (ჩაირთო არსებული ჩანაწერი)') + '. ' + x.code + '-ის ჩანაწერი ისტორიაშია.');
+  render();
+}
+function drReadMove() { var M = DR.move; if (!M) return; var s = document.getElementById('u-dr-move-disp'), c = document.getElementById('u-dr-move-same'); if (s) M.disp = s.value; if (c) M.same = c.checked; }
+/* ---- add: a driver that exists nowhere yet ---- */
+function drAddHtml() {
+  var A = DR.add, busy = !!A.busy, code = A.co ? uCoCode(A.co) : '';
+  var same = A.name.trim() ? (uMembers().byName[uNameKey(A.name.replace(/\s+/g, ' '))] || []) : [];
+  var exists = (A.exists || same.map(function (d) { return { code: uCoCode(d.company_id), name: d.name, active: d.active !== false, dispatcher_name: d.dispatcher_name }; }));
+  return '<div class="u-editor u-add" id="u-dr-add"><div class="u-editorhead"><h3>ახალი მძღოლის დამატება</h3><button type="button" class="u-iconbtn" data-u-dr-add-close aria-label="დამატების გაუქმება"' + (busy ? ' disabled' : '') + '>' + ic('x') + '</button></div>' +
+    '<div class="u-fields"><label class="u-field u-wide" for="u-dr-add-name">სახელი და გვარი<input class="u-input" id="u-dr-add-name" maxlength="120" autocomplete="off" value="' + h(A.name) + '" placeholder="მაგ. გიორგი ბერიძე"' + (busy ? ' disabled' : '') + '></label>' +
+    '<label class="u-field" for="u-dr-add-co">კომპანია<select id="u-dr-add-co"' + (busy ? ' disabled' : '') + '><option value=""' + (A.co ? '' : ' selected') + '>აირჩიე…</option>' + (U.cos || []).map(function (c) { return '<option value="' + h(c.company_id) + '"' + (A.co === c.company_id ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="u-field" for="u-dr-add-disp">დისპეჩერი<select id="u-dr-add-disp"' + (busy || !A.co ? ' disabled' : '') + '><option value=""' + (A.disp ? '' : ' selected') + '>მიუნიჭებელი</option>' + (A.co ? drDispOptions(code, null) : []).map(function (n) { return '<option value="' + h(n) + '"' + (n === A.disp ? ' selected' : '') + '>' + h(n) + '</option>'; }).join('') + '</select></label>' +
+    '<label class="u-field" for="u-dr-add-cap">მისაბმელის ზომა (მანქანა)<select id="u-dr-add-cap"' + (busy ? ' disabled' : '') + '><option value=""' + (A.cap === '' ? ' selected' : '') + '>არ არის მითითებული</option>' + [1, 2, 3, 4, 5].map(function (n) { return '<option value="' + n + '"' + (String(A.cap) === String(n) ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label></div>' +
+    (exists.length ? '<p class="u-callout" id="u-dr-add-exists" style="margin-top:14px">ამ სახელით ჩანაწერი უკვე არსებობს: ' + exists.map(function (e) { return h(e.code) + ' (' + (e.active ? 'აქტიური' : 'არააქტიური') + ')'; }).join(' · ') + '.<small>ახალი მძღოლის ნაცვლად გამოიყენე მისი სტრიქონის „კომპანია“ სვეტი (გადაყვანა) ან ჩართე „მუშაობს“. თუ ეს სხვა ადამიანია, ჩაწერე განსხვავებული სახელი (მაგ. მამის სახელის ინიციალით). <button type="button" class="u-btn u-link" data-u-dr-add-show>მაჩვენე ეს ჩანაწერები</button></small></p>' : '') +
+    '<p class="u-detailnote">მძღოლი დაემატება არჩეულ კომპანიაში როგორც მიმდინარე („მუშაობს“) და მაშინვე ჩაითვლება არჩეული დისპეჩერის ცვლის როსტერში — პირველ ტვირთამდეც; ცვლის ჩვეულებრივი მოთხოვნები მასზეც ვრცელდება. პროცენტი, სამიზნე და ჯალამბარი შემდეგ შეივსება სტრიქონში. მისაბმელის მითითებამდე სტანდარტი მას 1-მანქანიანად ითვლის.</p>' +
+    (A.err ? '<p class="u-err-text" role="alert">' + h(A.err) + '</p>' : '') +
+    '<div class="u-editorfoot"><button type="button" class="u-btn" data-u-dr-add-close' + (busy ? ' disabled' : '') + '>გაუქმება</button><button type="button" class="u-btn u-primary" data-u-dr-add-go' + (busy ? ' disabled' : '') + '>' + (busy ? 'ემატება…' : 'დამატება') + '</button></div></div>';
+}
+function drReadAdd() { var A = DR.add, v = function (id) { var e = document.getElementById(id); return e ? e.value : null; }, x; if (!A) return; if ((x = v('u-dr-add-name')) != null) A.name = x; if ((x = v('u-dr-add-co')) != null) A.co = x; if ((x = v('u-dr-add-disp')) != null) A.disp = x; if ((x = v('u-dr-add-cap')) != null) A.cap = x; }
+async function drAddGo() {
+  var A = DR.add; if (!A || A.busy) return;
+  drReadAdd(); A.err = ''; A.exists = null;
+  var name = A.name.replace(/\s+/g, ' ').trim();
+  if (name.length < 3) { A.err = 'ჩაწერე მძღოლის სახელი და გვარი.'; return drRepaint(); }
+  if (!A.co) { A.err = 'აირჩიე კომპანია.'; return drRepaint(); }
+  A.busy = true; drRepaint();
+  var r = null;
+  try { r = await sb.rpc('driver_add_v1', { p_company_id: A.co, p_name: name, p_dispatcher: A.disp || null, p_cap: A.cap === '' ? null : Number(A.cap), p_note: null }); }
+  catch (e) { r = { error: e }; }
+  if (DR.add !== A) return;
+  A.busy = false;
+  if (r.error) { if (uMissing(r.error)) DR.rpcMissing = true; A.err = uMissing(r.error) ? DR_NO_RPC : 'ვერ დაემატა: ' + uErr(r.error) + ' · არაფერი შეცვლილა.'; return render(); }
+  if (!r.data || r.data.ok !== true) {
+    var why = r.data && r.data.reason;
+    if (why === 'name_exists') { A.exists = r.data.existing || []; A.err = 'ამ სახელით ჩანაწერი უკვე არსებობს — ახალი მძღოლი არ შექმნილა.'; }
+    else A.err = why === 'dispatcher_invalid' ? 'ეს დისპეჩერი ამ კომპანიაში აქტიური ანგარიშით არ ჩანს — აირჩიე სხვა.' : 'ვერ დაემატა (' + (why || 'უცნობი პასუხი') + ') · არაფერი შეცვლილა.';
+    return render();
+  }
+  var drv = r.data.driver || {};
+  drLegacyPatch(drv.company_id, drv.name, drv);
+  DR.add = null;
+  try { await uLoad(true); } catch (e2) { console.error(e2); }
+  feedback(name + ' — დამატებულია: ' + uCoCode(drv.company_id) + ' · დისპეჩერი ' + (drv.dispatcher_name || 'მიუნიჭებელი') + '.');
+  render();
+}
+/* ---- rows ---- */
+function drCapText(d, unreg) { return d.cap != null && Number(d.cap) > 0 ? Number(d.cap) + '-მანქ.' : '—'; }
 function drRowHtml(x) {
-  var d = x.d, ex = DR.edit === x.id, cap = d.cap != null && Number(d.cap) > 0 ? Number(d.cap) + '-მანქ.' : (x.d._unreg ? '—' : '1-მანქ.'), cur = d.dispatcher_name || '', st = DR_ST[x.st];
+  var d = x.d, ex = DR.edit === x.id, mv = DR.move && DR.move.id === x.id, cur = d.dispatcher_name || '', st = DR_ST[x.st], reg = !d._unreg;
   var sub = x.st !== 'work' && x.off.to_day ? uDayShort(x.off.to_day) + '-ის ჩათვლით' : '';
-  return '<div class="u-row' + (ex ? ' u-expanded' : '') + (d.active === false ? ' u-off' : '') + '" data-u-dr-row="' + h(x.id) + '">' +
-    '<div class="u-person u-cell-name"><div class="u-avatar" aria-hidden="true">' + h(uInitials(x.name)) + '</div><button type="button" class="u-namelink" data-u-edit="' + h(x.id) + '"><span class="u-personname">' + h(x.name) + '</span><small>' + h(x.code) + (x.d._unreg ? ' · რეესტრში არ არის' : '') + '</small></button></div>' +
+  var was = x.sib.filter(function (s) { return s.active === false; }).map(function (s) { return uCoCode(s.company_id) + (s.name !== x.name ? ' („' + s.name + '“)' : ''); });
+  var coSel = mv ? DR.move.to : x.co;
+  return '<div class="u-row' + (ex || mv ? ' u-expanded' : '') + '" data-u-dr-row="' + h(x.id) + '">' +
+    '<div class="u-person u-cell-name"><div class="u-avatar" aria-hidden="true">' + h(uInitials(x.name)) + '</div><button type="button" class="u-namelink" data-u-edit="' + h(x.id) + '"><span class="u-personname">' + h(x.name) + '</span>' +
+      (reg ? (was.length ? '<small title="ამ მძღოლის გამორთული ჩანაწერი სხვა კომპანიაში (იხ. „არააქტიური და ადრინდელი წევრობები“)">ადრე: ' + h(was.join(', ')) + '</small>' : '') : '<small>რეესტრში არ არის · ტვირთებიდან</small>') + '</button></div>' +
+    '<div class="u-cell-co">' + (reg ? '<select data-u-dr-co="' + h(x.id) + '" aria-label="' + h(x.name) + ' — მიმდინარე კომპანია (შეცვლა = გადაყვანა)"' + (drServerOn() ? '' : ' disabled title="' + h(DR_NO_RPC) + '"') + '>' + (U.cos || []).map(function (c) { return '<option value="' + h(c.company_id) + '"' + (c.company_id === coSel ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>' : '<span class="u-chip">' + h(x.code) + '</span>') + '</div>' +
     '<div class="u-cell-disp"><select data-u-dr-disp="' + h(x.id) + '" aria-label="' + h(x.name) + ' — დისპეჩერი"><option value=""' + (cur ? '' : ' selected') + '>მიუნიჭებელი</option>' + drDispOptions(x.code, cur).map(function (n) { return '<option value="' + h(n) + '"' + (n === cur ? ' selected' : '') + '>' + h(n) + '</option>'; }).join('') + '</select>' + (x.cover ? '<small>დროებით: ' + h(x.cover.dispatcher_name) + (x.cover.to_day ? ' · ' + h(uDayShort(x.cover.to_day)) + '-მდე' : '') + '</small>' : '') + '</div>' +
-    '<span class="u-cell-gear u-muted">' + h(cap) + '</span>' +
+    '<span class="u-cell-gear u-muted"' + (d.cap != null && Number(d.cap) > 0 ? '' : ' title="მისაბმელის ზომა მითითებული არ არის — სტანდარტში ითვლება 1"') + '>' + h(drCapText(d)) + '</span>' +
     '<label class="u-check u-cell-winch"><input type="checkbox" data-u-dr-winch="' + h(x.id) + '"' + (d.winch ? ' checked' : '') + ' aria-label="' + h(x.name) + ' — ჯალამბარი">აქვს</label>' +
-    '<label class="u-check u-cell-active"><input type="checkbox" data-u-dr-active="' + h(x.id) + '"' + (d.active !== false ? ' checked' : '') + ' aria-label="' + h(x.name) + ' — მუშაობს (რეესტრში აქტიურია)">მუშაობს</label>' +
-    '<div class="u-cell-status"><button type="button" class="u-statusbtn' + (x.st === 'repair' ? ' u-repair' : '') + '" data-u-edit="' + h(x.id) + '" aria-expanded="' + ex + '">' + ic(st[1]) + '<span>' + st[0] + (sub ? '<small>' + h(sub) + '</small>' : '') + '</span>' + ic(ex ? 'chevron-up' : 'chevron-down') + '</button></div></div>' + (ex ? drEditorHtml(x) : '');
+    '<label class="u-check u-cell-active"><input type="checkbox" data-u-dr-active="' + h(x.id) + '"' + (d.active !== false ? ' checked' : '') + ' aria-label="' + h(x.name) + ' — მუშაობს (ეს კომპანია მისი მიმდინარე კომპანიაა)">მუშაობს</label>' +
+    '<div class="u-cell-status"><button type="button" class="u-statusbtn' + (x.st === 'repair' ? ' u-repair' : '') + '" data-u-edit="' + h(x.id) + '" aria-expanded="' + ex + '">' + ic(st[1]) + '<span>' + st[0] + (sub ? '<small>' + h(sub) + '</small>' : '') + '</span>' + ic(ex ? 'chevron-up' : 'chevron-down') + '</button></div></div>' + (ex ? drEditorHtml(x) : '') + (mv ? drMoveHtml(x) : '');
 }
-function drListHtml() {
-  var q = DR.q.trim().toLocaleLowerCase(), rows = drRows().filter(function (x) { return (DR.co === 'ALL' || x.co === DR.co) && (!q || (x.name + ' ' + (x.d.dispatcher_name || '')).toLocaleLowerCase().indexOf(q) >= 0); });
-  return { n: rows.length, html: rows.length ? rows.map(drRowHtml).join('') : '<div class="u-empty" style="border-radius:0">' + ic('inbox') + '<strong>მძღოლი ვერ მოიძებნა</strong><p>შეცვალე ძიება ან კომპანია.</p></div>' };
+/* a switched-off membership: where the driver is now, and the two ways back (switch on here, or move to another company) */
+function drHistRowHtml(x) {
+  var d = x.d, r = x.ref, reg = !d._unreg, mv = DR.move && DR.move.id === x.id, coSel = mv ? DR.move.to : x.co;
+  var now = !r ? '<span class="u-histnow">მიმდინარე კომპანია არ აქვს</span>'
+    : r.linked ? '<span class="u-histnow u-ok">ამჟამად: ' + h(uCoCode(r.row.company_id)) + (r.row.name !== x.name ? ' · იქ ჩაწერილია „' + h(r.row.name) + '“' : '') + '</span>'
+    : reg ? '<span class="u-histnow u-warn">სახელი ემთხვევა ' + h(uCoCode(r.row.company_id)) + '-ის მიმდინარე მძღოლს · იდენტობა დაუდასტურებელია</span>'
+    : '<span class="u-histnow">მიმდინარე კომპანია (იმავე სახელით): ' + h(uCoCode(r.row.company_id)) + '</span>';
+  return '<div class="u-row u-off u-hist' + (mv ? ' u-expanded' : '') + '" data-u-dr-row="' + h(x.id) + '">' +
+    '<div class="u-person u-cell-name"><div class="u-avatar" aria-hidden="true">' + h(uInitials(x.name)) + '</div><span class="u-namelink"><span class="u-personname">' + h(x.name) + '</span><small>' + (reg ? 'გამორთული ჩანაწერი' : 'რეესტრში არ არის · აქ მხოლოდ ტვირთი აქვს') + '</small></span></div>' +
+    '<div class="u-cell-co">' + (!r && reg ? '<select data-u-dr-co="' + h(x.id) + '" aria-label="' + h(x.name) + ' — გადაყვანა სხვა კომპანიაში"' + (drServerOn() ? '' : ' disabled title="' + h(DR_NO_RPC) + '"') + '>' + (U.cos || []).map(function (c) { return '<option value="' + h(c.company_id) + '"' + (c.company_id === coSel ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>' : '<span class="u-chip">' + h(x.code) + '</span>') + '</div>' +
+    '<div class="u-cell-disp u-muted">' + h(reg ? d.dispatcher_name || 'მიუნიჭებელი' : '—') + '</div>' +
+    '<span class="u-cell-gear u-muted">' + h(drCapText(d)) + '</span>' +
+    '<span class="u-cell-winch u-muted">' + (d.winch ? 'აქვს' : '—') + '</span>' +
+    (reg ? '<label class="u-check u-cell-active"' + (r ? ' title="მიმდინარე კომპანიის შესაცვლელად გამოიყენე „კომპანია“ სვეტი მის მიმდინარე სტრიქონში"' : '') + '><input type="checkbox" data-u-dr-active="' + h(x.id) + '"' + (r ? ' disabled' : '') + ' aria-label="' + h(x.name) + ' — ჩართვა კომპანიაში ' + h(x.code) + '">მუშაობს</label>' : '<span class="u-cell-active u-muted">—</span>') +
+    '<div class="u-cell-status">' + now + '</div></div>' + (mv ? drMoveHtml(x) : '');
 }
-function drRepaint() { var e = document.getElementById('u-dr-rows'), c = document.getElementById('u-dr-count'); if (!e) return render(); var l = drListHtml(); e.innerHTML = l.html; if (c) c.textContent = l.n + ' მძღოლი'; }
+function drLists() {
+  var q = DR.q.trim().toLocaleLowerCase(), all = drRows().filter(function (x) { return uScopeIn(x.co) && (!q || (x.name + ' ' + (x.d.dispatcher_name || '')).toLocaleLowerCase().indexOf(q) >= 0); });
+  return { cur: all.filter(function (x) { return x.cur; }), hist: all.filter(function (x) { return !x.cur; }) };
+}
+function drBodyHtml() {
+  var L = drLists(), unreg = L.cur.filter(function (x) { return x.d._unreg; }).length;
+  var head = '<div class="u-rowhead"><span>მძღოლი</span><span>კომპანია</span><span>დისპეჩერი</span><span>აღჭურვილობა</span><span>ჯალამბარი</span><span>მუშაობს</span><span>სამუშაო სტატუსი</span></div>';
+  return { n: L.cur.length, unreg: unreg, nh: L.hist.length, html: (DR.add ? drAddHtml() : '') +
+    '<div class="u-registry">' + head + '<div id="u-dr-rows">' + (L.cur.length ? L.cur.map(drRowHtml).join('') : '<div class="u-empty" style="border-radius:0">' + ic('inbox') + '<strong>მიმდინარე მძღოლი ვერ მოიძებნა</strong><p>' + (L.hist.length ? 'ამ ფილტრში მხოლოდ გამორთული ჩანაწერებია — იხ. ქვემოთ.' : 'შეცვალე ძიება ან კომპანია.') + '</p></div>') + '</div></div>' +
+    '<div class="u-section-t"><button type="button" class="u-btn" data-u-dr-hist aria-expanded="' + DR.hist + '"' + (L.hist.length ? '' : ' disabled') + '>' + ic(DR.hist ? 'chevron-up' : 'chevron-down') + 'არააქტიური და ადრინდელი წევრობები · ' + L.hist.length + '</button><span>გამორთული ჩანაწერები: მძღოლები, რომლებიც სხვა კომპანიაში გადავიდნენ ან აღარ მუშაობენ. ისტორია, ტვირთები და მოვალეობები იმავე კომპანიაში რჩება.</span></div>' +
+    (DR.hist && L.hist.length ? '<div class="u-registry" id="u-dr-hist">' + L.hist.map(drHistRowHtml).join('') + '</div>' : '') };
+}
+function drCountText(b) { return b.n + ' მიმდინარე მძღოლი' + (b.unreg ? ' · მათ შორის ' + b.unreg + ' რეესტრში არ არის' : ''); }
+function drRepaint() {
+  var e = document.getElementById('u-dr-body'), c = document.getElementById('u-dr-count'); if (!e) return render();
+  var a = document.activeElement, fid = a && a.id && e.contains(a) ? a.id : null, ss = null, se = null;
+  if (fid) { try { ss = a.selectionStart; se = a.selectionEnd; } catch (x) {} }
+  var b = drBodyHtml(); e.innerHTML = b.html; if (c) c.textContent = drCountText(b);
+  if (fid) { var f = document.getElementById(fid); if (f) { try { f.focus({ preventScroll: true }); if (ss != null && f.setSelectionRange) f.setSelectionRange(ss, se); } catch (x2) {} } }
+}
 function drFind(id) { return drRows().filter(function (x) { return x.id === id; })[0] || null; }
 function drReadDraft() {
   var D = DR.draft, v = function (id) { var e = document.getElementById(id); return e ? e.value : null; }, x;
@@ -12095,6 +12338,7 @@ function drReadDraft() {
   if ((x = v('u-dr-cap')) != null) D.cap = x; if ((x = v('u-dr-cat')) != null) D.category = x; if ((x = v('u-dr-target')) != null) D.target = x;
   var c = document.getElementById('u-dr-npa'); if (c) D.npa = c.checked; var a = document.querySelector('#u-dr-editor .u-adv'); if (a) D.advOpen = a.open;
 }
+function drReadAll() { drReadDraft(); drReadMove(); drReadAdd(); }
 async function drSave() {
   var D = DR.draft, x = D && drFind(D.id); if (!x || DR.busy) return;
   drReadDraft(); DR.err = '';
@@ -12140,41 +12384,63 @@ async function drSave() {
   }
 }
 PAGES.drivers = {
-  editing: function () { return DR.busy; },
+  editing: function () { return DR.busy || !!(DR.move && DR.move.phase === 'busy') || !!(DR.add && DR.add.busy) || !!(DR.add && document.activeElement && document.activeElement.id === 'u-dr-add-name'); },
   paint: function (view) {
     if (TK.state === 'unknown' && !TK.loading) tkLoad().then(function () { if (MTAB === 'drivers' && DR.edit && !DR.busy) { drReadDraft(); drRepaint(); } });
-    var st = uStateHtml(), l = uReady() ? drListHtml() : { n: 0, html: '' };
-    view.innerHTML = '<div class="u-page" id="u-drivers"><div class="u-head"><div><h1>მძღოლების დაფა</h1><p class="u-sub">დისპეჩერი, აღჭურვილობა და სამუშაო სტატუსი · ყველა კომპანია</p></div><span class="u-date"><button type="button" class="u-btn" data-u-route="drvstats">სტატისტიკა და გადაბარება →</button></span></div>' + st +
-      (uReady() ? '<div class="u-toolbar"><label class="u-search" for="u-dr-q">' + ic('search') + '<input id="u-dr-q" type="search" value="' + h(DR.q) + '" placeholder="მოძებნე მძღოლი" aria-label="მოძებნე მძღოლი სიაში"></label>' +
-        '<select id="u-dr-co" aria-label="მძღოლების კომპანია" style="max-width:190px"><option value="ALL">ყველა კომპანია</option>' + U.cos.map(function (c) { return '<option value="' + h(c.company_id) + '"' + (DR.co === c.company_id ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>' +
-        '<span class="u-count" id="u-dr-count">' + l.n + ' მძღოლი</span></div>' +
-        '<div class="u-registry"><div class="u-rowhead"><span>მძღოლი / კომპანია</span><span>დისპეჩერი</span><span>აღჭურვილობა</span><span>ჯალამბარი</span><span>მუშაობს</span><span>სამუშაო სტატუსი</span></div><div id="u-dr-rows">' + l.html + '</div></div>' +
-        '<p class="u-note" style="margin-top:12px">ცვლილება მაშინვე ინახება ბაზაში იმ კომპანიის ჩანაწერში, რომელსაც მძღოლი ეკუთვნის. 30/56-დღიანი სტატისტიკა, ფილტრები და დროებითი გადაბარების ფორმა — „სტატისტიკა და გადაბარება“ გვერდზე (არჩეული კომპანიისთვის).</p>' : '') + '</div>';
+    if (document.getElementById('u-dr-body')) drReadAll();
+    var st = uStateHtml(), b = uReady() ? drBodyHtml() : { n: 0, unreg: 0, html: '' };
+    view.innerHTML = '<div class="u-page" id="u-drivers"><div class="u-head"><div><h1>მძღოლების დაფა</h1><p class="u-sub">კომპანია, დისპეჩერი, აღჭურვილობა და სამუშაო სტატუსი · ერთი სტრიქონი თითო მიმდინარე მძღოლზე</p></div><span class="u-date"><button type="button" class="u-btn" data-u-route="drvstats">სტატისტიკა და გადაბარება →</button></span></div>' + st +
+      (uReady() ? '<div class="u-toolbar"><label class="u-search" for="u-dr-q">' + ic('search') + '<input id="u-dr-q" type="search" value="' + h(DR.q) + '" placeholder="მოძებნე მძღოლი" aria-label="მოძებნე მძღოლი სიაში"></label>' + uScopeSelect('u-dr-scope') +
+        '<button type="button" class="u-btn u-primary" data-u-dr-add-open' + (drServerOn() ? '' : ' disabled title="' + h(DR_NO_RPC) + '"') + '>' + ic('plus') + 'მძღოლის დამატება</button>' +
+        '<span class="u-count" id="u-dr-count">' + drCountText(b) + '</span></div>' + uScopeNote() +
+        (drServerOn() ? '' : '<div class="u-state" id="u-dr-nosrv" role="status" style="margin-bottom:14px">კომპანიის შეცვლა (გადაყვანა) და ახალი მძღოლის დამატება ჩაირთვება მონაცემთა ბაზის განახლების შემდეგ. მანამდე ნაჩვენებია რეესტრის ჩანაწერები ისე, როგორც ინახება.</div>') +
+        '<div id="u-dr-body">' + b.html + '</div>' +
+        '<p class="u-note" style="margin-top:12px">ერთ მძღოლს ერთი მიმდინარე კომპანია აქვს — ამას სერვერი იცავს ყველა ეკრანისთვის. „კომპანია“ სვეტში სხვა კომპანიის არჩევა მძღოლს იქ გადაიყვანს (დადასტურების შემდეგ); ძველი კომპანიის ჩანაწერი, ტვირთები და მოვალეობები ადგილზე რჩება. დანარჩენი ცვლილება მაშინვე ინახება იმ კომპანიის ჩანაწერში, რომელშიც სტრიქონია. 30/56-დღიანი სტატისტიკა, ფილტრები და დროებითი გადაბარების ფორმა — „სტატისტიკა და გადაბარება“ გვერდზე (არჩეული კომპანიისთვის).</p>' : '') + '</div>';
   },
   click: function (e, el) {
     var a;
-    if ((a = el.closest('[data-u-edit]'))) { if (DR.busy) return; var id = a.getAttribute('data-u-edit'), x = drFind(id); if (!x) return; if (DR.edit === id) { DR.edit = null; DR.draft = null; } else { DR.edit = id; DR.draft = drDraft(x); } DR.err = ''; drRepaint();
+    if ((a = el.closest('[data-u-edit]'))) { if (DR.busy) return; var id = a.getAttribute('data-u-edit'), x = drFind(id); if (!x || !x.cur) return; drReadAll(); DR.move = null; if (DR.edit === id) { DR.edit = null; DR.draft = null; } else { DR.edit = id; DR.draft = drDraft(x); } DR.err = ''; drRepaint();
       if (DR.edit) setTimeout(function () { var t = document.querySelector('#u-dr-editor [aria-pressed="true"]'); if (t) { try { t.focus({ preventScroll: true }); document.getElementById('u-dr-editor').scrollIntoView({ block: 'nearest' }); } catch (x2) {} } }, 0); return; }
-    if (el.closest('[data-u-dr-close]')) { if (DR.busy) return; var back = DR.edit; DR.edit = null; DR.draft = null; DR.err = ''; drRepaint(); var b = document.querySelector('[data-u-dr-row="' + (window.CSS && CSS.escape ? CSS.escape(back) : back) + '"] .u-statusbtn'); if (b) b.focus(); return; }
-    if ((a = el.closest('[data-u-dr-st]'))) { if (DR.busy || !DR.draft) return; drReadDraft(); DR.draft.st = a.getAttribute('data-u-dr-st'); DR.err = ''; drRepaint(); var t2 = document.querySelector('#u-dr-editor [aria-pressed="true"]'); if (t2) t2.focus(); return; }
+    if (el.closest('[data-u-dr-close]')) { if (DR.busy) return; var back = DR.edit; DR.edit = null; DR.draft = null; DR.err = ''; drReadAll(); drRepaint(); var b = document.querySelector('[data-u-dr-row="' + (window.CSS && CSS.escape ? CSS.escape(back) : back) + '"] .u-statusbtn'); if (b) b.focus(); return; }
+    if ((a = el.closest('[data-u-dr-st]'))) { if (DR.busy || !DR.draft) return; drReadAll(); DR.draft.st = a.getAttribute('data-u-dr-st'); DR.err = ''; drRepaint(); var t2 = document.querySelector('#u-dr-editor [aria-pressed="true"]'); if (t2) t2.focus(); return; }
     if (el.closest('[data-u-dr-save]')) return drSave();
+    if (el.closest('[data-u-dr-move-close]')) { if (DR.move && DR.move.phase === 'busy') return; drReadAll(); DR.move = null; return drRepaint(); }
+    if (el.closest('[data-u-dr-move-go]')) return drMoveGo();
+    if (el.closest('[data-u-dr-hist]')) { drReadAll(); DR.hist = !DR.hist; if (!DR.hist && DR.move && !(drFind(DR.move.id) || {}).cur) DR.move = null; return drRepaint(); }
+    if (el.closest('[data-u-dr-add-open]')) { if (DR.add) return; drReadAll(); DR.add = { name: '', co: SCOPE.co !== 'ALL' ? SCOPE.co : '', disp: '', cap: '', busy: false, err: '', exists: null }; drRepaint(); var n = document.getElementById('u-dr-add-name'); if (n) { try { n.focus(); document.getElementById('u-dr-add').scrollIntoView({ block: 'nearest' }); } catch (x3) {} } return; }
+    if (el.closest('[data-u-dr-add-close]')) { if (DR.add && DR.add.busy) return; drReadAll(); DR.add = null; return drRepaint(); }
+    if (el.closest('[data-u-dr-add-show]')) { drReadAll(); DR.q = DR.add ? DR.add.name.replace(/\s+/g, ' ').trim() : DR.q; DR.hist = true; SCOPE.co = 'ALL'; return render(); }
+    if (el.closest('[data-u-dr-add-go]')) return drAddGo();
   },
   change: function (e, el) {
     var id, x, field, val, msg;
-    if (el.id === 'u-dr-co') { DR.co = el.value; DR.edit = null; DR.draft = null; return drRepaint(); }
+    if (el.hasAttribute('data-u-scope')) { drReadAll(); SCOPE.co = el.value; DR.edit = null; DR.draft = null; DR.move = null; return render(); }
+    if (el.id === 'u-dr-add-co') { drReadAdd(); DR.add.disp = ''; DR.add.err = ''; return drRepaint(); }
+    if (el.id === 'u-dr-move-disp' || el.id === 'u-dr-move-same' || el.id === 'u-dr-add-disp' || el.id === 'u-dr-add-cap') return drReadAll();
+    if ((id = el.getAttribute('data-u-dr-co')) != null) {                    /* the company column: never saved by itself - it opens the transfer panel */
+      x = drFind(id); if (!x) return; drReadAll();
+      if (el.value === x.co) { if (DR.move && DR.move.id === id) DR.move = null; return drRepaint(); }
+      var cur = x.d.dispatcher_name || '', T = drMoveTarget(x, el.value);
+      DR.edit = null; DR.draft = null; DR.err = '';
+      DR.move = { id: id, to: el.value, disp: T.kind === 'new' && cur && drDispOptions(uCoCode(el.value), null).indexOf(cur) >= 0 ? cur : '', same: false, phase: 'ask', err: '' };
+      drRepaint(); var p = document.getElementById('u-dr-move'); if (p) { try { p.scrollIntoView({ block: 'nearest' }); var g = document.getElementById('u-dr-move-disp'); if (g) g.focus({ preventScroll: true }); } catch (x4) {} } return;
+    }
     if ((id = el.getAttribute('data-u-dr-disp')) != null) { field = { dispatcher_name: el.value || null }; msg = 'დისპეჩერი შეიცვალა'; }
     else if ((id = el.getAttribute('data-u-dr-winch')) != null) { field = { winch: !!el.checked }; msg = 'ჯალამბარის ინფორმაცია შენახულია'; }
-    else if ((id = el.getAttribute('data-u-dr-active')) != null) { field = { active: !!el.checked }; msg = el.checked ? 'აქტიურია' : 'არააქტიურია'; }
+    else if ((id = el.getAttribute('data-u-dr-active')) != null) { field = { active: !!el.checked }; msg = el.checked ? 'მიმდინარე კომპანიაა (მუშაობს)' : 'გამორთულია — ჩანაწერი ისტორიაში გადავიდა'; }
     else return;
     x = drFind(id); if (!x) return;
     var prev = { dispatcher_name: x.d.dispatcher_name || null, winch: !!x.d.winch, active: x.d.active !== false };
     el.disabled = true;
-    return drPatch(x, field).then(function () { feedback(x.name + ' — ' + msg + '.'); if (DR.edit) drReadDraft(); drRepaint(); }, function (err) {
+    return drPatch(x, field).then(function () { feedback(x.name + ' — ' + msg + '.'); drReadAll(); if ('active' in field) { if (DR.edit === id) { DR.edit = null; DR.draft = null; } if (DR.move && DR.move.id === id) DR.move = null; } drRepaint(); }, function (err) {
       console.error(err); feedback(x.name + ' — ვერ შეინახა (' + uErr(err) + '). მნიშვნელობა დაბრუნდა.', true);
       if (el.type === 'checkbox') el.checked = 'winch' in field ? prev.winch : prev.active; else el.value = prev.dispatcher_name || ''; el.disabled = false; });
   },
-  input: function (e, el) { if (el.id === 'u-dr-q') { if (DR.edit) drReadDraft(); DR.q = el.value; drRepaint(); } else if (DR.draft && el.closest('#u-dr-editor')) drReadDraft(); },
-  key: function (e) { if (e.key === 'Escape' && DR.edit && !DR.busy && !(e.target && e.target.tagName === 'TEXTAREA' && e.target.value)) { DR.edit = null; DR.draft = null; DR.err = ''; drRepaint(); } }
+  input: function (e, el) { if (el.id === 'u-dr-q') { drReadAll(); DR.q = el.value; drRepaint(); } else if (el.id === 'u-dr-add-name' && DR.add) { drReadAdd(); var stale = !!(DR.add.exists || DR.add.err); DR.add.exists = null; DR.add.err = ''; var had = !!document.getElementById('u-dr-add-exists'), has = !!(uMembers().byName[uNameKey(DR.add.name.replace(/\s+/g, ' '))] || []).length; if (stale || had !== has) drRepaint(); } else if (el.closest('#u-dr-editor')) drReadDraft(); },
+  key: function (e) { if (e.key !== 'Escape' || DR.busy || (e.target && e.target.tagName === 'TEXTAREA' && e.target.value)) return;
+    if (DR.move && DR.move.phase !== 'busy') { drReadAll(); DR.move = null; return drRepaint(); }
+    if (DR.edit) { DR.edit = null; DR.draft = null; DR.err = ''; return drRepaint(); }
+    if (DR.add && !DR.add.busy && !DR.add.name.trim()) { DR.add = null; return drRepaint(); } }
 };
 
 /* ---- DISPATCHERS: read-only cards + a compact distribution list. No score, no rank, no capacity rule: the app stores no
@@ -12188,17 +12454,18 @@ function tmTenure(ts) {
   var y = Math.floor(m / 12), r = m % 12; return (y ? y + ' წელი' : '') + (y && r ? ' · ' : '') + (r ? r + ' თვე' : '');
 }
 function tmModel() {
-  var today = workToday_(), cut = addDays_(today, -30), owned = {}, stat = {};
-  (U.cos || []).forEach(function (c) { var B = U.by[c.company_id], act = {};
+  var today = workToday_(), cut = addDays_(today, -30), owned = {}, stat = {}, none = 0, total = 0;
+  (U.cos || []).forEach(function (c) { if (!uScopeIn(c.company_id)) return; var B = U.by[c.company_id], act = {};
     /* the live board's existing scope of a working driver: an open load now, or a load planned in the last 30 days */
     B.loads.forEach(function (l) { if (l.is_canceled || !l.driver_name) return; var p = puDay_(l); if (l.status === 'new' || (l.status === 'picked_up' && !l.delivery_completed) || (p && p >= cut)) act[l.driver_name] = 1; });
-    B.drivers.forEach(function (d) { if (d.active === false) return; var o = uOwner(c.company_id, d.name, today); if (!o) return; var off = uOff(c.company_id, d.name, today), dorm = !off && !act[d.name];
+    /* a driver counts where his CURRENT membership is: the registry row with "works" on (one per driver, kept by the server) */
+    B.drivers.forEach(function (d) { if (d.active === false) return; total++; var o = uOwner(c.company_id, d.name, today); if (!o) { none++; return; } var off = uOff(c.company_id, d.name, today), dorm = !off && !act[d.name];
       (owned[o] = owned[o] || []).push({ name: d.name, code: c.code, dorm: dorm, st: off ? (uIsRepair(off) ? 'შეკეთება' : 'ისვენებს') : dorm ? '30+ დღე უტვირთოდ' : '' }); });
     B.loads.forEach(function (l) { if (l.is_canceled || !l.dispatcher_name) return; var s = stat[l.dispatcher_name] || (stat[l.dispatcher_name] = { del: 0, gross: 0, mix: [0, 0, 0], first: '', cos: {} });
       s.cos[c.code] = 1; var p = puDay_(l); if (p && (!s.first || p < s.first)) s.first = p;
       if (l.delivery_completed) { s.del++; s.gross += grossOf_(l); s.mix[Math.min(3, cars_(l)) - 1]++; } });
   });
-  var myCodes = (U.cos || []).map(function (c) { return String(c.code).toUpperCase(); });
+  var myCodes = (U.cos || []).filter(function (c) { return uScopeIn(c.company_id); }).map(function (c) { return String(c.code).toUpperCase(); });
   /* a dispatcher listed only for companies this manager cannot see is not shown (their figures would be partial) */
   var list = (U.people || []).filter(function (p) { return p.role === 'dispatcher' && p.active && (!Array.isArray(p.company_codes) || p.company_codes.some(function (x) { return myCodes.indexOf(String(x).trim().toUpperCase()) >= 0; })); }).map(function (p) {
     var s = stat[p.dispatcher_name] || { del: 0, gross: 0, mix: [0, 0, 0], first: '', cos: {} }, mine = (owned[p.dispatcher_name] || []).sort(function (a, b) { return a.name.localeCompare(b.name, 'ka'); });
@@ -12209,6 +12476,8 @@ function tmModel() {
   /* registry drivers attached to a name that has no card (a departed dispatcher, a switched-off account, a manager): said, not hidden */
   var shown = {}; list.forEach(function (x) { shown[x.name] = 1; });
   list.others = Object.keys(owned).filter(function (n) { return !shown[n]; }).map(function (n) { var d = owned[n].filter(function (m) { return m.dorm; }).length; return { name: n, n: owned[n].length - d, nDorm: d }; }).sort(function (a, b) { return b.n - a.n || a.name.localeCompare(b.name, 'ka'); });
+  /* every current driver of the shown companies is in exactly one of the three numbers */
+  list.sum = { total: total, cards: list.reduce(function (s, x) { return s + x.drivers.length; }, 0), others: list.others.reduce(function (s, o) { return s + o.n + o.nDorm; }, 0), none: none };
   return list;
 }
 function tmCard(x) {
@@ -12228,18 +12497,20 @@ function tmFlip(id) {
   TM.flip = id;
   document.querySelectorAll('#u-team [data-u-card]').forEach(function (c) { var on = c.getAttribute('data-u-card') === id, f = c.querySelector('.u-front'), b = c.querySelector('.u-back'); c.classList.toggle('u-flipped', on); if (f) { f.inert = on; f.setAttribute('aria-expanded', on); } if (b) b.inert = !on; });
 }
-PAGES.dispatchers = {
+PAGES.team = {
   paint: function (view) {
-    var st = uStateHtml(), list = uReady() ? tmModel() : [], free = list.slice().sort(function (a, b) { return a.n - b.n || a.name.localeCompare(b.name, 'ka'); });
-    view.innerHTML = '<div class="u-page" id="u-team"><div class="u-head"><div><h1>დისპეჩერები</h1><p class="u-sub">გამოცდილება და მძღოლების განაწილება · ყველა კომპანია</p></div><span class="u-date"><button type="button" class="u-btn" data-u-route="dispadmin">წვდომა და დარჩენილი საქმეები →</button></span></div>' + st +
-      (uReady() ? '<div class="u-teamwrap"><div class="u-teamcards">' + (list.map(tmCard).join('') || shEmpty('აქტიური დისპეჩერი არ ჩანს', 'შეამოწმე წვდომის სია.')) + '</div>' +
+    var st = uStateHtml(), list = uReady() ? tmModel() : [], free = list.slice().sort(function (a, b) { return a.n - b.n || a.name.localeCompare(b.name, 'ka'); }), S = list.sum || { total: 0, cards: 0, others: 0, none: 0 };
+    view.innerHTML = '<div class="u-page" id="u-team"><div class="u-head"><div><h1>დისპეჩერები</h1><p class="u-sub">გამოცდილება და მძღოლების განაწილება</p></div><span class="u-date"><button type="button" class="u-btn" data-u-route="dispatchers">წვდომა და დარჩენილი საქმეები →</button></span></div>' + st +
+      (uReady() ? '<div class="u-toolbar">' + uScopeSelect('u-tm-co') + '<span class="u-count" id="u-tm-count">' + S.total + ' მიმდინარე მძღოლი · ბარათებზე ' + S.cards + (S.others ? ' · სხვა სახელებზე ' + S.others : '') + (S.none ? ' · დისპეჩერის გარეშე ' + S.none : '') + '</span></div>' + uScopeNote() +
+        '<div class="u-teamwrap"><div class="u-teamcards">' + (list.map(tmCard).join('') || shEmpty('აქტიური დისპეჩერი არ ჩანს', 'შეამოწმე წვდომის სია.')) + '</div>' +
         '<aside class="u-free"><h2>ადგილი ახალი მძღოლისთვის</h2><small>' + list.length + ' დისპეჩერი · დალაგებულია მიმაგრებული მძღოლების რაოდენობით</small><div class="u-freelist">' +
         free.map(function (x) { return '<button type="button" class="u-freerow" data-u-team-focus="' + h(x.id) + '"><span><b>' + h(x.name) + '</b><small>' + h(x.codes.join(' · ') || 'ყველა კომპანია') + (x.nDorm ? ' · +' + x.nDorm + ' უტვირთო' : '') + '</small></span><span class="u-freen">' + x.n + '<small>მძღოლი</small></span></button>'; }).join('') +
         '</div><p class="u-note" style="margin-top:10px">თავისუფალი ადგილების რაოდენობა <b>უცნობია</b>: დისპეჩერის ტევადობა აპში არ ინახება. სია არ არის შეფასება ან რეიტინგი — ნაჩვენებია მხოლოდ მიმაგრებული აქტიური მძღოლების რაოდენობა დღევანდელი სამუშაო დღისთვის. მძღოლი, რომელსაც ბოლო 30 დღეში ტვირთი არ ჰქონია და არც ისვენებს, მთავარ რიცხვში არ შედის და ცალკეა მითითებული („+N უტვირთო“).</p></aside></div>' +
         (list.others && list.others.length ? '<p class="u-note" id="u-team-others" style="margin-top:14px"><b>სხვა სახელებზე მიბმული მძღოლები.</b> ეს სახელები აქტიური დისპეჩერის ანგარიშად არ ჩანს (წასული დისპეჩერი, გამორთული ანგარიში ან მენეჯერი), თუმცა რეესტრში მათზე აქტიური მძღოლებია მიბმული: ' + list.others.map(function (o) { return h(o.name) + ' — ' + o.n + (o.nDorm ? ' (+' + o.nDorm + ' უტვირთო)' : ''); }).join(' · ') + '. <button type="button" class="u-btn u-link" data-u-route="drivers">მძღოლების დაფა →</button></p>' : '') +
-        '<p class="u-note" style="margin-top:14px">„ტვირთი“ და „GROSS“ — ჩაბარებული ტვირთები, რომლებზეც აპის ჩანაწერში ეს დისპეჩერია მითითებული (იგივე ველი, რომელსაც არსებული რეიტინგი და ანაზღაურების გვერდი იყენებს; ჩაბარებულ ტვირთზე მძღოლის შემდგომი გადაბარება მას აღარ ცვლის), აპში არსებული ისტორიის ფარგლებში (ყველა ნებადართული კომპანია, გაუქმებულის გარეშე). ეს სრული სტაჟის ჯამი არ არის, თუ ისტორია უფრო გვიან იწყება. GROSS არ არის ანაზღაურება.</p>' : '') + '</div>';
+        '<p class="u-note" style="margin-top:14px">„ტვირთი“ და „GROSS“ — ჩაბარებული ტვირთები, რომლებზეც აპის ჩანაწერში ეს დისპეჩერია მითითებული (იგივე ველი, რომელსაც არსებული რეიტინგი და ანაზღაურების გვერდი იყენებს; ჩაბარებულ ტვირთზე მძღოლის შემდგომი გადაბარება მას აღარ ცვლის), აპში არსებული ისტორიის ფარგლებში (ზემოთ ნაჩვენები კომპანიები, გაუქმებულის გარეშე). ეს სრული სტაჟის ჯამი არ არის, თუ ისტორია უფრო გვიან იწყება. GROSS არ არის ანაზღაურება.</p>' : '') + '</div>';
   },
   outside: function () { if (TM.flip) tmFlip(null); },
+  change: function (e, el) { if (el.hasAttribute('data-u-scope')) { SCOPE.co = el.value; TM.flip = null; render(); } },
   click: function (e, el) {
     var a;
     if ((a = el.closest('[data-u-unflip]'))) { tmFlip(null); return; }
