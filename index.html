@@ -11006,7 +11006,7 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
 'use strict';
 if (window.__uimgmt001) return;
 if (typeof render !== 'function' || typeof goM !== 'function' || typeof buildTabs !== 'function' || typeof rOverview !== 'function' || typeof refreshLive_ !== 'function' || typeof MGI === 'undefined' || typeof mgiShifts_ !== 'function' || typeof mgiDecide_ !== 'function' || typeof selAll_ !== 'function' || typeof scItems_ !== 'function') { try { console.error('UIMGMT-001: expected application functions are missing - the new management layer stays off'); } catch (e) {} return; }
-window.__uimgmt001 = '2026-10-08';
+window.__uimgmt001 = '2026-10-09.1';
 
 /* ---- pure helpers (no DOM, no network, no globals): unit-tested in node against the real database functions ---- */
 var U_TZ = 'Asia/Tbilisi';
@@ -11189,17 +11189,38 @@ function feedback(msg, isErr) {
 }
 
 /* ---- the all-company store. Never touches LIVE or any single-company cache of the app. ---- */
-var U = { email: null, gen: 0, loading: null, loadedAt: 0, error: '', cos: null, ids: [], drivers: [], assign: [], loads: [], plans: [], people: [], by: {} };
+var U = { email: null, gen: 0, mut: 0, sync: 0, loading: null, loadedAt: 0, error: '', cos: null, ids: [], drivers: [], assign: [], loads: [], plans: [], people: [], by: {} };
 var U_COLS = (typeof LOAD_COLS_ === 'string' ? LOAD_COLS_ : '*') + ',company_id,is_canceled';
 function uReset() { U.gen++; U.email = USER ? USER.email : null; U.loading = null; U.loadedAt = 0; U.error = ''; U.cos = null; U.ids = []; U.drivers = []; U.assign = []; U.loads = []; U.plans = []; U.people = []; U.by = {}; U._mem = null; }
 function uReady() { return !!(U.loadedAt && U.cos && U.email === (USER && USER.email)); }
+/* A confirmed local write (a save this page made and the server accepted). Any read that started before it may hold older
+   rows, so such a read is never applied over it (see uLoad / uRosterSync). */
+function uTouch() { U.mut++; U._mem = null; }
+/* One company's loads in key order with a moving lower bound - never OFFSET. The server's read-permission check costs time
+   for every row a request has to look at (measured 2026-10-07: 0.65 ms a row); an OFFSET page over all companies looked at
+   every row again for every page (six pages of 3-4 s). Read like this, each row is looked at once. */
+async function uLoadsOf(co) {
+  var out = [], last = null;
+  for (var i = 0; i < 400; i++) {
+    var q = sb.from('loads').select(U_COLS).eq('company_id', co).is('deleted_at', null);
+    if (last != null) q = q.gt('order_number', last);
+    var r = await q.order('order_number', { ascending: true }).limit(1000);
+    if (r.error) { var pe = new Error('partial_read loads: ' + (r.error.message || r.error.code || 'error')); pe.partial = true; pe.cause = r.error; throw pe; }
+    var rows = r.data || []; out = out.concat(rows);
+    if (rows.length < 1000) return out;
+    last = rows[rows.length - 1].order_number;
+  }
+  var le = new Error('partial_read loads: row limit'); le.partial = true; throw le;
+}
 function uLoad(force) {
   if (!uiActive()) return Promise.resolve();
   if (U.email !== USER.email) uReset();
-  if (U.loading) return U.loading;
+  /* a forced read never rides on a read that is already running: that one may have started before the change that asks for
+     this one. The running read is superseded (its answer is dropped). */
+  if (U.loading && !force) return U.loading;
   if (!force && U.loadedAt && Date.now() - U.loadedAt < 150000) return Promise.resolve();
-  var gen = ++U.gen, email = USER.email, current = function () { return gen === U.gen && USER && USER.email === email; };
-  U.loading = (async function () {
+  var gen = ++U.gen, mut = U.mut, again = false, email = USER.email, current = function () { return gen === U.gen && USER && USER.email === email; };
+  var run = (async function () {
     try {
       var idr = await sb.rpc('my_company_ids'); if (idr.error) throw idr.error;
       var allowed = Array.isArray(idr.data) ? idr.data : [];
@@ -11209,12 +11230,14 @@ function uLoad(force) {
       var got = await Promise.all([
         selAll_(function () { return sb.from('drivers').select('*').in('company_id', ids); }, ['company_id', 'name']),
         selAll_(function () { return sb.from('driver_assignment').select('*').in('company_id', ids).is('canceled_at', null); }, ['id']),
-        selAll_(function () { return sb.from('loads').select(U_COLS).in('company_id', ids).is('deleted_at', null); }, ['company_id', 'order_number']),
+        Promise.all(ids.map(uLoadsOf)).then(function (parts) { return [].concat.apply([], parts); }),
         selAll_(function () { return sb.from('day_plan').select('*').in('company_id', ids).gte('work_day', from); }, ['id']),
         sb.from('access_allowlist').select('email,dispatcher_name,role,active,company_codes,created_at').order('dispatcher_name', { ascending: true })
       ]);
       if (got[4].error) throw got[4].error;
       if (!current()) return;
+      /* a save was confirmed while this read was running: its rows may be older than the save - read again instead */
+      if (U.mut !== mut) { again = true; return; }
       var by = {};
       cos.forEach(function (c) { by[c.company_id] = { co: c, drivers: [], assign: [], loads: [], plans: [], drv: {}, load: {} }; });
       got[0].forEach(function (d) { var B = by[d.company_id]; if (B) { B.drivers.push(d); B.drv[d.name] = d; } });
@@ -11224,13 +11247,64 @@ function uLoad(force) {
       var all = [];
       cos.forEach(function (c) { var B = by[c.company_id]; B.loads = uPrepLoads(raw[c.company_id] || [], onKey_, dupScore_, dupSame_); B.loads.forEach(function (l) { B.load[l.order_number] = l; }); all = all.concat(B.loads); });
       U.cos = cos; U.ids = ids; U.by = by; U.drivers = got[0]; U.assign = got[1]; U.plans = got[3]; U.loads = all; U.people = got[4].data || [];
-      U.loadedAt = Date.now(); U.error = '';
+      U.loadedAt = Date.now(); U.error = ''; U._mem = null;
     } catch (e) {
       console.error('UIMGMT store read failed', e);
       if (current()) U.error = 'ყველა კომპანიის მონაცემი ვერ ჩაიტვირთა (' + uErr(e) + '). ცარიელი სია არ ნიშნავს, რომ მონაცემი არ არსებობს.';
     } finally { if (gen === U.gen) U.loading = null; }
+    if (again && gen === U.gen && uiActive()) return uLoad(true);
   })();
-  return U.loading;
+  U.loading = run;
+  return run;
+}
+/* ---- after a confirmed save: put the server's answer into the store at once, then re-read only the two small registry
+   tables (drivers, periods) in the background. The loads, plans and accounts are not re-read for a registry save. ---- */
+function uPutDriver(row) {
+  if (!row || !row.company_id || !row.name) return;
+  var B = U.by[row.company_id]; if (!B) return;
+  var d = B.drv[row.name];
+  if (d) Object.assign(d, row); else { d = Object.assign({}, row); B.drv[row.name] = d; B.drivers.push(d); U.drivers.push(d); }
+  uTouch();
+}
+function uPutAssign(row) {
+  if (!row || row.id == null || row.canceled_at) return;
+  var B = U.by[row.company_id];
+  if (!U.assign.some(function (a) { return a.id === row.id; })) { U.assign.push(row); if (B) B.assign.push(row); }
+  uTouch();
+}
+function uDropAssign(id) {
+  U.assign = U.assign.filter(function (a) { return a.id !== id; });
+  Object.keys(U.by).forEach(function (k) { U.by[k].assign = U.by[k].assign.filter(function (a) { return a.id !== id; }); });
+  uTouch();
+}
+/* true = the registry was read again (or something newer made this read unnecessary); false = the read failed. A failed
+   re-read never undoes or hides a confirmed save: the store keeps what the server confirmed. */
+async function uRosterSync() {
+  if (!uiActive() || !uReady()) return true;
+  var seq = ++U.sync, gen = U.gen, mut = U.mut, email = USER.email, ids = U.ids.slice();
+  try {
+    var got = await Promise.all([
+      selAll_(function () { return sb.from('drivers').select('*').in('company_id', ids); }, ['company_id', 'name']),
+      selAll_(function () { return sb.from('driver_assignment').select('*').in('company_id', ids).is('canceled_at', null); }, ['id'])
+    ]);
+    /* a newer save, a newer re-read or a full read has happened meanwhile: this answer may be older than what is shown */
+    if (seq !== U.sync || gen !== U.gen || mut !== U.mut || !uReady() || !USER || USER.email !== email) return true;
+    Object.keys(U.by).forEach(function (k) { var B = U.by[k]; B.drivers = []; B.drv = {}; B.assign = []; });
+    got[0].forEach(function (d) { var B = U.by[d.company_id]; if (B) { B.drivers.push(d); B.drv[d.name] = d; } });
+    got[1].forEach(function (a) { var B = U.by[a.company_id]; if (B) B.assign.push(a); });
+    U.drivers = got[0]; U.assign = got[1]; U._mem = null;
+    return true;
+  } catch (e) { console.error('UIMGMT registry re-read failed', e); return false; }
+}
+/* the follow-up every registry save shares: never awaited by the save itself */
+function uAfterSave(co, what) {
+  try { if (co === COID() && typeof loadAssign === 'function') Promise.resolve(loadAssign()).catch(function (e) { console.error(e); }); } catch (e) { console.error(e); }
+  return uRosterSync().then(function (ok) {
+    if (!uiActive()) return ok;
+    if (!ok) feedback((what ? what + ' — შენახულია. ' : 'ცვლილება შენახულია. ') + 'სიის ხელახლა წაკითხვა ვერ მოხერხდა: ნაჩვენებია ის, რაც სერვერმა დაადასტურა; სხვების ცვლილებები გამოჩნდება შემდეგი განახლებისას.');
+    else if (PAGES[MTAB] && !busyEditing() && !selectOpen() && !(typeof viewTyping_ === 'function' && viewTyping_())) render();
+    return ok;
+  });
 }
 /* who owns a driver on a day, per company: a temporary handover wins over the permanent dispatcher (same rule as dispOfDriver_) */
 function uOwner(co, name, day) {
@@ -12148,14 +12222,19 @@ function drDispOptions(code, current) {
 function drLegacyPatch(co, name, patch) {              /* the single-company cache of the existing screens, when it shows that company */
   try { if (co === COID() && typeof DRIVERS_BY_NAME !== 'undefined') { if (!DRIVERS_BY_NAME[name]) DRIVERS_BY_NAME[name] = { name: name }; Object.assign(DRIVERS_BY_NAME[name], patch); } } catch (e) {}
 }
+/* A registry write is finished when the server has answered. Its answer (the stored row) goes into the store at once; nothing
+   here waits for a re-read of the lists. When the answer carries no row, what was sent is what the server confirmed. */
 async function drPatch(x, patch) {
   var row = Object.assign({ company_id: x.co, name: x.name }, patch, { updated_at: new Date().toISOString(), updated_by: USER.email });
-  var r = await sb.from('drivers').upsert(row, { onConflict: 'company_id,name' });
+  var r = await sb.from('drivers').upsert(row, { onConflict: 'company_id,name' }).select('*');
   if (r.error) throw r.error;
-  var B = U.by[x.co], d = B.drv[x.name];
-  if (!d) { d = { company_id: x.co, name: x.name, active: true }; B.drv[x.name] = d; B.drivers.push(d); U.drivers.push(d); }
-  Object.assign(d, patch); U._mem = null;
+  var saved = (Array.isArray(r.data) ? r.data : []).filter(function (d) { return d && d.company_id === x.co && d.name === x.name; })[0] || null;
+  uPutDriver(saved || Object.assign({ company_id: x.co, name: x.name }, U.by[x.co] && U.by[x.co].drv[x.name] ? {} : { active: true }, patch));
   drLegacyPatch(x.co, x.name, patch);
+}
+/* the registry is read again in the background after a save that did not finish as a whole: the page then shows what is stored */
+function drResync() {
+  return uRosterSync().then(function () { if (uiActive() && MTAB === 'drivers' && !PAGES.drivers.editing() && !selectOpen()) render(); });
 }
 function drDraft(x) {
   var off = x.off, rep = x.st === 'repair', m = rep ? /^\s*შეკეთება\s*:\s*([^·—]*?)(?:\s*·\s*([^—]*?))?(?:\s*—\s*(.*))?$/.exec(String(off.reason || '')) : null, d = x.d;
@@ -12222,16 +12301,17 @@ async function drMoveGo() {
     fail = why === 'dispatcher_invalid' ? 'ეს დისპეჩერი ' + uCoCode(M.to) + '-ში აქტიური ანგარიშით არ ჩანს — აირჩიე სხვა.'
       : why === 'name_active_elsewhere' ? 'იმავე სახელით მძღოლი აქტიურია კომპანიაში ' + (r.data.code || '?') + ' და დადასტურებული არ არის, რომ ეს იგივე ადამიანია. ჯერ იქ გამორთე „მუშაობს“ ან იქიდან გადაიყვანე.'
       : why === 'not_found' ? 'ჩანაწერი ვეღარ მოიძებნა — სია განახლდა.' : 'ვერ გადავიდა (' + (why || 'უცნობი პასუხი') + ') · არაფერი შეცვლილა.';
-    if (why === 'not_found') { try { await uLoad(true); } catch (e2) {} }
+    if (why === 'not_found') { try { await uRosterSync(); } catch (e2) {} if (DR.move !== M) return; }
   }
   if (fail) { M.phase = M.phase === 'busy' ? 'ask' : M.phase; M.err = fail; return render(); }
+  /* the server's answer IS the result: both rows go into the store now, the message is shown now */
   var v = r.data, drv = v.driver || {};
-  (v.deactivated || []).forEach(function (o) { drLegacyPatch(o.company_id, o.name, { active: false }); });
-  drLegacyPatch(drv.company_id, drv.name, drv);
+  (v.deactivated || []).forEach(function (o) { drLegacyPatch(o.company_id, o.name, { active: false }); uPutDriver({ company_id: o.company_id, name: o.name, active: false }); });
+  drLegacyPatch(drv.company_id, drv.name, drv); uPutDriver(drv);
   DR.move = null; DR.edit = null; DR.draft = null;
-  try { await uLoad(true); } catch (e3) { console.error(e3); }
   feedback(x.name + ' — გადაყვანილია: ' + x.code + ' → ' + uCoCode(M.to) + (v.created ? ' (შეიქმნა ახალი ჩანაწერი)' : ' (ჩაირთო არსებული ჩანაწერი)') + '. ' + x.code + '-ის ჩანაწერი ისტორიაშია.');
   render();
+  uAfterSave(M.to, x.name + ' — გადაყვანა');
 }
 function drReadMove() { var M = DR.move; if (!M) return; var s = document.getElementById('u-dr-move-disp'), c = document.getElementById('u-dr-move-same'); if (s) M.disp = s.value; if (c) M.same = c.checked; }
 /* ---- add: a driver that exists nowhere yet ---- */
@@ -12270,11 +12350,11 @@ async function drAddGo() {
     return render();
   }
   var drv = r.data.driver || {};
-  drLegacyPatch(drv.company_id, drv.name, drv);
+  drLegacyPatch(drv.company_id, drv.name, drv); uPutDriver(drv);
   DR.add = null;
-  try { await uLoad(true); } catch (e2) { console.error(e2); }
   feedback(name + ' — დამატებულია: ' + uCoCode(drv.company_id) + ' · დისპეჩერი ' + (drv.dispatcher_name || 'მიუნიჭებელი') + '.');
   render();
+  uAfterSave(drv.company_id, name + ' — დამატება');
 }
 /* ---- rows ---- */
 function drCapText(d, unreg) { return d.cap != null && Number(d.cap) > 0 ? Number(d.cap) + '-მანქ.' : '—'; }
@@ -12352,18 +12432,22 @@ async function drSave() {
   var reason = D.st === 'repair' ? 'შეკეთება: ' + D.unit + ' · ' + D.problem + (D.note.trim() ? ' — ' + D.note.trim() : '') : (D.note.trim().length >= 3 ? D.note.trim() : 'ისვენებს');
   var toDay = D.st !== 'work' && D.until ? uAddDays(D.until, -1) : null;
   var same = x.off && D.st === x.st && String(x.off.reason || '') === reason && String(x.off.to_day || '') === String(toDay || '');
-  DR.busy = true; drRepaint();
+  DR.busy = true; drRepaint();                                          /* DR.busy is set before the first request: a second press does nothing */
   var did = [];
   try {
     if (Object.keys(patch).length) { await drPatch(x, patch); did.push('პარამეტრები'); }
     if (D.st !== 'work' && !same) {                                     /* new period first; the previous one is ended only after it exists */
-      var ins = await sb.from('driver_assignment').insert({ company_id: x.co, driver_name: x.name, dispatcher_name: uOwner(x.co, x.name, today) || d.dispatcher_name || USER.dispatcher || '', kind: 'off', from_day: today, to_day: toDay, reason: reason, created_by: USER.email });
+      var per = { company_id: x.co, driver_name: x.name, dispatcher_name: uOwner(x.co, x.name, today) || d.dispatcher_name || USER.dispatcher || '', kind: 'off', from_day: today, to_day: toDay, reason: reason, created_by: USER.email };
+      var ins = await sb.from('driver_assignment').insert(per).select('*');
       if (ins.error) throw ins.error;
+      /* the stored period as the server returns it; without a returned row the period is shown as sent until the re-read brings its id */
+      uPutAssign((Array.isArray(ins.data) && ins.data[0]) || Object.assign({ id: 'new-' + Date.now(), canceled_at: null }, per));
       did.push(D.st === 'repair' ? 'შეკეთება' : 'დასვენება');
     }
     if (x.off && (D.st === 'work' || !same)) {
       var up = await sb.from('driver_assignment').update({ canceled_at: new Date().toISOString(), canceled_by: USER.email }).eq('id', x.off.id).eq('company_id', x.co).select('id');
       if (up.error) throw up.error; if (!(up.data || []).length) throw new Error('წინა პერიოდი ვერ დასრულდა (ჩანაწერი შეიცვალა ან უფლება არ არის)');
+      uDropAssign(x.off.id);
       if (D.st === 'work') did.push('დაბრუნდა სამუშაოდ');
     }
     if (D.st !== 'work' && D.follow && TK.state === 'ok') {
@@ -12371,16 +12455,17 @@ async function drSave() {
         due_day: D.follow, due_time: null, remind_min: null, priority: 'normal', kind: 'driver_followup', visibility: 'team', driver_name: x.name, driver_company_id: x.co, detail: { status: D.st, item: D.st === 'repair' ? D.unit : null, problem: D.st === 'repair' ? D.problem : null, expected_return: D.until || null } });
       did.push('შეხსენება კალენდარში');
     }
-    await uLoad(true);
-    try { if (x.co === COID() && typeof loadAssign === 'function') await loadAssign(); } catch (e) { console.error(e); }
+    /* every step was confirmed by the server and is already in the store: the result is shown now. The registry is read again
+       in the background (drivers + periods only); a failure of that re-read is reported as such and never as a failed save. */
     DR.busy = false; DR.edit = null; DR.draft = null;
     feedback(did.length ? x.name + ' — შენახულია: ' + did.join(', ') + '.' : x.name + ' — ცვლილება არ ყოფილა.');
     render();
+    if (did.length) uAfterSave(x.co, x.name);
   } catch (e) {
     console.error(e); DR.busy = false;
     DR.err = 'ვერ შეინახა: ' + uErr(e) + (did.length ? ' · უკვე შენახულია: ' + did.join(', ') + '.' : ' · არაფერი შეცვლილა.');
-    try { await uLoad(true); } catch (x2) {}
     render();
+    if (did.length) drResync();
   }
 }
 PAGES.drivers = {
