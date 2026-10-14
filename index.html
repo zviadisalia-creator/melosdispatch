@@ -1479,6 +1479,12 @@ async function saveDriver(encName, field, value, el){
   else if(field==='category' && v==='—') v=null;
   try{
     var reg0=DRIVERS_BY_NAME[name];
+    if(field==='target_gross' && reg0 && reg0.id){   /* DOS-WEEKLY-TARGET-UI-20261014: guarded, like the size */
+      if(v!=null && !(v>=0)){ toast('რიცხვი ჩაწერე'); if(el) el.value=(reg0.target_gross!=null)?String(reg0.target_gross):''; return; }
+      var tRow=await tgtWrite_(COID(), name, reg0.id, reg0.target_gross!=null?Number(reg0.target_gross):null, v);
+      reg0.target_gross=tRow.target_gross; if(typeof uPutDriver==='function') uPutDriver(tRow);
+      toast('შენახულია ✓'); return;
+    }
     if(field==='cap' && reg0 && reg0.id){   /* DOS-TRAILER-CAPACITY-20261013: a registered driver's size goes through the guarded writer */
       var capRow=await capWrite_(COID(), name, reg0.id, reg0.cap!=null?Number(reg0.cap):null, v);
       reg0.cap=capRow.cap; if(typeof uPutDriver==='function') uPutDriver(capRow);
@@ -1488,7 +1494,8 @@ async function saveDriver(encName, field, value, el){
     if(error) throw error;
     if(!DRIVERS_BY_NAME[name]) DRIVERS_BY_NAME[name]={name}; DRIVERS_BY_NAME[name][field]=v;
     toast('შენახულია ✓');
-  }catch(e){ console.error(e); toast((e&&e.capStale)?'ვერ შეინახა — ჩანაწერი შეიცვალა, განაახლე გვერდი':'ვერ შეინახა');
+  }catch(e){ console.error(e); toast((e&&(e.capStale||e.tgtStale))?'ვერ შეინახა — ჩანაწერი შეიცვალა, განაახლე გვერდი':'ვერ შეინახა');
+    if(field==='target_gross' && el){ var st1=DRIVERS_BY_NAME[name]; try{ el.value=(st1&&st1.target_gross!=null)?String(st1.target_gross):''; }catch(_){} }
     if(field==='cap' && el){ var st0=DRIVERS_BY_NAME[name]; try{ el.value=capKnown_(st0)?String(Number(st0.cap)):''; }catch(_){} } }
 }
 let ROLE='disp', TAB='board', MTAB='overview';
@@ -1935,6 +1942,24 @@ async function capWrite_(co, name, id, was, val){
   if(r.error) throw r.error;
   var row=(Array.isArray(r.data)?r.data:[]).filter(function(d){ return d && d.company_id===co && d.name===name; })[0]||null;
   if(!row){ var e=new Error(CAP_STALE_KA); e.capStale=true; throw e; }
+  return row;
+}
+/* DOS-WEEKLY-TARGET-UI-20261014 - weekly gross target (drivers.target_gross): one parser and one guarded writer for every
+   screen that edits it. The writer changes that one field of that one row (company + name, and the row id when known) and
+   only while the stored target is still the one the screen showed; no row back = refused (changed meanwhile or no right). */
+var TGT_MISS_KA='არ არის მითითებული';
+var TGT_STALE_KA='კვირის სამიზნე ამასობაში სხვამ შეცვალა ან ცვლილების უფლება არ არის; სია ახლდება — გადაამოწმე ახლანდელი მნიშვნელობა';
+function tgtParse_(s){ var t=String(s==null?'':s).replace(/[\s$,]/g,''); if(t==='') return {ok:true,v:null};
+  var n=Number(t); return (isFinite(n) && n>=0) ? {ok:true,v:n} : {ok:false}; }
+async function tgtWrite_(co, name, id, was, val){
+  if(val!=null && !(isFinite(val) && val>=0)) throw new Error('კვირის სამიზნე არასწორია');
+  var q=sb.from('drivers').update({target_gross:val, updated_at:new Date().toISOString(), updated_by:USER.email}).eq('company_id',co).eq('name',name);
+  if(id) q=q.eq('id',id);
+  q=(was==null)?q.is('target_gross',null):q.eq('target_gross',was);
+  var r=await q.select('*');
+  if(r.error) throw r.error;
+  var row=(Array.isArray(r.data)?r.data:[]).filter(function(d){ return d && d.company_id===co && d.name===name; })[0]||null;
+  if(!row){ var e=new Error(TGT_STALE_KA); e.tgtStale=true; throw e; }
   return row;
 }
 function driverStd_(name, day){
@@ -3700,7 +3725,7 @@ function rDrivers(){
     var capSel="<select class='mini'"+(d.cap?"":" title='"+CAP_MISS_KA+"'")+" onchange=\"saveDriver('"+enc+"','cap',this.value,this)\">"+(d.cap?"":"<option value='' selected>—</option>")+['1','2','3','4','5'].concat((d.cap&&['1','2','3','4','5'].indexOf(String(d.cap))<0)?[String(d.cap)]:[]).map(function(o){ return "<option"+((d.cap&&String(d.cap)===o)?' selected':'')+">"+o+"</option>"; }).join('')+"</select>";
     var winch="<input type='checkbox' style='width:16px;height:16px'"+(reg.winch?' checked':'')+" onchange=\"saveDriver('"+enc+"','winch',this.checked)\">";
     var npa="<input type='checkbox' style='width:16px;height:16px' title='წინასწარ არ ვაბამთ — ინსპექციის რისკი'"+(reg.no_pre_assign?' checked':'')+" onchange=\"saveDriver('"+enc+"','no_pre_assign',this.checked)\">";
-    var target="<input class='mini' style='width:78px' placeholder='$ სამიზნე' value='"+(reg.target_gross!=null?reg.target_gross:'')+"' onchange=\"saveDriver('"+enc+"','target_gross',this.value)\">";
+    var target="<input class='mini' style='width:78px' placeholder='$ სამიზნე' value='"+(reg.target_gross!=null?reg.target_gross:'')+"' onchange=\"saveDriver('"+enc+"','target_gross',this.value,this)\">";
     var off=(d.cap!=null && d.obsP75!=null && d.obsP75>d.cap);
     var obs=(d.obsDays? ("<b"+(off?" style='color:var(--crit)'":"")+">"+d.obsMed+" / "+d.obsP75+"</b> <span class='muted'>· მაქს "+d.obsMax+"</span>") : "<span class='muted'>—</span>");
     var tcol = d.tgt ? (wkG>=d.tgt?'var(--good)':(wkG>=d.tgt*0.75?'var(--warn)':'var(--crit)')) : 'var(--ink2)';
@@ -10650,7 +10675,7 @@ body.uim .u-section-t span{font-size:12px;color:var(--u-muted)}
 /* ---------- registry (drivers) ---------- */
 body.uim #u-drivers{max-width:1430px}
 body.uim .u-registry{border:1px solid var(--u-line);border-radius:12px;overflow:clip;background:var(--u-panel)}
-body.uim .u-row,body.uim .u-rowhead{display:grid;grid-template-columns:minmax(190px,1.2fr) 104px 200px minmax(96px,.45fr) 88px 100px minmax(165px,.9fr);align-items:center;gap:14px;padding:13px 20px}
+body.uim .u-row,body.uim .u-rowhead{display:grid;grid-template-columns:minmax(160px,1.1fr) 100px 180px minmax(92px,.4fr) 112px 76px 92px minmax(150px,.9fr);align-items:center;gap:12px;padding:13px 18px}
 body.uim .u-rowhead{background:var(--u-strip);color:var(--u-muted);font-size:10px;padding-top:12px;padding-bottom:12px}
 body.uim .u-row{border-top:1px solid var(--u-line);font-size:12px}
 body.uim .u-row.u-expanded{background:var(--u-editor)}
@@ -10676,6 +10701,8 @@ body.uim .u-cell-disp select{width:100%;font-size:11px;padding:9px 10px;backgrou
 body.uim .u-cell-disp small{display:block;color:var(--u-muted);font-size:10px;margin-top:3px}
 body.uim .u-cell-gear select{font-size:11px;padding:6px 8px;min-height:34px;width:100%;max-width:110px;background:var(--u-chip);border-color:var(--u-line)}
 body.uim .u-cell-gear select.u-capmiss{border-color:var(--u-warm)}
+body.uim .u-cell-target input{font-size:11px;padding:6px 8px;min-height:34px;width:100%;max-width:120px;background:var(--u-chip);border-color:var(--u-line)}
+body.uim .u-cell-target small{display:block;color:var(--u-muted);font-size:10px;margin-top:2px}
 body.uim .u-check{display:flex;align-items:center;gap:8px;font-size:11px;min-height:34px}
 body.uim .u-statusbtn{display:flex;align-items:center;gap:7px;border:0;background:var(--u-tag);border-radius:7px;padding:9px 11px;font-size:11px;text-align:left;width:100%;max-width:206px;min-height:36px}
 body.uim .u-statusbtn .u-ic{width:14px;height:14px}
@@ -10920,7 +10947,7 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
 /* ---------- responsive ---------- */
 @media(min-width:1700px){body.uim #view{padding:34px 40px 96px}body.uim .u-cards{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
 @media(max-width:1360px){
- body.uim .u-row,body.uim .u-rowhead{grid-template-columns:minmax(150px,1.1fr) 96px 186px 92px 76px 94px minmax(150px,.9fr);gap:10px;padding-left:15px;padding-right:15px}
+ body.uim .u-row,body.uim .u-rowhead{grid-template-columns:minmax(130px,1fr) 90px 160px 88px 104px 66px 86px minmax(130px,.9fr);gap:9px;padding-left:15px;padding-right:15px}
  body.uim .u-row .u-avatar{display:none}
  body.uim .u-calwrap{grid-template-columns:minmax(0,1fr) 265px}
  body.uim .u-closed-head,body.uim .u-closed-row{grid-template-columns:minmax(205px,1.2fr) 100px minmax(195px,1fr) 22px;gap:18px}
@@ -10936,9 +10963,10 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
  body.uim .u-rowhead{display:none}
  body.uim .u-row{grid-template-columns:minmax(160px,1.2fr) 100px minmax(170px,210px) minmax(60px,110px);grid-template-rows:auto auto;row-gap:10px}
  body.uim .u-row .u-cell-name{grid-column:1;grid-row:1}body.uim .u-row .u-cell-co{grid-column:2;grid-row:1}body.uim .u-row .u-cell-disp{grid-column:3;grid-row:1}body.uim .u-row .u-cell-gear{grid-column:4;grid-row:1}
- body.uim .u-row .u-cell-status{grid-column:1;grid-row:2}body.uim .u-row .u-cell-active{grid-column:2;grid-row:2}body.uim .u-row .u-cell-winch{grid-column:3/-1;grid-row:2}
+ body.uim .u-row .u-cell-status{grid-column:1;grid-row:2}body.uim .u-row .u-cell-active{grid-column:2;grid-row:2}body.uim .u-row .u-cell-winch{grid-column:3;grid-row:2}body.uim .u-row .u-cell-target{grid-column:4;grid-row:2}
  body.uim .u-row .u-cell-winch::before{content:'ჯალამბარი';color:var(--u-muted);font-size:10px;margin-right:2px}
  body.uim .u-row .u-cell-gear::before{content:'მისაბმელი ';color:var(--u-muted);font-size:10px}
+ body.uim .u-row .u-cell-target::before{content:'კვირის სამიზნე ($) ';color:var(--u-muted);font-size:10px}
  body.uim .u-calwrap{grid-template-columns:1fr}
  body.uim .u-agenda .u-tasks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
  body.uim .u-agenda .u-task{margin-bottom:0}
@@ -10989,7 +11017,8 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
  body.uim .u-row .u-cell-name{grid-column:1/-1;grid-row:1}body.uim .u-row .u-cell-co{grid-column:1;grid-row:2}body.uim .u-row .u-cell-gear{grid-column:2;grid-row:2}
  body.uim .u-row .u-cell-disp{grid-column:1/-1;grid-row:3;max-width:260px}
  body.uim .u-row .u-cell-winch{grid-column:1;grid-row:4}body.uim .u-row .u-cell-active{grid-column:2;grid-row:4}
- body.uim .u-row .u-cell-status{grid-column:1/-1;grid-row:5}
+ body.uim .u-row .u-cell-target{grid-column:1/-1;grid-row:5}
+ body.uim .u-row .u-cell-status{grid-column:1/-1;grid-row:6}
  body.uim .u-statusbtn{min-height:40px;padding:9px 7px}
  body.uim .u-editor{padding:18px 13px;width:calc(100% - 20px);margin:10px}
  body.uim .u-tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
@@ -12274,7 +12303,7 @@ function drResync() {
 function drDraft(x) {
   var off = x.off, rep = x.st === 'repair', m = rep ? /^\s*შეკეთება\s*:\s*([^·—]*?)(?:\s*·\s*([^—]*?))?(?:\s*—\s*(.*))?$/.exec(String(off.reason || '')) : null, d = x.d;
   return { id: x.id, st: x.st, until: off && off.to_day ? uAddDays(off.to_day, 1) : '', follow: '', unit: m && m[1] ? m[1].trim() : 'მანქანა', problem: m && m[2] ? m[2].trim() : 'ელექტროობა', note: rep ? (m && m[3] ? m[3].trim() : '') : (off ? String(off.reason || '') : ''),
-    cap: String(d.cap != null ? d.cap : ''), _cap0: String(d.cap != null ? d.cap : ''), category: d.category || '', target: d.target_gross != null ? String(d.target_gross) : '', npa: !!d.no_pre_assign, _st0: x.st };
+    cap: String(d.cap != null ? d.cap : ''), _cap0: String(d.cap != null ? d.cap : ''), category: d.category || '', target: d.target_gross != null ? String(d.target_gross) : '', _tgt0: d.target_gross != null ? String(d.target_gross) : '', npa: !!d.no_pre_assign, _st0: x.st };
 }
 function drEditorHtml(x) {
   var D = DR.draft, non = D.st !== 'work', rep = D.st === 'repair', tk = TK.state === 'ok';
@@ -12416,6 +12445,28 @@ function drCapPick(id, el) {
     if (err && err.capStale) drResync();
   });
 }
+/* DOS-WEEKLY-TARGET-UI-20261014: the weekly-target cell of a board row */
+function drTgtText(d) { return d.target_gross != null ? uMoney(Number(d.target_gross)) : '—'; }
+function drTgtDay(d) { return d.target_gross != null ? '<small>დღეში ' + h(uMoney(Number(d.target_gross) / 6 * marketFactor_())) + '</small>' : ''; }
+/* saved when the field is left / Enter (change event) through the guarded writer; an invalid entry or any failure puts back the
+   stored value and says so; the same value is not written again */
+function drTgtSave(id, el) {
+  var x = drFind(id); if (!x || x.d._unreg) return;
+  var was = x.d.target_gross != null ? Number(x.d.target_gross) : null, p = tgtParse_(el.value), back = was != null ? String(was) : '';
+  if (!p.ok) { el.value = back; feedback(x.name + ' — კვირის სამიზნეში ჩაწერე დადებითი რიცხვი ან დატოვე ცარიელი. არაფერი შეცვლილა.', true); return; }
+  if (p.v === was) { el.value = back; return; }
+  el.disabled = true;
+  return tgtWrite_(x.co, x.name, x.d.id, was, p.v).then(function (row) {
+    uPutDriver(row); drLegacyPatch(x.co, x.name, { target_gross: row.target_gross });
+    drReadAll(); if (DR.draft && DR.draft.id === id) DR.draft.target = DR.draft._tgt0 = row.target_gross != null ? String(row.target_gross) : '';
+    feedback(x.name + ' — კვირის სამიზნე შენახულია: ' + (row.target_gross != null ? uMoney(Number(row.target_gross)) : TGT_MISS_KA) + '.');
+    drRepaint(); uAfterSave(x.co, x.name + ' — კვირის სამიზნე');
+  }, function (err) {
+    console.error(err); feedback(x.name + ' — კვირის სამიზნე ვერ შეინახა (' + uErr(err) + '). მნიშვნელობა დაბრუნდა.', true);
+    el.value = back; el.disabled = false;
+    if (err && err.tgtStale) drResync();
+  });
+}
 function drRowHtml(x) {
   var d = x.d, ex = DR.edit === x.id, mv = DR.move && DR.move.id === x.id, cur = d.dispatcher_name || '', st = DR_ST[x.st], reg = !d._unreg;
   var sub = x.st !== 'work' && x.off.to_day ? uDayShort(x.off.to_day) + '-ის ჩათვლით' : '';
@@ -12427,6 +12478,7 @@ function drRowHtml(x) {
     '<div class="u-cell-co">' + (reg ? '<select data-u-dr-co="' + h(x.id) + '" aria-label="' + h(x.name) + ' — მიმდინარე კომპანია (შეცვლა = გადაყვანა)"' + (drServerOn() ? '' : ' disabled title="' + h(DR_NO_RPC) + '"') + '>' + (U.cos || []).map(function (c) { return '<option value="' + h(c.company_id) + '"' + (c.company_id === coSel ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>' : '<span class="u-chip">' + h(x.code) + '</span>') + '</div>' +
     '<div class="u-cell-disp"><select data-u-dr-disp="' + h(x.id) + '" aria-label="' + h(x.name) + ' — დისპეჩერი"><option value=""' + (cur ? '' : ' selected') + '>მიუნიჭებელი</option>' + drDispOptions(x.code, cur).map(function (n) { return '<option value="' + h(n) + '"' + (n === cur ? ' selected' : '') + '>' + h(n) + '</option>'; }).join('') + '</select>' + (x.cover ? '<small>დროებით: ' + h(x.cover.dispatcher_name) + (x.cover.to_day ? ' · ' + h(uDayShort(x.cover.to_day)) + '-მდე' : '') + '</small>' : '') + '</div>' +
     '<span class="u-cell-gear' + (reg ? '' : ' u-muted') + '">' + (reg ? '<select' + (capKnown_(d) ? '' : ' class="u-capmiss" title="' + h(CAP_MISS_KA) + '"') + ' data-u-dr-cap="' + h(x.id) + '" aria-label="' + h(x.name) + ' — მისაბმელის ზომა (მანქანა)">' + drCapOptions(d) + '</select>' : h(drCapText(d))) + '</span>' +
+    '<span class="u-cell-target' + (reg ? '' : ' u-muted') + '">' + (reg ? '<input class="u-input" type="text" inputmode="decimal" data-u-dr-tgt="' + h(x.id) + '" value="' + h(d.target_gross != null ? String(Number(d.target_gross)) : '') + '" placeholder="' + h(TGT_MISS_KA) + '" aria-label="' + h(x.name) + ' — კვირის სამიზნე ($)" title="კვირის სამიზნე GROSS ($) · დღიური გეგმა = სამიზნე ÷ 6">' + drTgtDay(d) : h(drTgtText(d))) + '</span>' +
     '<label class="u-check u-cell-winch"><input type="checkbox" data-u-dr-winch="' + h(x.id) + '"' + (d.winch ? ' checked' : '') + ' aria-label="' + h(x.name) + ' — ჯალამბარი">აქვს</label>' +
     '<label class="u-check u-cell-active"><input type="checkbox" data-u-dr-active="' + h(x.id) + '"' + (d.active !== false ? ' checked' : '') + ' aria-label="' + h(x.name) + ' — მუშაობს (ეს კომპანია მისი მიმდინარე კომპანიაა)">მუშაობს</label>' +
     '<div class="u-cell-status"><button type="button" class="u-statusbtn' + (x.st === 'repair' ? ' u-repair' : '') + '" data-u-edit="' + h(x.id) + '" aria-expanded="' + ex + '">' + ic(st[1]) + '<span>' + st[0] + (sub ? '<small>' + h(sub) + '</small>' : '') + '</span>' + ic(ex ? 'chevron-up' : 'chevron-down') + '</button></div></div>' + (ex ? drEditorHtml(x) : '') + (mv ? drMoveHtml(x) : '');
@@ -12443,6 +12495,7 @@ function drHistRowHtml(x) {
     '<div class="u-cell-co">' + (!r && reg ? '<select data-u-dr-co="' + h(x.id) + '" aria-label="' + h(x.name) + ' — გადაყვანა სხვა კომპანიაში"' + (drServerOn() ? '' : ' disabled title="' + h(DR_NO_RPC) + '"') + '>' + (U.cos || []).map(function (c) { return '<option value="' + h(c.company_id) + '"' + (c.company_id === coSel ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>' : '<span class="u-chip">' + h(x.code) + '</span>') + '</div>' +
     '<div class="u-cell-disp u-muted">' + h(reg ? d.dispatcher_name || 'მიუნიჭებელი' : '—') + '</div>' +
     '<span class="u-cell-gear u-muted">' + h(drCapText(d)) + '</span>' +
+    '<span class="u-cell-target u-muted">' + h(drTgtText(d)) + '</span>' +
     '<span class="u-cell-winch u-muted">' + (d.winch ? 'აქვს' : '—') + '</span>' +
     (reg ? '<label class="u-check u-cell-active"' + (r ? ' title="მიმდინარე კომპანიის შესაცვლელად გამოიყენე „კომპანია“ სვეტი მის მიმდინარე სტრიქონში"' : '') + '><input type="checkbox" data-u-dr-active="' + h(x.id) + '"' + (r ? ' disabled' : '') + ' aria-label="' + h(x.name) + ' — ჩართვა კომპანიაში ' + h(x.code) + '">მუშაობს</label>' : '<span class="u-cell-active u-muted">—</span>') +
     '<div class="u-cell-status">' + now + '</div></div>' + (mv ? drMoveHtml(x) : '');
@@ -12453,7 +12506,7 @@ function drLists() {
 }
 function drBodyHtml() {
   var L = drLists(), unreg = L.cur.filter(function (x) { return x.d._unreg; }).length;
-  var head = '<div class="u-rowhead"><span>მძღოლი</span><span>კომპანია</span><span>დისპეჩერი</span><span>მისაბმელი</span><span>ჯალამბარი</span><span>მუშაობს</span><span>სამუშაო სტატუსი</span></div>';
+  var head = '<div class="u-rowhead"><span>მძღოლი</span><span>კომპანია</span><span>დისპეჩერი</span><span>მისაბმელი</span><span>კვირის სამიზნე ($)</span><span>ჯალამბარი</span><span>მუშაობს</span><span>სამუშაო სტატუსი</span></div>';
   return { n: L.cur.length, unreg: unreg, nh: L.hist.length, html: (DR.add ? drAddHtml() : '') +
     '<div class="u-registry">' + head + '<div id="u-dr-rows">' + (L.cur.length ? L.cur.map(drRowHtml).join('') : '<div class="u-empty" style="border-radius:0">' + ic('inbox') + '<strong>მიმდინარე მძღოლი ვერ მოიძებნა</strong><p>' + (L.hist.length ? 'ამ ფილტრში მხოლოდ გამორთული ჩანაწერებია — იხ. ქვემოთ.' : 'შეცვალე ძიება ან კომპანია.') + '</p></div>') + '</div></div>' +
     '<div class="u-section-t"><button type="button" class="u-btn" data-u-dr-hist aria-expanded="' + DR.hist + '"' + (L.hist.length ? '' : ' disabled') + '>' + ic(DR.hist ? 'chevron-up' : 'chevron-down') + 'არააქტიური და ადრინდელი წევრობები · ' + L.hist.length + '</button><span>გამორთული ჩანაწერები: მძღოლები, რომლებიც სხვა კომპანიაში გადავიდნენ ან აღარ მუშაობენ. ისტორია, ტვირთები და მოვალეობები იმავე კომპანიაში რჩება.</span></div>' +
@@ -12482,13 +12535,15 @@ async function drSave() {
   drReadDraft(); DR.err = '';
   var today = workToday_(), d = x.d, patch = {};
   if (D.st !== 'work' && D.until && !(/^\d{4}-\d{2}-\d{2}$/.test(D.until) && D.until > today)) { DR.err = 'სავარაუდო გამოსვლის თარიღი ხვალიდან უნდა იყოს (სამუშაო დღე: ' + uDay(today) + ').'; return drRepaint(); }
-  if (D.target !== '' && !isFinite(Number(D.target))) { DR.err = 'კვირის სამიზნეში რიცხვი ჩაწერე.'; D.advOpen = true; return drRepaint(); }
+  var tgtP = tgtParse_(D.target); if (!tgtP.ok) { DR.err = 'კვირის სამიზნეში ჩაწერე დადებითი რიცხვი ან დატოვე ცარიელი.'; D.advOpen = true; return drRepaint(); }
   /* DOS-TRAILER-CAPACITY-20261013: the size is written only when the manager changed it in THIS editor (not because the list
      was refreshed underneath it), and for a registered row through the guarded writer - against the size the editor opened with */
   var capCh = String(D.cap) !== String(D._cap0), capNew = D.cap === '' ? null : Number(D.cap), capWas = D._cap0 === '' ? null : Number(D._cap0);
   if (capCh && d._unreg) patch.cap = capNew;
   if ((D.category || '') !== (d.category || '')) patch.category = D.category || null;
-  if (D.target !== (d.target_gross != null ? String(d.target_gross) : '')) patch.target_gross = D.target === '' ? null : Number(D.target);
+  /* DOS-WEEKLY-TARGET-UI-20261014: like the size - only a target changed in THIS editor is written, guarded by the value it opened with */
+  var tgtCh = String(D.target) !== String(D._tgt0), tgtWas = D._tgt0 === '' ? null : Number(D._tgt0);
+  if (tgtCh && d._unreg) patch.target_gross = tgtP.v;
   if (!!D.npa !== !!d.no_pre_assign) patch.no_pre_assign = !!D.npa;
   var reason = D.st === 'repair' ? 'შეკეთება: ' + D.unit + ' · ' + D.problem + (D.note.trim() ? ' — ' + D.note.trim() : '') : (D.note.trim().length >= 3 ? D.note.trim() : 'ისვენებს');
   var toDay = D.st !== 'work' && D.until ? uAddDays(D.until, -1) : null;
@@ -12497,6 +12552,7 @@ async function drSave() {
   var did = [];
   try {
     if (capCh && !d._unreg) { var capRow = await capWrite_(x.co, x.name, d.id, capWas, capNew); uPutDriver(capRow); drLegacyPatch(x.co, x.name, { cap: capRow.cap }); D._cap0 = D.cap; did.push('მისაბმელის ზომა'); }
+    if (tgtCh && !d._unreg) { var tgtRow = await tgtWrite_(x.co, x.name, d.id, tgtWas, tgtP.v); uPutDriver(tgtRow); drLegacyPatch(x.co, x.name, { target_gross: tgtRow.target_gross }); D._tgt0 = D.target; did.push('კვირის სამიზნე'); }
     if (Object.keys(patch).length) { await drPatch(x, patch); did.push('პარამეტრები'); }
     if (D.st !== 'work' && !same) {                                     /* new period first; the previous one is ended only after it exists */
       var per = { company_id: x.co, driver_name: x.name, dispatcher_name: uOwner(x.co, x.name, today) || d.dispatcher_name || USER.dispatcher || '', kind: 'off', from_day: today, to_day: toDay, reason: reason, created_by: USER.email };
@@ -12527,7 +12583,7 @@ async function drSave() {
     console.error(e); DR.busy = false;
     DR.err = 'ვერ შეინახა: ' + uErr(e) + (did.length ? ' · უკვე შენახულია: ' + did.join(', ') + '.' : ' · არაფერი შეცვლილა.');
     render();
-    if (e && e.capStale) drResync().then(function () { var y = DR.draft && DR.draft.id === D.id ? drFind(D.id) : null; if (y) { DR.draft.cap = DR.draft._cap0 = String(y.d.cap != null ? y.d.cap : ''); drRepaint(); } });
+    if (e && (e.capStale || e.tgtStale)) drResync().then(function () { var y = DR.draft && DR.draft.id === D.id ? drFind(D.id) : null; if (y) { DR.draft.cap = DR.draft._cap0 = String(y.d.cap != null ? y.d.cap : ''); DR.draft.target = DR.draft._tgt0 = y.d.target_gross != null ? String(y.d.target_gross) : ''; drRepaint(); } });
     else if (did.length) drResync();
   }
 }
@@ -12573,6 +12629,7 @@ PAGES.drivers = {
       DR.move = { id: id, to: el.value, disp: T.kind === 'new' && cur && drDispOptions(uCoCode(el.value), null).indexOf(cur) >= 0 ? cur : '', same: false, phase: 'ask', err: '' };
       drRepaint(); var p = document.getElementById('u-dr-move'); if (p) { try { p.scrollIntoView({ block: 'nearest' }); var g = document.getElementById('u-dr-move-disp'); if (g) g.focus({ preventScroll: true }); } catch (x4) {} } return;
     }
+    if ((id = el.getAttribute('data-u-dr-tgt')) != null) return drTgtSave(id, el);
     if ((id = el.getAttribute('data-u-dr-cap')) != null) return drCapPick(id, el);
     if ((id = el.getAttribute('data-u-dr-disp')) != null) { field = { dispatcher_name: el.value || null }; msg = 'დისპეჩერი შეიცვალა'; }
     else if ((id = el.getAttribute('data-u-dr-winch')) != null) { field = { winch: !!el.checked }; msg = 'ჯალამბარის ინფორმაცია შენახულია'; }
