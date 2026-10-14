@@ -1103,7 +1103,11 @@ function syncFinalize_(co, g){
 async function critCycle_(opts){
   opts=opts||{};
   var co=COID(), g=SYNC.gen;
-  var names=(SYNC.base===co ? [] : CRIT_BASE.slice()).concat(CRIT_CYCLE);
+  /* DOS-TRAILER-CAPACITY-20261013: the driver registry (trailer size, target, dispatcher) was read once per company and then
+     never again while the page stayed open - a size corrected by management reached an open dispatcher page only after a
+     reload. It is now read again on a manual refresh and, otherwise, once its copy is older than 10 minutes. */
+  var drvAgain=(SYNC.base===co) && (opts.drivers===true || Date.now()-(SYNC.drvAt||0) > 600000);
+  var names=(SYNC.base===co ? (drvAgain?['drivers']:[]) : CRIT_BASE.slice()).concat(CRIT_CYCLE);
   var seqs={}; names.forEach(function(n){ seqs[n]=(CRIT_SEQ[n]=(CRIT_SEQ[n]||0)+1); });
   SYNC.tryAt=Date.now();
   var res=await Promise.all(names.map(function(n){
@@ -1119,7 +1123,7 @@ async function critCycle_(opts){
   }
   /* never let an older-started read overwrite a newer one that already landed */
   res.forEach(function(r){ if(seqs[r.n]>(CRIT_DONE[r.n]||0)){ critCommit_(r.n, r.v, seqs[r.n], co); CRIT_DONE[r.n]=seqs[r.n]; } });
-  if(names.indexOf('drivers')>=0) SYNC.base=co;
+  if(names.indexOf('drivers')>=0){ SYNC.base=co; SYNC.drvAt=Date.now(); }
   SYNC.co=co; SYNC.have=true;
   if(opts.contacts===false) return {ok:true, committed:true, co:co, g:g};
   await loadPlanContacts();                                   /* depends on the committed plan */
@@ -1425,7 +1429,8 @@ async function refreshLive_(manual){
   var wrapped=!!window.__rfRlPatched;
   var out={p0:true, manual:!!manual, cycle:null};
   REFRESHING=true; paintSyncAge_();
-  try{ out.cycle=await critRefresh_(!!manual, wrapped?{finalize:false}:null); }
+  var ropt=wrapped?{finalize:false}:{}; if(manual) ropt.drivers=true;   /* DOS-TRAILER-CAPACITY-20261013 */
+  try{ out.cycle=await critRefresh_(!!manual, ropt); }
   catch(e){ console.error(e); out.cycle={ok:false}; }
   if(manual){ try{ await auxRetry_(); }catch(e){ console.error(e); } }
   if(!wrapped) refreshFinish_(out);
@@ -1463,7 +1468,7 @@ function toast(msg){
   t.textContent=msg; t.style.opacity='1'; clearTimeout(t._h); t._h=setTimeout(()=>{t.style.opacity='0';},1600);
 }
 /* ---------- writes ---------- */
-async function saveDriver(encName, field, value){
+async function saveDriver(encName, field, value, el){
   const name=decodeURIComponent(encName);
   let v=value;
   if(field==='winch') v=!!value;
@@ -1473,11 +1478,18 @@ async function saveDriver(encName, field, value){
   else if(field==='active') v=!!value;
   else if(field==='category' && v==='—') v=null;
   try{
+    var reg0=DRIVERS_BY_NAME[name];
+    if(field==='cap' && reg0 && reg0.id){   /* DOS-TRAILER-CAPACITY-20261013: a registered driver's size goes through the guarded writer */
+      var capRow=await capWrite_(COID(), name, reg0.id, reg0.cap!=null?Number(reg0.cap):null, v);
+      reg0.cap=capRow.cap; if(typeof uPutDriver==='function') uPutDriver(capRow);
+      toast('შენახულია ✓'); return;
+    }
     const { error } = await sb.from('drivers').upsert({company_id:COID(), name:name, [field]:v, updated_at:new Date().toISOString(), updated_by:USER.email},{onConflict:'company_id,name'});
     if(error) throw error;
     if(!DRIVERS_BY_NAME[name]) DRIVERS_BY_NAME[name]={name}; DRIVERS_BY_NAME[name][field]=v;
     toast('შენახულია ✓');
-  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+  }catch(e){ console.error(e); toast((e&&e.capStale)?'ვერ შეინახა — ჩანაწერი შეიცვალა, განაახლე გვერდი':'ვერ შეინახა');
+    if(field==='cap' && el){ var st0=DRIVERS_BY_NAME[name]; try{ el.value=capKnown_(st0)?String(Number(st0.cap)):''; }catch(_){} } }
 }
 let ROLE='disp', TAB='board', MTAB='overview';
 const TODAY = new Date(2026,6,28);
@@ -1903,6 +1915,28 @@ function inTransit_(name, tday){
   }
   return null;
 }
+/* DOS-TRAILER-CAPACITY-20261013 - trailer size (drivers.cap): one meaning and one writer for every screen.
+   A size that is not stored is SAID as not stored. The daily standard still counts it as 1 - exactly as the server's close
+   check does - so no rule result changes here; only the wording stops presenting a missing size as a checked one-car fact. */
+var CAP_MISS_KA='მისაბმელის ზომა მითითებული არ არის — სტანდარტში ითვლება 1';
+var CAP_STALE_KA='მისაბმელის ზომა ამასობაში სხვამ შეცვალა ან ცვლილების უფლება არ არის; სია ახლდება — გადაამოწმე ახლანდელი მნიშვნელობა';
+function capKnown_(reg){ return !!reg && reg.cap!=null && Number(reg.cap)>0; }
+function capLabel_(reg){ return capKnown_(reg) ? (Number(reg.cap)+'-მანქანიანი') : CAP_MISS_KA; }
+/* The writer of a REGISTERED driver's trailer size. It changes that one field of that one row (company + name, and the row id
+   when the screen has it) and only while the stored size is still the one the screen showed (was: a number, or null = not
+   stored). A row changed meanwhile, a row that is not there or a missing right gives no row back - that is an error here,
+   never a silent success. Returns the stored row as the server answered it. */
+async function capWrite_(co, name, id, was, val){
+  if(val!=null && !(isFinite(val) && val>0)) throw new Error('მისაბმელის ზომა არასწორია');
+  var q=sb.from('drivers').update({cap:val, updated_at:new Date().toISOString(), updated_by:USER.email}).eq('company_id',co).eq('name',name);
+  if(id) q=q.eq('id',id);
+  q=(was==null)?q.is('cap',null):q.eq('cap',was);
+  var r=await q.select('*');
+  if(r.error) throw r.error;
+  var row=(Array.isArray(r.data)?r.data:[]).filter(function(d){ return d && d.company_id===co && d.name===name; })[0]||null;
+  if(!row){ var e=new Error(CAP_STALE_KA); e.capStale=true; throw e; }
+  return row;
+}
 function driverStd_(name, day){
   var reg=DRIVERS_BY_NAME[name]||{};
   var cap=Number(reg.cap)||1;
@@ -2163,8 +2197,8 @@ function rBoard(){
     var act="<div style='margin-top:6px'>"+((lvl==='g'||tgt==null)?'':(waivChip_('standard',d.name,d.name+' — '+reason,tday)+' '))+restBtn+"</div>";
     var cov=coverOf_(d.name,tday);
     var covChip=(cov&&cov.dispatcher_name===MYD())?" <span class='chip y' style='padding:0 6px;font-size:10px'>დროებით ჩემთან</span>":"";
-    return "<div class='driver'><div class='cap'>"+cap+"</div>"+
-      "<div><div class='nm'>"+esc(d.name)+covChip+"</div><div class='meta'>"+cap+"-მანქანიანი"+(tgt?(' · გეგმა '+money(tgt)+'/დღე'):'')+"</div></div>"+
+    return "<div class='driver'><div class='cap'"+(capKnown_(reg)?"":" title='"+CAP_MISS_KA+"'")+">"+(capKnown_(reg)?cap:'?')+"</div>"+
+      "<div><div class='nm'>"+esc(d.name)+covChip+"</div><div class='meta'>"+esc(capLabel_(reg))+(tgt?(' · გეგმა '+money(tgt)+'/დღე'):'')+"</div></div>"+
       "<div class='lw'><div class='loadline'>"+(ll||"<span class='load'>ხვალინდელი ტვირთი ჯერ არ არის არჩეული — ქვემოთ მოძებნე Order ID-ით და მიაბი</span>")+"</div>"+
         (reason?("<div class='reason'"+(lvl==='g'?" style='color:var(--good)'":"")+">"+reason+"</div>"):'')+act+"</div>"+
       "<div class='st'><span class='chip "+(ok?'g':lvl)+"'><span class='dot'></span>"+
@@ -3663,7 +3697,7 @@ function rDrivers(){
     var reg=d.reg, enc=encodeURIComponent(d.name);
     var wkG=d.s.g30/4.33;
     var sel="<select class='mini' onchange=\"saveDriver('"+enc+"','category',this.value)\">"+catOpts.map(function(o){ return "<option"+(((reg.category||'—')===o)?' selected':'')+">"+o+"</option>"; }).join('')+"</select>";
-    var capSel="<select class='mini' onchange=\"saveDriver('"+enc+"','cap',this.value)\">"+['1','2','3','4','5'].map(function(o){ return "<option"+((String(d.cap||1)===o)?' selected':'')+">"+o+"</option>"; }).join('')+"</select>";
+    var capSel="<select class='mini'"+(d.cap?"":" title='"+CAP_MISS_KA+"'")+" onchange=\"saveDriver('"+enc+"','cap',this.value,this)\">"+(d.cap?"":"<option value='' selected>—</option>")+['1','2','3','4','5'].concat((d.cap&&['1','2','3','4','5'].indexOf(String(d.cap))<0)?[String(d.cap)]:[]).map(function(o){ return "<option"+((d.cap&&String(d.cap)===o)?' selected':'')+">"+o+"</option>"; }).join('')+"</select>";
     var winch="<input type='checkbox' style='width:16px;height:16px'"+(reg.winch?' checked':'')+" onchange=\"saveDriver('"+enc+"','winch',this.checked)\">";
     var npa="<input type='checkbox' style='width:16px;height:16px' title='წინასწარ არ ვაბამთ — ინსპექციის რისკი'"+(reg.no_pre_assign?' checked':'')+" onchange=\"saveDriver('"+enc+"','no_pre_assign',this.checked)\">";
     var target="<input class='mini' style='width:78px' placeholder='$ სამიზნე' value='"+(reg.target_gross!=null?reg.target_gross:'')+"' onchange=\"saveDriver('"+enc+"','target_gross',this.value)\">";
@@ -3728,7 +3762,7 @@ function coverRows_(){
     .filter(function(d){ return d.last>=cutD; })
     .map(function(d){
       var reg=DRIVERS_BY_NAME[d.name]||{};
-      d.cap=Number(reg.cap)||1;
+      d.cap=Number(reg.cap)||1; d.capMiss=!capKnown_(reg);
       d.day=d.loads.filter(function(l){ return puDay_(l)===tday; });
       d.cars=d.day.reduce(function(s,l){ return s+cars_(l); },0);
       d.gross=d.day.reduce(function(s,l){ return s+grossOf_(l); },0);
@@ -3758,7 +3792,7 @@ function rCoverage(){
       return esc(locShort(l.pickup_location))+' → '+esc(locShort(l.delivery_location))+' · '+money(grossOf_(l))+(cars_(l)>1?(' · '+cars_(l)+' მანქ.'):'');
     }).join('<br>');
     return "<tr><td>"+esc(d.disp)+"</td><td><b>"+esc(d.name)+"</b>"+(d.loaded?" <span class='chip g' style='padding:1px 6px'>გზაშია</span>":"")+"</td>"+
-      "<td class='num'>"+d.cap+"</td><td class='num' style='font-weight:750;color:"+({g:'var(--good)',y:'var(--warn)',r:'var(--crit)'}[d.color])+"'>"+d.cars+"</td>"+
+      "<td class='num'"+(d.capMiss?" title='"+CAP_MISS_KA+"'":"")+">"+d.cap+(d.capMiss?"?":"")+"</td><td class='num' style='font-weight:750;color:"+({g:'var(--good)',y:'var(--warn)',r:'var(--crit)'}[d.color])+"'>"+d.cars+"</td>"+
       "<td class='num'>"+(d.gross?money(d.gross):'—')+"</td>"+
       "<td class='muted' style='font-size:12px'>"+(ll||'ტვირთი არ არის დაბუკული')+"</td>"+
       "<td>"+gd(d.last)+"</td>"+
@@ -9093,7 +9127,7 @@ function scpDriver_(d, M) {
   else why = "<div class='scp-reason " + (ok ? 'ok' : 'bad') + "'>" + scpIc_(ok ? 'check' : 'alert') + esc(okW && !st.ok ? 'ახსნა დადასტურებულია' : st.reason) + "</div>";
   return "<div class='scp-drv'>" +
     "<div class='scp-dhd'><span class='scp-rig'>" + scpRig_(cap) + "</span>" +
-      "<div class='scp-person'><h4>" + esc(d.name) + covChip + "</h4><p>" + cap + "-მანქანიანი</p></div>" +
+      "<div class='scp-person'><h4>" + esc(d.name) + covChip + "</h4><p>" + esc(capLabel_(reg)) + "</p></div>" +
       "<div class='scp-goal'><span>დღიური გეგმა</span><strong>" + (tgt != null ? money(tgt) : '—') + "</strong></div></div>" +
     "<div class='scp-loads'>" + loads + why + "</div></div>";
 }
@@ -10616,7 +10650,7 @@ body.uim .u-section-t span{font-size:12px;color:var(--u-muted)}
 /* ---------- registry (drivers) ---------- */
 body.uim #u-drivers{max-width:1430px}
 body.uim .u-registry{border:1px solid var(--u-line);border-radius:12px;overflow:clip;background:var(--u-panel)}
-body.uim .u-row,body.uim .u-rowhead{display:grid;grid-template-columns:minmax(190px,1.2fr) 104px 200px minmax(64px,.45fr) 88px 100px minmax(165px,.9fr);align-items:center;gap:14px;padding:13px 20px}
+body.uim .u-row,body.uim .u-rowhead{display:grid;grid-template-columns:minmax(190px,1.2fr) 104px 200px minmax(96px,.45fr) 88px 100px minmax(165px,.9fr);align-items:center;gap:14px;padding:13px 20px}
 body.uim .u-rowhead{background:var(--u-strip);color:var(--u-muted);font-size:10px;padding-top:12px;padding-bottom:12px}
 body.uim .u-row{border-top:1px solid var(--u-line);font-size:12px}
 body.uim .u-row.u-expanded{background:var(--u-editor)}
@@ -10640,7 +10674,8 @@ body.uim .u-person small{color:var(--u-muted);font-size:10px}
 body.uim .u-cell-disp{width:100%;max-width:218px}
 body.uim .u-cell-disp select{width:100%;font-size:11px;padding:9px 10px;background:var(--u-chip);border-color:var(--u-line)}
 body.uim .u-cell-disp small{display:block;color:var(--u-muted);font-size:10px;margin-top:3px}
-body.uim .u-cell-gear select{font-size:11px;padding:6px 8px;min-height:34px;width:100%;max-width:110px}
+body.uim .u-cell-gear select{font-size:11px;padding:6px 8px;min-height:34px;width:100%;max-width:110px;background:var(--u-chip);border-color:var(--u-line)}
+body.uim .u-cell-gear select.u-capmiss{border-color:var(--u-warm)}
 body.uim .u-check{display:flex;align-items:center;gap:8px;font-size:11px;min-height:34px}
 body.uim .u-statusbtn{display:flex;align-items:center;gap:7px;border:0;background:var(--u-tag);border-radius:7px;padding:9px 11px;font-size:11px;text-align:left;width:100%;max-width:206px;min-height:36px}
 body.uim .u-statusbtn .u-ic{width:14px;height:14px}
@@ -10885,7 +10920,7 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
 /* ---------- responsive ---------- */
 @media(min-width:1700px){body.uim #view{padding:34px 40px 96px}body.uim .u-cards{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
 @media(max-width:1360px){
- body.uim .u-row,body.uim .u-rowhead{grid-template-columns:minmax(150px,1.1fr) 96px 186px 58px 76px 94px minmax(150px,.9fr);gap:10px;padding-left:15px;padding-right:15px}
+ body.uim .u-row,body.uim .u-rowhead{grid-template-columns:minmax(150px,1.1fr) 96px 186px 92px 76px 94px minmax(150px,.9fr);gap:10px;padding-left:15px;padding-right:15px}
  body.uim .u-row .u-avatar{display:none}
  body.uim .u-calwrap{grid-template-columns:minmax(0,1fr) 265px}
  body.uim .u-closed-head,body.uim .u-closed-row{grid-template-columns:minmax(205px,1.2fr) 100px minmax(195px,1fr) 22px;gap:18px}
@@ -11712,7 +11747,7 @@ function shClosedDetail(r) {
     html += '<p class="u-snapnote"><b>ტვირთის მიმდინარე მონაცემი (არ არის დახურვის ჩანაწერი)</b> — ქვემოთ მოცემული მანქანა, მარშრუტი, დრო, GROSS და მძღოლი Super Dispatch-ის ამჟამინდელი მონაცემია დაფიქსირებული ნომრებისთვის.</p>';
     var items = orders.map(function (on) { var l = B.load[on] || null; return { on: on, l: l, driver: l ? (l.driver_name || '') : '', source: '' }; });
     html += shGroups(items).map(function (gr) { var d = B.drv[gr.name], rec = recBy[gr.name];
-      return '<div class="u-plandrv"><div class="u-plandrv-h">' + ic('truck') + '<strong>' + h(gr.name === '—' ? 'მძღოლი მითითებული არ არის' : gr.name) + '</strong>' + (d ? '<small>' + h((Number(d.cap) || 1) + '-მანქანიანი') + '</small>' : '') + (rec ? '<small>დახურვისას: ' + h(rec.n) + ' ტვირთი · ' + h(money(Number(rec.gross) || 0)) + '</small>' : '') + '</div><div class="u-loads">' +
+      return '<div class="u-plandrv"><div class="u-plandrv-h">' + ic('truck') + '<strong>' + h(gr.name === '—' ? 'მძღოლი მითითებული არ არის' : gr.name) + '</strong>' + (d ? '<small>' + h(capLabel_(d)) + '</small>' : '') + (rec ? '<small>დახურვისას: ' + h(rec.n) + ' ტვირთი · ' + h(money(Number(rec.gross) || 0)) + '</small>' : '') + '</div><div class="u-loads">' +
         gr.items.map(function (it) { return shLoadCard(it, { open: false, statusNow: true, grossNote: 'მიმდინარე' }); }).join('') + '</div></div>'; }).join('');
   }
   html += sv ? shGatesBlock(sv.gates, 'პირობები დახურვისას', 'ჩანაწერიდან', 'rec') : '<div class="u-gates"><h3>პირობები დახურვისას</h3><div class="u-planempty">არ არის დაფიქსირებული — ეს ჩანაწერი სერვერის შეფასების შენახვამდეა გაკეთებული.</div></div>';
@@ -11737,7 +11772,7 @@ function shOpenDetail(row) {
     (idle.some(function (o) { return !o.off; }) ? '. მძღოლი, რომელსაც გეგმაში ტვირთი არ აქვს და არც ისვენებს, დღიურ სტანდარტში ითვლება — საჭიროა ტვირთი, დამტკიცებული ახსნა ან დასვენების მონიშვნა.' : '.') + '</p>';
   if (!items.length) html += '<div class="u-planempty">ამ დღისთვის გეგმაში ტვირთი არ ჩანს. ცარიელი გეგმა თავისთავად დახურვის პირობებს არ ხსნის — სერვერი მაინც ამოწმებს.</div>';
   else html += shGroups(items).map(function (gr) { var d = (U.by[row.company_id] || { drv: {} }).drv[gr.name];
-    return '<div class="u-plandrv"><div class="u-plandrv-h">' + ic('truck') + '<strong>' + h(gr.name === '—' ? 'მძღოლი მითითებული არ არის' : gr.name) + '</strong>' + (d ? '<small>' + h((Number(d.cap) || 1) + '-მანქანიანი') + '</small>' : '') + '</div><div class="u-loads">' +
+    return '<div class="u-plandrv"><div class="u-plandrv-h">' + ic('truck') + '<strong>' + h(gr.name === '—' ? 'მძღოლი მითითებული არ არის' : gr.name) + '</strong>' + (d ? '<small>' + h(capLabel_(d)) + '</small>' : '') + '</div><div class="u-loads">' +
       gr.items.map(function (it) { return shLoadCard(it, { open: true, legs: legs, waivers: allW }); }).join('') + '</div></div>'; }).join('');
   if (P && P.data) html += shGatesBlock(P.data.gates, 'დახურვის პირობები', (P.from === 'read' ? 'სერვერის შემოწმება ' : 'ბოლო მცდელობის შედეგი ') + uTzTime(P.at) + ' · ინვოისი/BOL და ჩეკი ეხება დისპეჩერის მიერ დაბუკულ, უკვე ჩაბარებულ ტვირთებს', 'live');
   else if (E) html += shGatesBlock(E.gates, 'დახურვის პირობები', 'ბოლო მცდელობის ჩანაწერი ' + uTzTime(E.occurred_at) + ' — მას შემდეგ შეიძლება შეიცვალა', 'live');
@@ -12239,7 +12274,7 @@ function drResync() {
 function drDraft(x) {
   var off = x.off, rep = x.st === 'repair', m = rep ? /^\s*შეკეთება\s*:\s*([^·—]*?)(?:\s*·\s*([^—]*?))?(?:\s*—\s*(.*))?$/.exec(String(off.reason || '')) : null, d = x.d;
   return { id: x.id, st: x.st, until: off && off.to_day ? uAddDays(off.to_day, 1) : '', follow: '', unit: m && m[1] ? m[1].trim() : 'მანქანა', problem: m && m[2] ? m[2].trim() : 'ელექტროობა', note: rep ? (m && m[3] ? m[3].trim() : '') : (off ? String(off.reason || '') : ''),
-    cap: String(d.cap != null ? d.cap : ''), category: d.category || '', target: d.target_gross != null ? String(d.target_gross) : '', npa: !!d.no_pre_assign, _st0: x.st };
+    cap: String(d.cap != null ? d.cap : ''), _cap0: String(d.cap != null ? d.cap : ''), category: d.category || '', target: d.target_gross != null ? String(d.target_gross) : '', npa: !!d.no_pre_assign, _st0: x.st };
 }
 function drEditorHtml(x) {
   var D = DR.draft, non = D.st !== 'work', rep = D.st === 'repair', tk = TK.state === 'ok';
@@ -12358,6 +12393,29 @@ async function drAddGo() {
 }
 /* ---- rows ---- */
 function drCapText(d, unreg) { return d.cap != null && Number(d.cap) > 0 ? Number(d.cap) + '-მანქ.' : '—'; }
+/* DOS-TRAILER-CAPACITY-20261013: the trailer-size selector of a current registered row. "—" = not stored (never shown as 1);
+   a stored size outside 1-5 stays selectable, so the selector never rewrites it by accident. */
+function drCapOptions(d) {
+  var v = capKnown_(d) ? String(Number(d.cap)) : '', list = ['1', '2', '3', '4', '5']; if (v && list.indexOf(v) < 0) list = [v].concat(list);
+  return '<option value=""' + (v ? '' : ' selected') + '>—</option>' + list.map(function (o) { return '<option value="' + h(o) + '"' + (o === v ? ' selected' : '') + '>' + h(o) + ' მანქ.</option>'; }).join('');
+}
+/* saved at once through the guarded writer; on any failure the selector goes back to what is stored and says so */
+function drCapPick(id, el) {
+  var x = drFind(id); if (!x || x.d._unreg) return;
+  var was = x.d.cap != null ? Number(x.d.cap) : null, val = el.value === '' ? null : Number(el.value);
+  if (val === was) return;
+  el.disabled = true;
+  return capWrite_(x.co, x.name, x.d.id, was, val).then(function (row) {
+    uPutDriver(row); drLegacyPatch(x.co, x.name, { cap: row.cap });
+    drReadAll(); if (DR.draft && DR.draft.id === id) DR.draft.cap = DR.draft._cap0 = String(row.cap != null ? row.cap : '');
+    feedback(x.name + ' — მისაბმელის ზომა შენახულია: ' + (capKnown_(row) ? Number(row.cap) + ' მანქანა' : 'არ არის მითითებული') + '.');
+    drRepaint(); uAfterSave(x.co, x.name + ' — მისაბმელის ზომა');
+  }, function (err) {
+    console.error(err); feedback(x.name + ' — მისაბმელის ზომა ვერ შეინახა (' + uErr(err) + '). მნიშვნელობა დაბრუნდა.', true);
+    el.value = was != null ? String(was) : ''; el.disabled = false;
+    if (err && err.capStale) drResync();
+  });
+}
 function drRowHtml(x) {
   var d = x.d, ex = DR.edit === x.id, mv = DR.move && DR.move.id === x.id, cur = d.dispatcher_name || '', st = DR_ST[x.st], reg = !d._unreg;
   var sub = x.st !== 'work' && x.off.to_day ? uDayShort(x.off.to_day) + '-ის ჩათვლით' : '';
@@ -12368,7 +12426,7 @@ function drRowHtml(x) {
       (reg ? (was.length ? '<small title="ამ მძღოლის გამორთული ჩანაწერი სხვა კომპანიაში (იხ. „არააქტიური და ადრინდელი წევრობები“)">ადრე: ' + h(was.join(', ')) + '</small>' : '') : '<small>რეესტრში არ არის · ტვირთებიდან</small>') + '</button></div>' +
     '<div class="u-cell-co">' + (reg ? '<select data-u-dr-co="' + h(x.id) + '" aria-label="' + h(x.name) + ' — მიმდინარე კომპანია (შეცვლა = გადაყვანა)"' + (drServerOn() ? '' : ' disabled title="' + h(DR_NO_RPC) + '"') + '>' + (U.cos || []).map(function (c) { return '<option value="' + h(c.company_id) + '"' + (c.company_id === coSel ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select>' : '<span class="u-chip">' + h(x.code) + '</span>') + '</div>' +
     '<div class="u-cell-disp"><select data-u-dr-disp="' + h(x.id) + '" aria-label="' + h(x.name) + ' — დისპეჩერი"><option value=""' + (cur ? '' : ' selected') + '>მიუნიჭებელი</option>' + drDispOptions(x.code, cur).map(function (n) { return '<option value="' + h(n) + '"' + (n === cur ? ' selected' : '') + '>' + h(n) + '</option>'; }).join('') + '</select>' + (x.cover ? '<small>დროებით: ' + h(x.cover.dispatcher_name) + (x.cover.to_day ? ' · ' + h(uDayShort(x.cover.to_day)) + '-მდე' : '') + '</small>' : '') + '</div>' +
-    '<span class="u-cell-gear u-muted"' + (d.cap != null && Number(d.cap) > 0 ? '' : ' title="მისაბმელის ზომა მითითებული არ არის — სტანდარტში ითვლება 1"') + '>' + h(drCapText(d)) + '</span>' +
+    '<span class="u-cell-gear' + (reg ? '' : ' u-muted') + '">' + (reg ? '<select' + (capKnown_(d) ? '' : ' class="u-capmiss" title="' + h(CAP_MISS_KA) + '"') + ' data-u-dr-cap="' + h(x.id) + '" aria-label="' + h(x.name) + ' — მისაბმელის ზომა (მანქანა)">' + drCapOptions(d) + '</select>' : h(drCapText(d))) + '</span>' +
     '<label class="u-check u-cell-winch"><input type="checkbox" data-u-dr-winch="' + h(x.id) + '"' + (d.winch ? ' checked' : '') + ' aria-label="' + h(x.name) + ' — ჯალამბარი">აქვს</label>' +
     '<label class="u-check u-cell-active"><input type="checkbox" data-u-dr-active="' + h(x.id) + '"' + (d.active !== false ? ' checked' : '') + ' aria-label="' + h(x.name) + ' — მუშაობს (ეს კომპანია მისი მიმდინარე კომპანიაა)">მუშაობს</label>' +
     '<div class="u-cell-status"><button type="button" class="u-statusbtn' + (x.st === 'repair' ? ' u-repair' : '') + '" data-u-edit="' + h(x.id) + '" aria-expanded="' + ex + '">' + ic(st[1]) + '<span>' + st[0] + (sub ? '<small>' + h(sub) + '</small>' : '') + '</span>' + ic(ex ? 'chevron-up' : 'chevron-down') + '</button></div></div>' + (ex ? drEditorHtml(x) : '') + (mv ? drMoveHtml(x) : '');
@@ -12395,7 +12453,7 @@ function drLists() {
 }
 function drBodyHtml() {
   var L = drLists(), unreg = L.cur.filter(function (x) { return x.d._unreg; }).length;
-  var head = '<div class="u-rowhead"><span>მძღოლი</span><span>კომპანია</span><span>დისპეჩერი</span><span>აღჭურვილობა</span><span>ჯალამბარი</span><span>მუშაობს</span><span>სამუშაო სტატუსი</span></div>';
+  var head = '<div class="u-rowhead"><span>მძღოლი</span><span>კომპანია</span><span>დისპეჩერი</span><span>მისაბმელი</span><span>ჯალამბარი</span><span>მუშაობს</span><span>სამუშაო სტატუსი</span></div>';
   return { n: L.cur.length, unreg: unreg, nh: L.hist.length, html: (DR.add ? drAddHtml() : '') +
     '<div class="u-registry">' + head + '<div id="u-dr-rows">' + (L.cur.length ? L.cur.map(drRowHtml).join('') : '<div class="u-empty" style="border-radius:0">' + ic('inbox') + '<strong>მიმდინარე მძღოლი ვერ მოიძებნა</strong><p>' + (L.hist.length ? 'ამ ფილტრში მხოლოდ გამორთული ჩანაწერებია — იხ. ქვემოთ.' : 'შეცვალე ძიება ან კომპანია.') + '</p></div>') + '</div></div>' +
     '<div class="u-section-t"><button type="button" class="u-btn" data-u-dr-hist aria-expanded="' + DR.hist + '"' + (L.hist.length ? '' : ' disabled') + '>' + ic(DR.hist ? 'chevron-up' : 'chevron-down') + 'არააქტიური და ადრინდელი წევრობები · ' + L.hist.length + '</button><span>გამორთული ჩანაწერები: მძღოლები, რომლებიც სხვა კომპანიაში გადავიდნენ ან აღარ მუშაობენ. ისტორია, ტვირთები და მოვალეობები იმავე კომპანიაში რჩება.</span></div>' +
@@ -12425,7 +12483,10 @@ async function drSave() {
   var today = workToday_(), d = x.d, patch = {};
   if (D.st !== 'work' && D.until && !(/^\d{4}-\d{2}-\d{2}$/.test(D.until) && D.until > today)) { DR.err = 'სავარაუდო გამოსვლის თარიღი ხვალიდან უნდა იყოს (სამუშაო დღე: ' + uDay(today) + ').'; return drRepaint(); }
   if (D.target !== '' && !isFinite(Number(D.target))) { DR.err = 'კვირის სამიზნეში რიცხვი ჩაწერე.'; D.advOpen = true; return drRepaint(); }
-  if (String(D.cap) !== String(d.cap != null ? d.cap : '')) patch.cap = D.cap === '' ? null : Number(D.cap);
+  /* DOS-TRAILER-CAPACITY-20261013: the size is written only when the manager changed it in THIS editor (not because the list
+     was refreshed underneath it), and for a registered row through the guarded writer - against the size the editor opened with */
+  var capCh = String(D.cap) !== String(D._cap0), capNew = D.cap === '' ? null : Number(D.cap), capWas = D._cap0 === '' ? null : Number(D._cap0);
+  if (capCh && d._unreg) patch.cap = capNew;
   if ((D.category || '') !== (d.category || '')) patch.category = D.category || null;
   if (D.target !== (d.target_gross != null ? String(d.target_gross) : '')) patch.target_gross = D.target === '' ? null : Number(D.target);
   if (!!D.npa !== !!d.no_pre_assign) patch.no_pre_assign = !!D.npa;
@@ -12435,6 +12496,7 @@ async function drSave() {
   DR.busy = true; drRepaint();                                          /* DR.busy is set before the first request: a second press does nothing */
   var did = [];
   try {
+    if (capCh && !d._unreg) { var capRow = await capWrite_(x.co, x.name, d.id, capWas, capNew); uPutDriver(capRow); drLegacyPatch(x.co, x.name, { cap: capRow.cap }); D._cap0 = D.cap; did.push('მისაბმელის ზომა'); }
     if (Object.keys(patch).length) { await drPatch(x, patch); did.push('პარამეტრები'); }
     if (D.st !== 'work' && !same) {                                     /* new period first; the previous one is ended only after it exists */
       var per = { company_id: x.co, driver_name: x.name, dispatcher_name: uOwner(x.co, x.name, today) || d.dispatcher_name || USER.dispatcher || '', kind: 'off', from_day: today, to_day: toDay, reason: reason, created_by: USER.email };
@@ -12465,7 +12527,8 @@ async function drSave() {
     console.error(e); DR.busy = false;
     DR.err = 'ვერ შეინახა: ' + uErr(e) + (did.length ? ' · უკვე შენახულია: ' + did.join(', ') + '.' : ' · არაფერი შეცვლილა.');
     render();
-    if (did.length) drResync();
+    if (e && e.capStale) drResync().then(function () { var y = DR.draft && DR.draft.id === D.id ? drFind(D.id) : null; if (y) { DR.draft.cap = DR.draft._cap0 = String(y.d.cap != null ? y.d.cap : ''); drRepaint(); } });
+    else if (did.length) drResync();
   }
 }
 PAGES.drivers = {
@@ -12510,6 +12573,7 @@ PAGES.drivers = {
       DR.move = { id: id, to: el.value, disp: T.kind === 'new' && cur && drDispOptions(uCoCode(el.value), null).indexOf(cur) >= 0 ? cur : '', same: false, phase: 'ask', err: '' };
       drRepaint(); var p = document.getElementById('u-dr-move'); if (p) { try { p.scrollIntoView({ block: 'nearest' }); var g = document.getElementById('u-dr-move-disp'); if (g) g.focus({ preventScroll: true }); } catch (x4) {} } return;
     }
+    if ((id = el.getAttribute('data-u-dr-cap')) != null) return drCapPick(id, el);
     if ((id = el.getAttribute('data-u-dr-disp')) != null) { field = { dispatcher_name: el.value || null }; msg = 'დისპეჩერი შეიცვალა'; }
     else if ((id = el.getAttribute('data-u-dr-winch')) != null) { field = { winch: !!el.checked }; msg = 'ჯალამბარის ინფორმაცია შენახულია'; }
     else if ((id = el.getAttribute('data-u-dr-active')) != null) { field = { active: !!el.checked }; msg = el.checked ? 'მიმდინარე კომპანიაა (მუშაობს)' : 'გამორთულია — ჩანაწერი ისტორიაში გადავიდა'; }
