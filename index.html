@@ -12495,7 +12495,8 @@ function regStripHtml() {
   if (!uReady()) return '';
   if (REG.state === 'missing') return '';
   if (REG.state !== 'ok' || !REG.data) return REG.state === 'error' ? '<div class="u-regstrip u-regerr" role="status">SD-თან კავშირის მდგომარეობა ვერ წაიკითხა (' + h(REG.err) + '). სია უცვლელია.</div>' : '';
-  var D = REG.data, items = (D.items || []).filter(function (x) { return uScopeIn(x.company_id); }), un = items.filter(function (x) { return x.state === 'unlinked'; });
+  var D = REG.data, items = (D.items || []).filter(function (x) { return uScopeIn(x.company_id); }), un = items.filter(function (x) { return x.state === 'unlinked' || x.state === 'unverified_link'; });
+  var nUv = items.filter(function (x) { return x.state === 'unverified_link'; }).length, nOff = items.filter(function (x) { return x.state === 'inactive_link'; }).length;
   var nod = (D.no_dispatcher || []).filter(function (x) { return uScopeIn(x.company_id); }), nosd = (D.no_sd_id || []).filter(function (x) { return uScopeIn(x.company_id); });
   var unv = (D.unverified || []).filter(function (x) { return uScopeIn(x.company_id); });
   if (!items.length && !nod.length && !nosd.length && !unv.length) return '';
@@ -12509,7 +12510,7 @@ function regStripHtml() {
           : '<span class="u-regact"><button type="button" class="u-btn" data-u-reg-linkitem="' + h(x.company_id + '|' + x.driver_id_sd) + '"' + (regBusy() ? ' disabled' : '') + '>არსებულ მძღოლთან დაკავშირება</button><button type="button" class="u-btn u-primary" data-u-reg-additem="' + h(x.company_id + '|' + x.driver_id_sd) + '"' + (regBusy() || !drServerOn() ? ' disabled' : '') + '>ახალი მძღოლის დამატება</button></span>') + '</div>';
   };
   return '<section class="u-regstrip" id="u-reg"><button type="button" class="u-reghead" data-u-reg-toggle aria-expanded="' + REG.open + '">' + ic(REG.open ? 'chevron-up' : 'chevron-down') +
-    '<span><b>დასაკავშირებელი მძღოლები</b> <span class="u-tag u-warn" id="u-reg-n">' + un.length + '</span>' + (items.length > un.length ? ' <small>+' + (items.length - un.length) + ' გამორთულ ჩანაწერთან</small>' : '') +
+    '<span><b>დასაკავშირებელი მძღოლები</b> <span class="u-tag u-warn" id="u-reg-n">' + un.length + '</span>' + (nUv ? ' <small>მათ შორის ' + nUv + ' დასადასტურებელი ბმა</small>' : '') + (nOff ? ' <small>+' + nOff + ' გამორთულ ჩანაწერთან</small>' : '') +
     (nod.length ? ' · <span class="u-tag u-warn">დისპეჩერი მისანიჭებელია · ' + nod.length + '</span>' : '') +
     (nosd.length ? ' · <small>ტვირთები SD-ის მძღოლის ნომრის გარეშე: ' + nosd.map(function (x) { return h(x.code) + ' ' + x.load_n; }).join(', ') + '</small>' : '') + '</span></button>' +
     (REG.open ? '<div class="u-regbody">' +
