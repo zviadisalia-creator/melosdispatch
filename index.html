@@ -10799,56 +10799,72 @@ body.uim #u-team .u-sr{position:absolute;width:1px;height:1px;overflow:hidden;cl
 body.uim .u-tm-count{font-size:13px;font-weight:400;color:var(--u-muted);margin-left:6px;vertical-align:middle;letter-spacing:0}
 body.uim .u-tm-headact{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;padding-top:4px}
 body.uim .u-tm-headact .u-btn .u-ic{width:15px;height:15px}
-body.uim .u-tm-sum{display:grid;grid-template-columns:1.3fr repeat(3,1fr);background:var(--u-panel);border:1px solid var(--u-line);border-radius:8px;padding:16px 0;margin-bottom:17px}
-body.uim .u-tm-sumcell{padding:0 24px;border-left:1px solid var(--u-line);min-width:0}
-body.uim .u-tm-sumcell.u-tm-sumfirst{border-left:0}
-body.uim .u-tm-sumcell small{display:block;font-size:11px;color:var(--u-muted);margin-bottom:7px}
-body.uim .u-tm-sumcell>span{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-body.uim .u-tm-sumcell strong{font-size:31px;line-height:1.15;font-weight:500;color:var(--u-muted);font-variant-numeric:tabular-nums}
-body.uim .u-tm-sumcell.u-tm-sumfirst strong{font-size:39px}
-body.uim .u-tm-sumcell em{font-style:normal;font-size:11px;color:#927020;white-space:nowrap}
-body.uim .u-tm-sumcell em.u-tm-unk{color:var(--u-muted)}
+body.uim .u-tm-sum{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 14px;background:var(--u-panel);border:1px solid var(--u-line);border-radius:8px;padding:13px 20px;margin-bottom:17px}
+body.uim .u-tm-sum small{font-size:11px;color:var(--u-muted)}
+body.uim .u-tm-sum strong{font-size:27px;line-height:1.1;font-weight:500;color:var(--u-green);font-variant-numeric:tabular-nums}
+body.uim .u-tm-sum em{font-style:normal;font-size:11px;color:var(--u-green)}
+body.uim .u-tm-sum em.u-tm-unk{color:var(--u-muted)}
 body.uim .u-tm-sortl{display:flex;align-items:center;gap:9px;color:var(--u-muted);font-size:11px;margin-left:auto}
 body.uim .u-tm-dir{display:inline-flex;align-items:center;gap:6px;font-size:11px}
 body.uim .u-tm-dir:disabled{opacity:.45;cursor:default}
 body.uim .u-tm-dir .u-ic{width:15px;height:15px}
 body.uim #u-team .u-toolbar .u-count{margin-left:0;flex-basis:100%;order:9}
 body.uim .u-tm-note{font-size:11px;color:var(--u-muted);margin:-6px 0 13px;line-height:1.7}
-body.uim .u-card.u-team{height:306px}
-body.uim .u-card.u-team .u-front{padding-top:14px}
-body.uim .u-card.u-team .u-cardtop{min-height:27px;margin-bottom:6px}
-body.uim .u-tm-cos{font-size:10px;color:var(--u-muted);overflow-wrap:anywhere;line-height:1.4}
-body.uim .u-tm-rate{display:inline-flex;align-items:center;gap:6px;background:transparent;border:0;border-radius:4px;padding:3px 0 3px 6px;min-height:27px;white-space:nowrap;color:var(--u-muted);font-size:10px;cursor:pointer;letter-spacing:0}
+body.uim .u-card.u-team{height:300px}
+body.uim .u-card.u-team .u-front{padding:16px 19px 15px;cursor:pointer}
+body.uim .u-card.u-team .u-cardtop{min-height:26px;margin-bottom:9px}
+body.uim .u-tm-cos{font-size:11px;color:var(--u-muted);overflow-wrap:anywhere;line-height:1.4}
+body.uim .u-tm-rate{display:inline-flex;align-items:center;gap:6px;background:transparent;border:0;border-radius:4px;padding:3px 0 3px 6px;min-height:26px;white-space:nowrap;color:var(--u-muted);font-size:12px;cursor:pointer;letter-spacing:0}
 body.uim .u-tm-rate:hover{background:var(--u-btn-hover)}
-body.uim .u-tm-main{display:flex;flex-direction:column;align-items:stretch;text-align:left;background:transparent;border:0;padding:3px 0 0;margin:0;width:100%;flex:1 1 auto;min-width:0;min-height:0;color:inherit;font:inherit;border-radius:3px;cursor:pointer}
-body.uim .u-tm-main .u-cardname{margin-bottom:3px}
-body.uim .u-tm-cover{font-size:10px;color:var(--u-muted);margin-top:4px;line-height:1.5}
-body.uim .u-card.u-team .u-totals{margin-top:14px}
-body.uim .u-tm-noprice{font-size:10px;color:var(--u-warm);margin-top:6px;line-height:1.5}
-body.uim .u-card.u-team .u-teamfoot{align-items:center;flex-wrap:wrap;gap:6px 9px;min-height:50px}
-body.uim .u-tm-badge{font-size:11px;font-weight:600;padding:5px 8px;border:0;cursor:pointer;color:var(--u-green)}
-body.uim .u-tm-dorm{font-size:10px;color:var(--u-muted)}
-body.uim .u-tm-cap{margin-left:auto;background:transparent;border:0;border-bottom:1px dotted var(--u-muted);border-radius:0;padding:2px 0;font-size:11px;color:var(--u-muted);cursor:pointer}
-body.uim .u-tm-rate:focus-visible,body.uim .u-tm-main:focus-visible,body.uim .u-tm-badge:focus-visible,body.uim .u-tm-cap:focus-visible,body.uim .u-tm-info:focus-visible{outline:2px solid var(--u-green);outline-offset:3px}
+body.uim .u-tm-stars{display:inline-flex;gap:1px;color:var(--u-line)}
+body.uim .u-tm-stars .u-ic{width:12px;height:12px}
+body.uim .u-tm-rnone{font-weight:500}
+body.uim .u-tm-main{display:block;text-align:left;background:transparent;border:0;padding:0;margin:0;width:100%;flex:none;min-width:0;color:inherit;font:inherit;border-radius:3px;cursor:pointer}
+body.uim .u-card.u-team .u-tm-main .u-cardname{font-size:15px;font-weight:600;margin-bottom:2px}
+body.uim .u-card.u-team .u-tenure{font-size:12px;margin-top:0;gap:7px;min-height:28px}
+body.uim .u-tm-ten{color:var(--u-text)}
+body.uim .u-tm-ten.u-tm-tenunk{color:var(--u-muted)}
+body.uim .u-tm-edit{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:auto;background:transparent;border:0;border-radius:50%;color:var(--u-muted);cursor:pointer;flex:none}
+body.uim .u-tm-edit:hover{background:var(--u-btn-hover);color:var(--u-green)}
+body.uim .u-tm-edit .u-ic{width:14px;height:14px}
+body.uim .u-card.u-team .u-totals{margin-top:16px;gap:12px}
+body.uim .u-card.u-team .u-totals small{font-size:11px}
+body.uim .u-card.u-team .u-totals strong{font-size:20px;font-weight:600;letter-spacing:-.3px;line-height:1.35;color:var(--u-text)}
+body.uim .u-card.u-team .u-teamfoot{align-items:center;gap:6px 9px;min-height:58px;padding-top:12px}
+body.uim .u-tm-badge{font-size:11px;font-weight:600;padding:6px 10px;border:0;cursor:pointer;color:var(--u-green)}
+body.uim .u-tm-cap{margin-left:auto;display:grid;grid-template-columns:auto;justify-items:end;row-gap:1px;background:transparent;border:0;border-radius:6px;padding:2px 2px;cursor:pointer;color:var(--u-green);font:inherit;text-align:right}
+body.uim .u-tm-cap:hover{background:var(--u-btn-hover)}
+body.uim .u-tm-capn{display:inline-flex;align-items:center;gap:7px}
+body.uim .u-tm-cap strong{font-size:22px;font-weight:500;line-height:1.1;font-variant-numeric:tabular-nums}
+body.uim .u-tm-cap small{font-size:10px;color:var(--u-muted);line-height:1.3}
+body.uim .u-tm-slot.u-ic{width:17px;height:17px;opacity:.75}
+body.uim .u-tm-cap.u-tm-full strong{color:var(--u-muted)}
+body.uim .u-tm-cap.u-tm-over strong{color:var(--u-warm)}
+body.uim .u-tm-cap.u-tm-over small{color:var(--u-warm)}
+body.uim .u-tm-cap.u-tm-capunk{display:inline-block;border-bottom:1px dotted var(--u-muted);border-radius:0;padding:2px 0;font-size:11px;color:var(--u-muted)}
+body.uim .u-tm-rate:focus-visible,body.uim .u-tm-main:focus-visible,body.uim .u-tm-badge:focus-visible,body.uim .u-tm-cap:focus-visible,body.uim .u-tm-info:focus-visible,body.uim .u-tm-edit:focus-visible{outline:2px solid var(--u-green);outline-offset:3px}
 body.uim .u-tm-backhead{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 body.uim .u-tm-backhead .u-cardname{font-size:14px;margin-bottom:2px}
 body.uim .u-tm-backhead small{display:block;font-size:11px}
 body.uim .u-card.u-team .u-backclose{position:static;flex:none;width:30px;height:30px}
+body.uim .u-card.u-team .u-backlist{overflow:auto;min-height:0}
 body.uim .u-tm-drv{display:flex;align-items:center;gap:6px;min-width:0}
 body.uim .u-tm-drv>span:last-child{overflow-wrap:anywhere}
 body.uim .u-tm-st{display:inline-flex;align-items:center;flex:none}
 body.uim .u-tm-st .u-ic{width:12px;height:12px}
 body.uim .u-tm-st-work{color:var(--u-good)}body.uim .u-tm-st-rest{color:#8e8257}body.uim .u-tm-st-repair{color:var(--u-bad)}body.uim .u-tm-st-dorm{color:var(--u-muted)}
 body.uim .u-tm-dist{margin-top:auto;padding-top:10px;flex:none}
-body.uim .u-tm-disthead{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-bottom:7px;font-size:11px;color:var(--u-muted)}
+body.uim .u-tm-disthead{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-bottom:6px;font-size:11px;color:var(--u-muted)}
 body.uim .u-tm-info{background:transparent;border:0;padding:0;display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:24px;color:var(--u-muted);border-radius:50%;cursor:pointer}
 body.uim .u-tm-info .u-ic{width:14px;height:14px}
+body.uim .u-tm-dist .u-mix{margin:2px 0 8px}
 body.uim .u-tm-distvals{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
-body.uim .u-tm-distvals div{border-left:1px solid var(--u-sep);padding-left:12px}
+body.uim .u-tm-distvals div{border-left:1px solid var(--u-sep);padding-left:10px;min-width:0}
 body.uim .u-tm-distvals div:first-child{border:0;padding-left:0}
-body.uim .u-tm-distvals span{display:block;font-size:10px;color:var(--u-muted)}
-body.uim .u-tm-distvals strong{display:block;font-size:21px;font-weight:500;color:var(--u-green);margin-top:2px;line-height:1.2;font-variant-numeric:tabular-nums}
-body.uim .u-tm-distnone{font-size:11px;color:var(--u-muted);padding:6px 0}
+body.uim .u-tm-distvals span{display:block;font-size:10px;color:var(--u-muted);white-space:nowrap}
+body.uim .u-tm-distvals strong{display:block;font-size:20px;font-weight:500;color:var(--u-green);margin-top:1px;line-height:1.2;font-variant-numeric:tabular-nums}
+body.uim .u-tm-distnone{font-size:12px;color:var(--u-text);padding:4px 0 2px;font-weight:500}
+body.uim .u-tm-cov{display:block;font-size:10px;color:var(--u-muted);margin-top:5px}
 body.uim .u-tm-dlg{border:1px solid var(--u-line);border-radius:15px;padding:0;background:var(--u-panel);color:inherit;width:min(600px,calc(100% - 24px));max-height:90vh;box-shadow:0 20px 70px rgba(36,49,30,.15);margin:auto;overflow:auto}
 body.uim .u-tm-dlg::backdrop{background:rgba(40,50,34,.38)}
 body.uim .u-tm-dhead{display:flex;align-items:flex-start;gap:16px;justify-content:space-between;padding:22px 24px 15px;border-bottom:1px solid var(--u-line)}
@@ -10857,35 +10873,31 @@ body.uim .u-tm-dhead p{font-size:12px;color:var(--u-muted);margin:4px 0 0}
 body.uim .u-tm-dbody{padding:18px 24px 22px;font-size:12px;line-height:1.8}
 body.uim .u-tm-dbody p{margin:0 0 10px}
 body.uim .u-tm-dbody h3{font-size:13px;font-weight:600;margin:12px 0 6px;display:flex;align-items:center;gap:7px}
-body.uim .u-tm-dbody h3 .u-ic{width:16px;height:16px;color:var(--u-green)}
 body.uim .u-tm-score{display:flex;align-items:center;gap:17px;padding:8px 0 14px}
 body.uim .u-tm-score>span{font-size:44px;line-height:1;font-weight:500}
 body.uim .u-tm-score small{display:block;color:var(--u-muted);font-size:11px;margin-top:4px}
-body.uim .u-tm-method{margin-top:14px;font-size:11px;color:var(--u-muted)}
-body.uim .u-tm-method summary{cursor:pointer;color:inherit}
-body.uim .u-tm-method p{margin-top:9px}
 body.uim .u-tm-list{margin:0 0 10px;padding-left:18px}
 body.uim .u-tm-list li{margin-bottom:6px}
 body.uim .u-tm-dact{display:flex;justify-content:flex-end;gap:9px;flex-wrap:wrap;padding-top:8px}
-@media (max-width:1100px){body.uim .u-tm-sumcell{padding:0 16px}body.uim .u-tm-sumcell strong{font-size:27px}body.uim .u-tm-sumcell.u-tm-sumfirst strong{font-size:33px}}
+body.uim .u-tm-form .u-tm-field{display:block;font-size:12px;font-weight:600;margin:4px 0 6px}
+body.uim .u-tm-form .u-input{width:100%;max-width:280px;box-sizing:border-box}
+body.uim .u-tm-form .u-tm-hint{font-size:11px;color:var(--u-muted);margin:5px 0 14px;line-height:1.6}
+body.uim .u-tm-form .u-tm-calc{background:var(--u-soft);border-radius:8px;padding:9px 12px;margin:10px 0 12px;line-height:1.7}
+body.uim .u-tm-form .u-tm-err{color:var(--u-bad);background:var(--u-bad-bg);border-radius:8px;padding:9px 12px;line-height:1.7}
+body.uim .u-tm-form .u-tm-err[hidden]{display:none}
 @media (max-width:700px){
  body.uim #u-team .u-head{flex-wrap:wrap;gap:10px}
  body.uim .u-tm-headact{padding-top:0;width:100%;justify-content:flex-start}
  body.uim .u-tm-headact .u-btn{min-height:36px;font-size:11px;padding:7px 10px}
- body.uim .u-tm-sum{grid-template-columns:repeat(3,minmax(0,1fr));padding:0}
- body.uim .u-tm-sumcell{padding:12px}
- body.uim .u-tm-sumcell.u-tm-sumfirst{grid-column:1/-1;display:flex;align-items:center;gap:18px;border-bottom:1px solid var(--u-line)}
- body.uim .u-tm-sumcell.u-tm-sumfirst small{margin:0}
- body.uim .u-tm-sumcell:nth-child(2){border-left:0}
- body.uim .u-tm-sumcell>span{flex-direction:column;gap:4px}
- body.uim .u-tm-sumcell.u-tm-sumfirst>span{flex-direction:row;align-items:baseline;gap:9px}
- body.uim .u-tm-sumcell strong{font-size:24px}body.uim .u-tm-sumcell.u-tm-sumfirst strong{font-size:28px}
+ body.uim .u-tm-sum{padding:12px 14px}
+ body.uim .u-tm-sum strong{font-size:23px}
  body.uim .u-tm-sortl{font-size:0;gap:0}
  body.uim .u-tm-sortl select{font-size:13px;max-width:150px}
  body.uim .u-tm-dir span{display:none}
  body.uim .u-tm-dhead{padding:18px 16px 13px}body.uim .u-tm-dbody{padding:16px}
+ body.uim .u-tm-form .u-input{max-width:none;font-size:16px}
 }
-@media (pointer:coarse){body.uim .u-tm-rate,body.uim .u-tm-cap,body.uim .u-tm-badge,body.uim .u-tm-dir{min-height:40px}body.uim .u-tm-info{min-width:36px;min-height:36px}body.uim .u-card.u-team{height:322px}}
+@media (pointer:coarse){body.uim .u-tm-rate,body.uim .u-tm-cap,body.uim .u-tm-badge,body.uim .u-tm-dir,body.uim .u-tm-edit{min-height:40px}body.uim .u-tm-edit{min-width:40px}body.uim .u-tm-info{min-width:36px;min-height:36px}body.uim .u-card.u-team{height:316px}}
 /* ---------- calendar ---------- */
 body.uim .u-calwrap{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:22px;align-items:start}
 body.uim .u-cal{background:var(--u-panel);border:1px solid var(--u-line);border-radius:12px;padding:18px}
@@ -11356,6 +11368,8 @@ var ICONS = {
   'sparkles': '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>',
   'arrow-down-wide-narrow': '<path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/>',
   'arrow-up-narrow-wide': '<path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/>',
+  'star': '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+  'square-dashed': '<path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/>',
   'external': '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
 };
 function ic(n, cls) { return '<svg class="u-ic' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + (ICONS[n] || '') + '</svg>'; }
@@ -13203,13 +13217,16 @@ PAGES.drivers = {
     if (DR.add && !DR.add.busy && !DR.add.name.trim()) { DR.add = null; return drRepaint(); } }
 };
 
-/* ---- DISPATCHERS (DOS-DISPATCHER-CARDS-PROD-20261016): the approved card layout over real data only.
-   "ტვირთები სულ" / "გროსი სულ" = delivered loads of the dispatcher in the app (loads.dispatcher_name, as before; a load without a
-   price is counted apart, never as $0) + the VERIFIED history row of public.dispatcher_history_v1 (management-only table, reconciled
-   order by order: a historical order that is also a live load is not counted twice; history of a name that is not verified by an
-   exact name or a confirmed alias AND matching orders stays out of the figure). Rating, dispatcher capacity, employment date and
-   dispatcher creation do not exist yet: they show their real unknown / unavailable state; nothing on this page writes. ---- */
-var TM = { flip: null, sort: 'original', dir: -1, dlg: null, ret: null };
+/* ---- DISPATCHERS (DOS-DISPATCHER-CARDS-FINISH-20261016): the owner's approved compact card, over real data only.
+   Front: companies of today's drivers · an EMPTY score (the rating is a separate, undecided feature) · name · tenure from the
+   management-entered actual start date to the business day · "ტვირთები სულ" / "გროსი სულ" (delivered app loads + the verified history
+   row, never twice; unknown price apart, in ⓘ) · drivers assigned TODAY (a temporary cover wins; rest, repair and 30+ days without a
+   load included; one per person, across every company this manager can see) · free places = management-entered total limit − assigned
+   (no limit = unknown, never 0; over the limit = 0 and the excess said).
+   Back: the drivers and the experience by TRAILER TYPE of the driver who carried each counted order (1-/2-/3-მანქანიანი; owner-
+   confirmed history in dispatcher_history_v1.eq*, live loads in load_equipment_v1). Orders without a confirmed type stay out of the
+   percentages and are counted in ⓘ. The only write: the management profile form, through dispatcher_profile_save_v1. ---- */
+var TM = { flip: null, sort: 'original', dir: -1, dlg: null, ret: null, saving: false };
 var TMH = { state: 'unknown', rows: {}, err: '', email: null, loading: null };      /* history: unknown | ok | absent | error */
 function tmHistLoad(force) {
   if (!uiActive() || !USER) return Promise.resolve();
@@ -13236,48 +13253,134 @@ function tmHistLoad(force) {
   return TMH.loading;
 }
 function tmHist(name) { var r = TMH.state === 'ok' ? TMH.rows[name] : null; return r && r.status === 'verified' ? r : null; }
+/* the two management-only tables of H2, read like the history: once per session (a manual refresh reads again), never per repaint */
+var TMP = { state: 'unknown', rows: {}, src: {}, err: '', email: null, loading: null };   /* profile per dispatcher account (e-mail) */
+var TME = { state: 'unknown', rows: {}, src: {}, err: '', email: null, loading: null };   /* trailer type per live load (company|order) */
+function tmAbsent(e) { var c = String(e && e.code || ''), m = String(e && e.message || ''); return c === 'PGRST205' || c === 'PGRST202' || c === '42P01' || /could not find the (table|function)|does not exist/i.test(m); }
+function tmReader(S, read) {
+  return function (force) {
+    if (!uiActive() || !USER) return Promise.resolve();
+    if (S.email !== USER.email) { S.state = 'unknown'; S.rows = {}; S.src = {}; S.err = ''; S.email = USER.email; S.loading = null; }
+    if (S.loading) return S.loading;
+    if (!force && S.state !== 'unknown') return Promise.resolve();
+    var email = USER.email;
+    S.loading = (async function () {
+      try {
+        var r = await read();
+        if (!USER || USER.email !== email) return;
+        if (r.error) {
+          if (tmAbsent(r.error)) { S.state = 'absent'; S.rows = {}; S.src = {}; S.err = ''; }
+          else if (S.state === 'ok') S.err = uErr(r.error);                            /* a failed re-read keeps what is shown */
+          else { S.state = 'error'; S.err = uErr(r.error); }
+          return;
+        }
+        S.rows = r.rows; S.src = r.src || {}; S.state = 'ok'; S.err = '';
+      } catch (e) { if (S.state !== 'ok') S.state = 'error'; S.err = uErr(e); }
+      finally { if (S.email === email) S.loading = null; }
+    })();
+    return S.loading;
+  };
+}
+var tmProfLoad = tmReader(TMP, async function () {
+  var r = await sb.from('dispatcher_profile_v1').select('email,employment_start,driver_limit,updated_at,updated_by');
+  if (r.error) return { error: r.error };
+  var rows = {}; (r.data || []).forEach(function (x) { if (x && x.email) rows[x.email] = x; });
+  return { rows: rows };
+});
+/* one company at a time, in key order with a moving lower bound (the read pattern of uLoadsOf: every row is looked at once) */
+var tmEqLoad = tmReader(TME, async function () {
+  var rows = {}, src = {}, ids = (U.ids || []).slice();
+  for (var k = 0; k < ids.length; k++) {
+    for (var i = 0, last = null; ; i++) {
+      if (i >= 400) return { error: { code: '', message: 'load_equipment_v1: row limit' } };
+      var q = sb.from('load_equipment_v1').select('company_id,order_number,cap,source').eq('company_id', ids[k]);
+      if (last != null) q = q.gt('order_number', last);
+      var r = await q.order('order_number', { ascending: true }).limit(1000);
+      if (r.error) return { error: r.error };
+      var got = r.data || [];
+      got.forEach(function (x) { var c = Number(x.cap), key = x.company_id + '|' + x.order_number; if (c === 1 || c === 2 || c === 3) { rows[key] = c; src[key] = String(x.source || ''); } });
+      if (got.length < 1000) break;
+      last = got[got.length - 1].order_number;
+    }
+  }
+  return { rows: rows, src: src };
+});
 function tmMonth(day) { var m = /^(\d{4})-(\d{2})/.exec(String(day || '')); return m ? GM[+m[2] - 1] + '. ' + m[1] : ''; }
 function tmNum(n) { return Math.round(Number(n) || 0).toLocaleString('en-US'); }
+/* actual tenure: the entered start date → the business day (workToday_, America/Chicago). Nothing is inferred from orders,
+   accounts or record coverage. */
+function tmTenure(start, today) {
+  var a = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(start || '')), b = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(today || ''));
+  if (!a || !b || a[0] > b[0]) return null;
+  return { months: (+b[1] - +a[1]) * 12 + (+b[2] - +a[2]) - (+b[3] < +a[3] ? 1 : 0), days: Math.round((Date.UTC(+b[1], +b[2] - 1, +b[3]) - Date.UTC(+a[1], +a[2] - 1, +a[3])) / 864e5) };
+}
+function tmTenureText(t) {
+  if (!t) return '';
+  if (t.months < 1) return t.days ? t.days + ' დღე' : 'დღეს დაიწყო';
+  var y = Math.floor(t.months / 12), m = t.months % 12;
+  return y ? y + ' წელი' + (m ? ' და ' + m + ' თვე' : '') : m + ' თვე';
+}
+/* known-type shares that add up to exactly 100 (largest remainder); a non-zero share is never shown as 0 */
+function tmShares(c) {
+  var tot = c[0] + c[1] + c[2]; if (!tot) return null;
+  var raw = c.map(function (v) { return v * 100 / tot; }), fl = raw.map(Math.floor), left = 100 - fl[0] - fl[1] - fl[2];
+  raw.map(function (r, i) { return [r - fl[i], i]; }).sort(function (a, b) { return b[0] - a[0] || a[1] - b[1]; }).slice(0, left).forEach(function (p) { fl[p[1]]++; });
+  return fl.map(function (v, i) { return c[i] && !v ? '<1' : String(v); });
+}
 function tmModel() {
-  var today = workToday_(), cut = addDays_(today, -30), owned = {}, stat = {}, none = 0, total = 0;
-  (U.cos || []).forEach(function (c) { if (!uScopeIn(c.company_id)) return; var B = U.by[c.company_id], act = {};
+  var today = workToday_(), cut = addDays_(today, -30), mineAll = {}, seen = {}, scoped = {}, stat = {}, none = 0, total = 0;
+  (U.cos || []).forEach(function (c) { var B = U.by[c.company_id], act = {}, inScope = uScopeIn(c.company_id);
     /* the live board's existing scope of a working driver: an open load now, or a load planned in the last 30 days */
     B.loads.forEach(function (l) { if (l.is_canceled || !l.driver_name) return; var p = puDay_(l); if (l.status === 'new' || (l.status === 'picked_up' && !l.delivery_completed) || (p && p >= cut)) act[l.driver_name] = 1; });
-    /* a driver counts where his CURRENT membership is: the registry row with "works" on (one per driver, kept by the server) */
-    B.drivers.forEach(function (d) { if (d.active === false) return; total++; var o = uOwner(c.company_id, d.name, today); if (!o) { none++; return; } var off = uOff(c.company_id, d.name, today), dorm = !off && !act[d.name];
-      (owned[o] = owned[o] || []).push({ name: d.name, code: c.code, dorm: dorm, st: off ? (uIsRepair(off) ? 'repair' : 'rest') : dorm ? 'dorm' : 'work' }); });
-    B.loads.forEach(function (l) { if (l.is_canceled || !l.dispatcher_name) return; var s = stat[l.dispatcher_name] || (stat[l.dispatcher_name] = { del: 0, gross: 0, noPrice: 0, mix: [0, 0, 0], mixUnk: 0, first: '', last: '' });
+    /* a driver counts where his CURRENT membership is (the registry row with "works" on), with whoever has him today (cover wins).
+       Places look at EVERY company this manager can see — a company filter never frees a place; the count line describes the filter. */
+    B.drivers.forEach(function (d) { if (d.active === false) return;
+      var o = uOwner(c.company_id, d.name, today), off = uOff(c.company_id, d.name, today), dorm = !off && !act[d.name];
+      if (inScope) { total++; if (!o) none++; else (scoped[o] = scoped[o] || []).push(dorm); }
+      if (!o || seen[o + '|' + uPid(d)]) return; seen[o + '|' + uPid(d)] = 1;            /* one place per person, not per membership row */
+      (mineAll[o] = mineAll[o] || []).push({ name: d.name, code: c.code, dorm: dorm, st: off ? (uIsRepair(off) ? 'repair' : 'rest') : dorm ? 'dorm' : 'work' }); });
+    if (!inScope) return;
+    B.loads.forEach(function (l) { if (l.is_canceled || !l.dispatcher_name) return; var s = stat[l.dispatcher_name] || (stat[l.dispatcher_name] = { del: 0, gross: 0, noPrice: 0, eq: [0, 0, 0], eqUnk: 0, eqSrc: {}, first: '', last: '' });
       /* first = earliest pickup day (as before); last = latest ACTUAL pickup / delivery, never a scheduled future date */
       var p = puDay_(l); if (p && (!s.first || p < s.first)) s.first = p; var e = String(l.delivery_completed || l.pickup_completed || '').slice(0, 10); if (e && e > s.last) s.last = e;
       if (!l.delivery_completed) return;
       s.del++; if (l.price == null || l.price === '') s.noPrice++; else s.gross += grossOf_(l);
-      var vc = Number(l.vehicle_count); if (l.vehicle_count == null || !(vc > 0)) s.mixUnk++; else s.mix[Math.min(3, vc) - 1]++; });
+      /* experience: the trailer type recorded for THIS load (the driver who carried it), never the number of vehicles in it */
+      var k = l.company_id + '|' + l.order_number, cap = TME.state === 'ok' ? TME.rows[k] : null;
+      if (cap) { s.eq[cap - 1]++; s.eqSrc[TME.src[k] || ''] = (s.eqSrc[TME.src[k] || ''] || 0) + 1; } else s.eqUnk++; });
   });
-  var myCodes = (U.cos || []).filter(function (c) { return uScopeIn(c.company_id); }).map(function (c) { return String(c.code).toUpperCase(); });
+  var code = function (c) { return String(c.code).toUpperCase(); };
+  var myCodes = (U.cos || []).filter(function (c) { return uScopeIn(c.company_id); }).map(code), seeCodes = (U.cos || []).map(code), allCodes = (COLIST || []).map(code);
   var people = (U.people || []).filter(function (p) { return p.role === 'dispatcher' && p.active; });
   /* the authorized current roster: active dispatcher accounts this manager's companies cover (history never adds a card) */
-  var allCodes = (U.cos || []).map(function (c) { return String(c.code).toUpperCase(); });
   var listed = function (p, codes) { return !Array.isArray(p.company_codes) || p.company_codes.some(function (x) { return codes.indexOf(String(x).trim().toUpperCase()) >= 0; }); };
-  var roster = people.filter(function (p) { return listed(p, allCodes); });
+  var roster = people.filter(function (p) { return listed(p, seeCodes); });
   var list = roster.map(function (p, i) {
-    var s = stat[p.dispatcher_name] || { del: 0, gross: 0, noPrice: 0, mix: [0, 0, 0], mixUnk: 0, first: '', last: '' }, mine = (owned[p.dispatcher_name] || []).sort(function (a, b) { return a.name.localeCompare(b.name, 'ka'); });
-    /* card labels = companies of the drivers the dispatcher has TODAY (hide only: memberships, history and permissions are untouched) */
+    var s = stat[p.dispatcher_name] || { del: 0, gross: 0, noPrice: 0, eq: [0, 0, 0], eqUnk: 0, eqSrc: {}, first: '', last: '' }, mine = (mineAll[p.dispatcher_name] || []).slice().sort(function (a, b) { return a.name.localeCompare(b.name, 'ka'); });
     var codes = mine.map(function (m) { return m.code; }).filter(function (v, k, a) { return a.indexOf(v) === k; }).sort();
     var all = SCOPE.co === 'ALL', H = all ? tmHist(p.dispatcher_name) : null, raw = TMH.state === 'ok' ? TMH.rows[p.dispatcher_name] || null : null;
-    var nDorm = mine.filter(function (m) { return m.dorm; }).length;
     var hOrders = H ? Number(H.hist_orders) || 0 : 0, hGross = H ? Number(H.hist_gross) || 0 : 0, hNoPrice = H ? Number(H.hist_unknown_price_orders) || 0 : 0;
+    /* history types only where the row carries them and they add up to its orders; otherwise every history order is "type unknown" */
+    var hEq = [0, 0, 0], hUnk = hOrders;
+    if (H && H.eq1 != null) { var q = [Number(H.eq1) || 0, Number(H.eq2) || 0, Number(H.eq3) || 0], qu = Number(H.eq_unknown) || 0; if (q[0] + q[1] + q[2] + qu === hOrders) { hEq = q; hUnk = qu; } }
     var first = [s.first, H && H.first_day].filter(Boolean).sort()[0] || '', last = [s.last, H && H.last_day].filter(Boolean).sort().pop() || '';
-    return { id: 'team|' + p.dispatcher_name, idx: i, name: p.dispatcher_name, codes: codes, drivers: mine, n: mine.length - nDorm, nDorm: nDorm, s: s, H: H, raw: raw,
+    var prof = TMP.state === 'ok' ? TMP.rows[p.email] || null : null, t = prof && prof.employment_start ? tmTenure(prof.employment_start, today) : null;
+    var lim = prof && prof.driver_limit != null && isFinite(Number(prof.driver_limit)) ? Number(prof.driver_limit) : null;
+    /* a dispatcher who also works in a company this manager cannot see: the count would be partial, so no free places are claimed */
+    var reach = Array.isArray(p.company_codes) ? p.company_codes.map(function (x) { return String(x).trim().toUpperCase(); }) : allCodes, partial = reach.some(function (x) { return seeCodes.indexOf(x) < 0; });
+    var nDorm = mine.filter(function (m) { return m.dorm; }).length, n = mine.length;
+    return { id: 'team|' + p.dispatcher_name, idx: i, name: p.dispatcher_name, email: p.email, codes: codes, drivers: mine, n: n, nDorm: nDorm, s: s, H: H, raw: raw,
       orders: s.del + hOrders, gross: s.gross + hGross, noPrice: s.noPrice + hNoPrice, first: first, last: last,
-      mix: [s.mix[0] + (H ? Number(H.v1) || 0 : 0), s.mix[1] + (H ? Number(H.v2) || 0 : 0), s.mix[2] + (H ? Number(H.v3p) || 0 : 0)], mixUnk: s.mixUnk + (H ? Number(H.v_unknown) || 0 : 0),
-      rating: null, tenure: null, free: null,
+      eq: [s.eq[0] + hEq[0], s.eq[1] + hEq[1], s.eq[2] + hEq[2]], eqUnk: s.eqUnk + hUnk, hEq: hEq, hUnk: hUnk,
+      prof: prof, tenureT: t, tenure: t ? t.days : null, limit: lim, partial: partial,
+      free: lim == null || partial ? null : Math.max(0, lim - n), over: lim != null && !partial && n > lim ? n - lim : 0, rating: null,
       show: all || mine.some(function (m) { return myCodes.indexOf(String(m.code).toUpperCase()) >= 0; }) || (Array.isArray(p.company_codes) && listed(p, myCodes)) };
   });
   list.sort(function (a, b) { return a.name.localeCompare(b.name, 'ka'); }).forEach(function (x, i) { x.idx = i; });
   /* registry drivers attached to a name that has no card (a departed dispatcher, a switched-off account, a manager): said, not hidden */
   var shown = {}; list.forEach(function (x) { shown[x.name] = 1; });
-  list.others = Object.keys(owned).filter(function (n) { return !shown[n]; }).map(function (n) { var d = owned[n].filter(function (m) { return m.dorm; }).length; return { name: n, n: owned[n].length - d, nDorm: d }; }).sort(function (a, b) { return b.n - a.n || a.name.localeCompare(b.name, 'ka'); });
-  list.sum = { total: total, cards: list.reduce(function (s, x) { return s + x.drivers.length; }, 0), others: list.others.reduce(function (s, o) { return s + o.n + o.nDorm; }, 0), none: none };
+  list.others = Object.keys(scoped).filter(function (nm) { return !shown[nm]; }).map(function (nm) { var d = scoped[nm].filter(Boolean).length; return { name: nm, n: scoped[nm].length - d, nDorm: d }; }).sort(function (a, b) { return b.n - a.n || a.name.localeCompare(b.name, 'ka'); });
+  list.sum = { total: total, cards: list.reduce(function (s, x) { return s + (scoped[x.name] || []).length; }, 0), others: list.others.reduce(function (s, o) { return s + o.n + o.nDorm; }, 0), none: none };
   return list;
 }
 /* sorting: numbers, not formatted text; a missing value stays last in both directions; ties keep the original (name) order */
@@ -13293,25 +13396,36 @@ function tmSorted(list, key, dir) {
   });
 }
 var TM_ST = { work: ['circle-check', 'აქტიური — ბოლო 30 დღეში ტვირთით'], rest: ['moon', 'ისვენებს'], repair: ['wrench', 'შეკეთება'], dorm: ['clock-3', '30+ დღე უტვირთოდ'] };
+var TM_EQ = ['1-მანქანიანი', '2-მანქანიანი', '3-მანქანიანი'];
+/* the right side of the footer: free places against the entered limit (never typed by management, never by trailer type) */
+function tmCapHtml(x) {
+  var at = ' data-u-tm-cap="' + h(x.id) + '"';
+  if (x.partial) return '<button type="button" class="u-tm-cap"' + at + ' aria-label="' + h(x.name) + ': თავისუფალი ადგილები უცნობია — ზოგი კომპანია ამ ანგარიშით არ ჩანს"><span class="u-tm-capn"><strong>?</strong></span><small>ნაწილობრივი მონაცემი</small></button>';
+  if (x.limit == null) return '<button type="button" class="u-tm-cap u-tm-capunk"' + at + ' aria-label="' + h(x.name) + ': მძღოლების ლიმიტი შესავსებია — შეყვანა">ლიმიტი შესავსებია</button>';
+  var lbl = x.over ? 'ლიმიტს აჭარბებს ' + x.over + '-ით' : x.free ? 'თავისუფალი ადგილი' : 'თავისუფალი ადგილი არ არის';
+  return '<button type="button" class="u-tm-cap' + (x.over ? ' u-tm-over' : x.free ? '' : ' u-tm-full') + '"' + at + ' aria-label="' + h(x.name) + ': ' + h(lbl) + (x.free ? ' — ' + x.free : '') + ' (ლიმიტი ' + x.limit + ', მიმაგრებულია ' + x.n + '). ლიმიტის შეცვლა">' +
+    '<span class="u-tm-capn">' + (x.free ? ic('square-dashed', 'u-tm-slot') : '') + '<strong>' + (x.free ? '+' + x.free : '0') + '</strong></span><small>' + h(lbl) + '</small></button>';
+}
 function tmCard(x) {
-  var fl = TM.flip === x.id, tot = x.mix[0] + x.mix[1] + x.mix[2], pc = function (i) { return tot ? Math.round(x.mix[i] * 100 / tot) : 0; };
-  var cover = x.first ? 'ჩანაწერები · ' + tmMonth(x.first) + (x.last && tmMonth(x.last) !== tmMonth(x.first) ? ' – ' + tmMonth(x.last) : '') : 'ჩანაწერები ჯერ არ არის';
+  var fl = TM.flip === x.id, sh = tmShares(x.eq), known = x.eq[0] + x.eq[1] + x.eq[2], all = known + x.eqUnk, ten = tmTenureText(x.tenureT), stars = '';
+  for (var i = 0; i < 5; i++) stars += ic('star');
   return '<article class="u-card u-team' + (fl ? ' u-flipped' : '') + '" data-u-card="' + h(x.id) + '"><div class="u-turn">' +
-    '<div class="u-front"' + (fl ? ' inert' : '') + '><span class="u-cardtop"><span class="u-tm-cos">' + h(x.codes.join(' · ') || 'მძღოლი ჯერ არ ჰყავს') + '</span>' +
-      '<button type="button" class="u-tm-rate" data-u-tm-rate="' + h(x.id) + '" aria-label="' + h(x.name) + ': შეფასება ჯერ არ არის. შეფასების ფანჯრის გახსნა"><span>შეფასება ჯერ არ არის</span></button></span>' +
-      '<button type="button" class="u-tm-main" data-u-flip="' + h(x.id) + '" aria-expanded="' + fl + '" aria-label="' + h(x.name) + ' — მძღოლებისა და სტატისტიკის ნახვა"><span class="u-cardname">' + h(x.name) + '</span>' +
-        '<span class="u-tenure">' + ic('briefcase') + 'სტაჟი შესავსებია</span><span class="u-tm-cover">' + h(cover) + '</span>' +
-        '<span class="u-totals"><span><small>ტვირთები სულ</small><strong>' + tmNum(x.orders) + '</strong></span><span><small>გროსი სულ</small><strong>$' + tmNum(x.gross) + '</strong></span></span>' +
-        (x.noPrice ? '<span class="u-tm-noprice">ფასი უცნობია · ' + x.noPrice + ' ტვირთი (გროსში არ შედის)</span>' : '') + '</button>' +
-      '<span class="u-teamfoot"><button type="button" class="u-tag u-tm-badge' + (x.n ? '' : ' u-neutral') + '" data-u-flip="' + h(x.id) + '" aria-label="' + h(x.name) + ': ' + x.n + ' მძღოლი — სიის ნახვა">' + x.n + ' მძღოლი</button>' +
-        (x.nDorm ? '<small class="u-tm-dorm" title="ბოლო 30 დღეში ტვირთი არ ჰქონია და არც ისვენებს">+' + x.nDorm + ' უტვირთო</small>' : '') +
-        '<button type="button" class="u-tm-cap" data-u-tm-cap="' + h(x.id) + '" aria-label="' + h(x.name) + ': დამატების ადგილები — შესავსებია">შესავსებია</button></span></div>' +
-    '<div class="u-back"' + (fl ? '' : ' inert') + '><div class="u-tm-backhead"><div><span class="u-cardname">' + h(x.name) + '</span><small class="u-muted">მძღოლები</small></div>' +
+    '<div class="u-front" data-u-flip="' + h(x.id) + '"' + (fl ? ' inert' : '') + '><span class="u-cardtop"><span class="u-tm-cos">' + h(x.codes.join(' · ') || 'მძღოლი ჯერ არ ჰყავს') + '</span>' +
+      '<button type="button" class="u-tm-rate" data-u-tm-rate="' + h(x.id) + '" aria-label="' + h(x.name) + ': შეფასება ჯერ არ არის"><span class="u-tm-stars">' + stars + '</span><span class="u-tm-rnone">—</span></button></span>' +
+      '<button type="button" class="u-tm-main" data-u-flip="' + h(x.id) + '" aria-expanded="' + fl + '" aria-label="' + h(x.name) + ' — მძღოლები და გამოცდილება"><span class="u-cardname">' + h(x.name) + '</span></button>' +
+      '<span class="u-tenure">' + ic('briefcase') + '<span class="u-tm-ten' + (ten ? '' : ' u-tm-tenunk') + '">' + (ten ? h(ten) : 'სტაჟი შესავსებია') + '</span>' +
+        '<button type="button" class="u-tm-edit" data-u-tm-edit="' + h(x.id) + '" aria-label="' + h(x.name) + ': სამუშაოს დაწყების თარიღი და მძღოლების ლიმიტი — შეცვლა">' + ic('pencil') + '</button></span>' +
+      '<span class="u-totals"><span><small>ტვირთები სულ</small><strong>' + tmNum(x.orders) + '</strong></span><span><small>გროსი სულ</small><strong>$' + tmNum(x.gross) + '</strong></span></span>' +
+      '<span class="u-teamfoot"><button type="button" class="u-tag u-tm-badge' + (x.n ? '' : ' u-neutral') + '" data-u-flip="' + h(x.id) + '" aria-label="' + h(x.name) + ': ' + x.n + ' მძღოლი — სიის ნახვა">' + x.n + ' მძღოლი</button>' + tmCapHtml(x) + '</span></div>' +
+    '<div class="u-back"' + (fl ? '' : ' inert') + '><div class="u-tm-backhead"><div><span class="u-cardname">' + h(x.name) + '</span><small class="u-muted">მძღოლები · ' + x.n + (x.nDorm ? ' · ' + x.nDorm + ' — 30+ დღე უტვირთოდ' : '') + '</small></div>' +
       '<button type="button" class="u-iconbtn u-backclose" data-u-unflip="' + h(x.id) + '" aria-label="' + h(x.name) + ' — ბარათის წინა მხარე">' + ic('rotate-ccw') + '</button></div>' +
       '<div class="u-backlist">' + (x.drivers.length ? x.drivers.map(function (d) { var st = TM_ST[d.st] || TM_ST.work;
         return '<div><span class="u-tm-drv"><span class="u-tm-st u-tm-st-' + d.st + '" title="' + h(st[1]) + '">' + ic(st[0]) + '<span class="u-sr">' + h(st[1]) + '</span></span><span>' + h(d.name) + (d.st !== 'work' ? ' <small>· ' + h(st[1]) + '</small>' : '') + '</span></span><small>' + h(d.code) + '</small></div>'; }).join('') : '<div><span class="u-muted">მძღოლი ჯერ არ ჰყავს</span></div>') + '</div>' +
-      '<div class="u-tm-dist"><div class="u-tm-disthead"><span>ტვირთების განაწილება</span><button type="button" class="u-tm-info" data-u-tm-info="' + h(x.id) + '" aria-label="' + h(x.name) + ': სტატისტიკის განმარტება და პერიოდი">' + ic('info') + '</button></div>' +
-        (tot ? '<div class="u-tm-distvals">' + ['1 მანქანა', '2 მანქანა', '3+ მანქანა'].map(function (t, i) { return '<div><span>' + t + '</span><strong>' + pc(i) + '%</strong></div>'; }).join('') + '</div>' : '<div class="u-tm-distnone">მონაცემები ჯერ არ არის</div>') + '</div>' +
+      '<div class="u-tm-dist"><div class="u-tm-disthead"><span>გამოცდილება მისაბმელის ტიპით</span><button type="button" class="u-tm-info" data-u-tm-info="' + h(x.id) + '" aria-label="' + h(x.name) + ': გამოცდილებისა და ჯამების განმარტება">' + ic('info') + '</button></div>' +
+        (sh ? '<div class="u-mix" aria-hidden="true">' + x.eq.map(function (v) { return v ? '<span style="width:' + (v * 100 / known).toFixed(2) + '%"></span>' : '<span hidden></span>'; }).join('') + '</div>' +
+          '<div class="u-tm-distvals">' + TM_EQ.map(function (t, k) { return '<div><span>' + t + '</span><strong>' + sh[k] + '%</strong></div>'; }).join('') + '</div>' +
+          '<small class="u-tm-cov">ტიპი ცნობილია ' + tmNum(known) + ' / ' + tmNum(all) + ' ტვირთზე</small>'
+          : '<div class="u-tm-distnone">მონაცემები დასაზუსტებელია</div><small class="u-tm-cov">' + (all ? 'ტიპი დასადასტურებელია ' + tmNum(all) + ' ტვირთზე' : 'ჩაბარებული ტვირთი ჯერ არ არის') + '</small>') + '</div>' +
     '</div></div></article>';
 }
 function tmFlip(id) {
@@ -13321,24 +13435,49 @@ function tmFlip(id) {
 }
 /* ---- dialogs: native <dialog> (focus stays inside, Escape closes it, focus returns to the button that opened it) ---- */
 function tmDlgHead(title, sub) { return '<div class="u-tm-dhead"><div><h2 id="u-tm-dtitle">' + h(title) + '</h2>' + (sub ? '<p>' + h(sub) + '</p>' : '') + '</div><button type="button" class="u-iconbtn" data-u-tm-close aria-label="ფანჯრის დახურვა">' + ic('x') + '</button></div>'; }
+/* what the form shows next to the limit: the counted drivers and the derived places (management never types the places) */
+function tmCalc(x, limText) {
+  var t = String(limText == null ? '' : limText).trim(), base = 'ამჟამად მიმაგრებულია <b>' + x.n + ' მძღოლი</b> (ყველა კომპანიით; დასვენება, შეკეთება და 30+ დღე უტვირთოდ — ჩათვლით)';
+  if (x.partial) return base + ' · ზოგი კომპანია ამ ანგარიშით არ ჩანს — თავისუფალი ადგილები ვერ დაითვლება.';
+  if (t === '') return base + ' · ლიმიტის გარეშე თავისუფალი ადგილები უცნობია.';
+  if (!/^\d{1,6}$/.test(t)) return base + '.';
+  var lim = Number(t);
+  return base + ' · ' + (x.n > lim ? 'ლიმიტს აჭარბებს <b>' + (x.n - lim) + '-ით</b> — თავისუფალი ადგილი: <b>0</b>' : 'თავისუფალი ადგილი: <b>' + (lim - x.n) + '</b>') + '.';
+}
 function tmDlgBody(kind, x) {
-  if (kind === 'add') return tmDlgHead('დისპეჩერის დამატება', 'ჯერ არ არის ჩართული') + '<div class="u-tm-dbody"><p>აპიდან ახალი დისპეჩერის დამატება ჯერ არ არის ჩართული: ამჟამად დისპეჩერის ჩანაწერი იგივე წვდომის ჩანაწერია (შესვლა, როლი და კომპანიები). ' +
-    'რა უნდა იქმნებოდეს ამ ღილაკით — მხოლოდ პროფილი თუ წვდომაც — ჯერ შესათანხმებელია, ამიტომ აქ არაფერი ინახება და მოწვევა არ იგზავნება.</p><p>არსებული დისპეჩერების წვდომა იმართება გვერდზე „წვდომა და დარჩენილი საქმეები“.</p>' +
+  if (kind === 'add') return tmDlgHead('დისპეჩერის დამატება', 'ჯერ არ არის ჩართული') + '<div class="u-tm-dbody"><p>ახალი დისპეჩერის ანგარიშის შექმნის წესი ჯერ შესათანხმებელია — აქ არაფერი ინახება და მოწვევა არ იგზავნება. არსებული ანგარიშების წვდომა იმართება გვერდზე „წვდომა და დარჩენილი საქმეები“.</p>' +
     '<div class="u-tm-dact"><button type="button" class="u-btn" data-u-tm-close>დახურვა</button><button type="button" class="u-btn" data-u-route="dispatchers">წვდომა და დარჩენილი საქმეები →</button></div></div>';
   if (kind === 'rate') return tmDlgHead('დისპეჩერის რეიტინგი', x.name) + '<div class="u-tm-dbody"><div class="u-tm-score"><span>—</span><div>შეფასება ჯერ არ არის<small>ქულა 0-ით არ ჩანაცვლდება.</small></div></div>' +
-    '<h3>' + ic('sparkles') + 'AI შეფასება</h3><p>შეფასების წესი — პერიოდი, კრიტერიუმები, წონები და მინიმალური მონაცემები — ჯერ შეთანხმებული არ არის. ამიტომ ქულა, AI დასკვნა და რჩევები არ იქმნება. ისტორიის ნაკლებობა დაბალ რეიტინგს არ ნიშნავს.</p>' +
-    '<details class="u-tm-method"><summary>როგორ ჩამოყალიბდება რეალური ქულა?</summary><p>ქულა შეთანხმებული, განმეორებადი წესით დაითვლება; AI ახსნის შედეგს და მოამზადებს რჩევებს. ჯამური გროსი და სამუშაო სტაჟი თავისთავად ქულას არ განსაზღვრავს. სისტემის შეცდომა თანამშრომელს დარღვევად არ ჩაეთვლება; თითო დასკვნას შესაბამისი ფაქტი და პერიოდი უნდა ახლდეს.</p><p>რეიტინგი არ მოქმედებს ცვლის დახურვაზე, მძღოლების განაწილებაზე, ანაზღაურებასა და წვდომაზე.</p></details></div>';
-  if (kind === 'cap') return tmDlgHead('დამატების შესაძლებლობა', x.name) + '<div class="u-tm-dbody"><p>თავისუფალი ადგილების შეყვანა ჯერ არ არის ჩართული: ტევადობის წესი (დასვენება, საცდელი ადგილი, შერეული მისაბმელები) ჯერ შესათანხმებელია. ამიტომ აქ ცვლილება არ ინახება და ადგილები ნაჩვენებია როგორც „შესავსებია“ — ნულად არ ითვლება.</p>' +
-    '<p>დღეს მიმაგრებული: <b>' + x.n + ' მძღოლი</b>' + (x.nDorm ? ' · +' + x.nDorm + ' უტვირთო 30+ დღე' : '') + '.</p><div class="u-tm-dact"><button type="button" class="u-btn" data-u-tm-close>დახურვა</button></div></div>';
-  /* info: what the figures contain, their period and what is left out */
-  var H = x.H, R = x.raw, d = (R && R.detail) || {}, s = x.s, all = SCOPE.co === 'ALL';
-  var li = function (t) { return '<li>' + t + '</li>'; }, rows = [];
+    '<p>რეიტინგის წესი ჯერ შეთანხმებული არ არის, ამიტომ ქულა, AI დასკვნა და რჩევები არ იქმნება. ისტორიის ნაკლებობა დაბალ რეიტინგს არ ნიშნავს.</p><div class="u-tm-dact"><button type="button" class="u-btn" data-u-tm-close>დახურვა</button></div></div>';
+  if (kind === 'edit') {
+    var P0 = x.prof, today = workToday_(), st0 = P0 && P0.employment_start ? String(P0.employment_start).slice(0, 10) : '', lim0 = P0 && P0.driver_limit != null ? String(P0.driver_limit) : '';
+    var off = TMP.state !== 'ok', why = TMP.state === 'absent' ? 'შენახვა ჯერ ვერ ხერხდება: სერვერზე დისპეჩერის მონაცემების ცხრილი ჯერ არ არის.' : TMP.state === 'error' ? 'მიმდინარე მონაცემები ვერ წაიკითხა (' + TMP.err + ') — შენახვა არ ჩაირთვება, სანამ არ წაიკითხება.' : 'მიმდინარე მონაცემები იტვირთება…';
+    return tmDlgHead('დისპეჩერის მონაცემები', x.name) + '<form class="u-tm-dbody u-tm-form" id="u-tm-form" novalidate>' +
+      '<label class="u-tm-field" for="u-tm-start">სამუშაოს დაწყების თარიღი</label><input class="u-input" type="date" id="u-tm-start" min="2000-01-01" max="' + h(today) + '" value="' + h(st0) + '"' + (off ? ' disabled' : '') + '>' +
+      '<p class="u-tm-hint">ფაქტობრივი დაწყება — არ ივსება შეკვეთებიდან ან ანგარიშიდან. ცარიელი = ჯერ არ არის შეყვანილი.</p>' +
+      '<label class="u-tm-field" for="u-tm-limit">მძღოლების ლიმიტი — სულ, ყველა კომპანიაში</label><input class="u-input" type="number" id="u-tm-limit" min="0" step="1" inputmode="numeric" placeholder="არ არის მითითებული" value="' + h(lim0) + '"' + (off ? ' disabled' : '') + '>' +
+      '<p class="u-tm-calc" id="u-tm-calc" aria-live="polite">' + tmCalc(x, lim0) + '</p>' +
+      '<p class="u-tm-err" id="u-tm-err" role="alert"' + (off ? '' : ' hidden') + '>' + (off ? h(why) : '') + '</p>' +
+      (P0 && P0.updated_at ? '<p class="u-tm-hint">ბოლოს შეცვალა ' + h(P0.updated_by || '—') + ' · ' + h(uDay(String(P0.updated_at).slice(0, 10))) + '</p>' : '') +
+      '<div class="u-tm-dact"><button type="button" class="u-btn" data-u-tm-close>გაუქმება</button><button type="submit" class="u-btn u-primary" id="u-tm-save"' + (off ? ' disabled' : '') + '>შენახვა</button></div></form>';
+  }
+  /* info: what the experience and the totals contain, their period and what is left out */
+  var H = x.H, R = x.raw, d = (R && R.detail) || {}, s = x.s, all = SCOPE.co === 'ALL', known = x.eq[0] + x.eq[1] + x.eq[2];
+  var li = function (t) { return '<li>' + t + '</li>'; }, eqRows = [], rows = [];
+  eqRows.push(li('<b>ცნობილია ' + tmNum(known) + ' / ' + tmNum(known + x.eqUnk) + ' ტვირთზე.</b> ' + (x.eqUnk ? tmNum(x.eqUnk) + ' ტვირთის ტიპი დადასტურებული არ არის: ის პროცენტში არ შედის (ტვირთებსა და გროსში — შედის).' : 'ყველა დათვლილ ტვირთს დადასტურებული ტიპი აქვს.')));
+  var src = s.eqSrc || {}, appK = s.eq[0] + s.eq[1] + s.eq[2];
+  if (appK) eqRows.push(li('<b>აპში:</b> ' + tmNum(appK) + ' ტვირთი' + [['archive_confirmed', 'იგივე გადაზიდვა და იგივე მძღოლი, რაც მფლობელის დადასტურებულ არქივის შეკვეთაში'], ['pickup_snapshot', 'მძღოლის მისაბმელი რეესტრში, დაფიქსირებული ტვირთის აღებისას'], ['owner_confirmed', 'მფლობელის დადასტურება']]
+    .filter(function (p) { return src[p[0]]; }).map(function (p) { return ' · ' + tmNum(src[p[0]]) + ' — ' + p[1]; }).join('') + '.'));
+  if (TME.state === 'error' || TME.err) eqRows.push(li('აპის ტვირთების მისაბმელის ტიპი ვერ წაიკითხა (' + h(TME.err) + ') — ეს ტვირთები ახლა „ტიპის გარეშეა“.'));
+  if (all && H) eqRows.push(li('<b>ისტორიული ფაილები:</b> ' + (x.hEq[0] + x.hEq[1] + x.hEq[2] ? tmNum(x.hEq[0] + x.hEq[1] + x.hEq[2]) + ' შეკვეთა — მფლობელის დადასტურებით (' + h(d.eq_register || 'რეესტრი') + ')' : 'დადასტურებული ტიპი ჯერ არ არის') + (x.hUnk ? '; ' + tmNum(x.hUnk) + ' — ტიპის გარეშე' : '') + '.'));
+  if (!all) eqRows.push(li('ისტორიული ფაილები ჩანს მხოლოდ „ყველა კომპანია“ ხედში.'));
   rows.push(li('<b>აპში:</b> ' + tmNum(s.del) + ' ჩაბარებული ტვირთი, $' + tmNum(s.gross) + (s.noPrice ? ' · ფასი უცნობია ' + s.noPrice + ' ტვირთზე (გროსში არ შედის)' : '') + (s.first ? ' · ' + h(uDay(s.first)) + ' – ' + h(uDay(s.last || s.first)) : '') + '.'));
   if (!all) rows.push(li('ისტორიული ფაილების ჩანაწერები ჩანს მხოლოდ „ყველა კომპანია“ ხედში: ისინი ადამიანს ეკუთვნის და აპის კომპანიებად ზუსტად არ იყოფა.'));
   else if (H) {
     rows.push(li('<b>ისტორიული ფაილები:</b> ' + tmNum(H.hist_orders) + ' ტვირთი, $' + tmNum(H.hist_gross) + (Number(H.hist_unknown_price_orders) ? ' · ფასი დასაზუსტებელია ' + tmNum(H.hist_unknown_price_orders) + ' ტვირთზე (გროსში არ შედის)' : '') + (H.first_day ? ' · ' + h(uDay(H.first_day)) + ' – ' + h(uDay(H.last_day)) : '') + '.'));
     if (d.overlap_orders) rows.push(li('აპშიც არსებული ' + tmNum(d.overlap_orders) + ' ისტორიული ტვირთი ორჯერ არ ითვლება (ითვლება აპის ჩანაწერი' + (d.overlap_other_dispatcher ? '; აქედან ' + tmNum(d.overlap_other_dispatcher) + ' აპში სხვა დისპეჩერზეა' : '') + ').'));
     if (d.withheld_orders) rows.push(li('შეკავებულია ' + tmNum(d.withheld_orders) + ' ტვირთი' + (Number(d.withheld_gross) ? ', $' + tmNum(d.withheld_gross) : '') + ': აპის პერიოდშია, მაგრამ აპის ჩანაწერთან დამთხვევა ვერ დადასტურდა.'));
+    if (d.excluded_owner_orders) rows.push(li('მფლობელის გადაწყვეტილებით არ ითვლება ' + tmNum(d.excluded_owner_orders) + ' ხელმოუწერელი ჩანაწერი ($' + tmNum(d.excluded_owner_gross) + ') — არც ტვირთებში, არც გროსში, არც გამოცდილებაში.'));
     if (d.sd_extra_orders) rows.push(li('SD ანგარიშის დამატებითი ' + tmNum(d.sd_extra_orders) + ' ტვირთი, $' + tmNum(d.sd_extra_gross) + ' — მიკუთვნება დასადასტურებელია, ჯამში არ შედის.'));
     if (d.basis) rows.push(li('იდენტობა: ' + h(d.basis) + '.'));
   } else if (R && R.status === 'pending') {
@@ -13349,16 +13488,15 @@ function tmDlgBody(kind, x) {
   else if (TMH.state === 'absent' || TMH.state === 'unknown') rows.push(li('ისტორიული ფაილების ჩანაწერები ჯერ არ არის ჩატვირთული — ნაჩვენებია მხოლოდ აპის ჩანაწერები.'));
   else if (TMH.state === 'error') rows.push(li('ისტორიული ჩანაწერები ვერ წაიკითხა (' + h(TMH.err) + ') — ნაჩვენებია მხოლოდ აპის ჩანაწერები.'));
   else rows.push(li('ამ დისპეჩერისთვის ისტორიულ ფაილებში დადასტურებული ჩანაწერი არ არის.'));
-  var tot = x.mix[0] + x.mix[1] + x.mix[2];
-  return tmDlgHead('ტვირთების სტატისტიკა', x.name) + '<div class="u-tm-dbody"><h3>რას ნიშნავს განაწილება?</h3><p>1, 2 და 3+ არის მანქანების რაოდენობა თითო ჩაბარებულ ტვირთში — არა მისაბმელის ტიპი. ' +
-    (tot ? 'ითვლება ' + tmNum(tot) + ' ტვირთი' + (x.mixUnk ? '; ' + tmNum(x.mixUnk) + ' ტვირთის მანქანების რაოდენობა უცნობია და პროცენტში არ შედის' : '') + '.' : 'მონაცემები ჯერ არ არის.') + '</p>' +
-    '<h3>„ტვირთები სულ“ და „გროსი სულ“</h3><ul class="u-tm-list">' + rows.join('') + '</ul>' +
-    '<p class="u-note">ეს არის ჩანაწერებით დადასტურებული ჯამი, არა სრული კარიერული შემოსავალი: ფაილები და აპი ყველა პერიოდს არ ფარავს. აპის GROSS = ტვირთის ფასი − ბროკერის საკომისიო; ფაილებში — ტვირთის ფასი. GROSS არ არის ანაზღაურება. „ჩანაწერები“ არის პირველი და ბოლო ჩანაწერის თარიღი, არა სამუშაო სტაჟი.</p></div>';
+  var period = x.first ? tmMonth(x.first) + (x.last && tmMonth(x.last) !== tmMonth(x.first) ? ' – ' + tmMonth(x.last) : '') : '';
+  return tmDlgHead('გამოცდილება და ჯამები', x.name) + '<div class="u-tm-dbody"><h3>გამოცდილება მისაბმელის ტიპით</h3><p>თითო ჩაბარებული ტვირთი ითვლება ერთხელ — იმ მძღოლის მისაბმელით (1-, 2- ან 3-მანქანიანი), რომელმაც ის წაიღო; ტვირთში მანქანების რაოდენობა აქ არ ითვლება. ძველი სიის მისაბმელის მნიშვნელობა მხოლოდ მინიშნებაა და დადასტურების გარეშე არ ითვლება.</p>' +
+    '<ul class="u-tm-list">' + eqRows.join('') + '</ul><h3>„ტვირთები სულ“ და „გროსი სულ“</h3><ul class="u-tm-list">' + rows.join('') + '</ul>' +
+    '<p class="u-note">' + (period ? 'ჩანაწერების პერიოდი: ' + h(period) + ' — პირველი და ბოლო ჩანაწერი, არა სამუშაო სტაჟი. ' : '') + 'ეს ჩანაწერებით დადასტურებული ჯამია, არა სრული კარიერა. აპის GROSS = ტვირთის ფასი − ბროკერის საკომისიო; ფაილებში — ტვირთის ფასი. GROSS არ არის ანაზღაურება.</p></div>';
 }
 /* the opener is remembered as a selector, so focus can return to it even if the cards were painted again meanwhile */
 function tmRetSel(el) {
   if (!el) return null; if (el.id) return '#' + el.id;
-  var at = ['data-u-tm-rate', 'data-u-tm-cap', 'data-u-tm-info'].filter(function (k) { return el.hasAttribute(k); })[0];
+  var at = ['data-u-tm-rate', 'data-u-tm-cap', 'data-u-tm-info', 'data-u-tm-edit'].filter(function (k) { return el.hasAttribute(k); })[0];
   return at ? '#u-team [' + at + '="' + String(el.getAttribute(at)).replace(/["\\]/g, '\\$&') + '"]' : null;
 }
 function tmOpen(kind, x, trigger) {
@@ -13367,7 +13505,14 @@ function tmOpen(kind, x, trigger) {
   dl.innerHTML = tmDlgBody(kind, x);
   dl.onclose = function () { if (TM.dlg) tmClose(); };                            /* closed by the browser (Escape) — same clean-up */
   try { dl.showModal(); } catch (e) { dl.setAttribute('open', ''); }
-  var f = dl.querySelector('[data-u-tm-close]'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) {} }
+  var f = dl.querySelector('#u-tm-form');
+  if (f) {
+    f.onsubmit = function (e) { e.preventDefault(); tmSave(x.id); };
+    var li = f.querySelector('#u-tm-limit'), calc = f.querySelector('#u-tm-calc');
+    if (li && calc) li.oninput = function () { calc.innerHTML = tmCalc(x, li.value); };
+  }
+  var first = f && !f.querySelector('#u-tm-save').disabled ? f.querySelector(trigger && trigger.hasAttribute('data-u-tm-cap') ? '#u-tm-limit' : '#u-tm-start') : dl.querySelector('[data-u-tm-close]');
+  if (first) { try { first.focus({ preventScroll: true }); } catch (e) {} }
 }
 function tmClose() {
   var dl = document.getElementById('u-tm-dlg'), sel = TM.ret; TM.dlg = null; TM.ret = null;
@@ -13375,34 +13520,76 @@ function tmClose() {
   var ret = null; try { ret = sel ? document.querySelector(sel) : null; } catch (e) {}
   if (ret) { try { ret.focus({ preventScroll: true }); } catch (e) {} }
 }
+/* the one write: validated here AND on the server (dispatcher_profile_save_v1: management only, start ≤ business day, limit ≥ 0);
+   the form carries the updated_at it was opened with, so a change made meanwhile by someone else is never silently overwritten */
+async function tmSave(id) {
+  var dl = document.getElementById('u-tm-dlg'), f = dl && dl.querySelector('#u-tm-form'), x = tmFind(id);
+  if (!f || !x || TM.saving || !TM.dlg || TM.dlg.id !== id) return;
+  var btn = f.querySelector('#u-tm-save'), out = f.querySelector('#u-tm-err'), st = f.querySelector('#u-tm-start').value.trim(), ls = f.querySelector('#u-tm-limit').value.trim(), today = workToday_();
+  var say = function (m) { out.innerHTML = m; out.hidden = false; };
+  if (btn.disabled) return;
+  if (st && (!/^\d{4}-\d{2}-\d{2}$/.test(st) || st > today || st < '2000-01-01')) return say('თარიღი უნდა იყოს 2000 წლიდან ' + h(uDay(today)) + '-ის ჩათვლით (დღევანდელი სამუშაო დღე). არაფერი შეინახა.');
+  if (ls && !/^\d{1,6}$/.test(ls)) return say('ლიმიტი — მთელი რიცხვი, 0 ან მეტი; ცარიელი = არ არის მითითებული. არაფერი შეინახა.');
+  var prev = TMP.rows[x.email] || null, email = USER.email;
+  TM.saving = true; btn.disabled = true; btn.textContent = 'ინახება…'; out.hidden = true;
+  try {
+    var r = await sb.rpc('dispatcher_profile_save_v1', { p_email: x.email, p_start: st || null, p_limit: ls === '' ? null : Number(ls), p_expected_updated_at: prev ? prev.updated_at : null });
+    if (!USER || USER.email !== email) return;
+    if (r.error) {
+      var c = String(r.error.code || '');
+      if (c === '40001') {
+        await tmProfLoad(true); var now = TMP.rows[x.email] || null;
+        say('ამასობაში ეს მონაცემები სხვამ შეცვალა: ახლა შენახულია — დაწყება ' + h(now && now.employment_start ? uDay(String(now.employment_start).slice(0, 10)) : '—') + ', ლიმიტი ' + h(now && now.driver_limit != null ? String(now.driver_limit) : '—') +
+          (now && now.updated_by ? ' (' + h(now.updated_by) + ')' : '') + '. შენი ჩანაწერი არ შენახულა — გადაამოწმე და დააჭირე „შენახვა“ ხელახლა.');
+        return;
+      }
+      say(c === '42501' ? 'შენახვა შეუძლია მხოლოდ მენეჯმენტს. არაფერი შეინახა.' : 'ვერ შეინახა (' + h(uErr(r.error)) + '). არაფერი შეცვლილა — სცადე ხელახლა.');
+      return;
+    }
+    var row = Array.isArray(r.data) ? r.data[0] : r.data;
+    if (!row || row.email !== x.email) { say('სერვერმა პასუხი არ დააბრუნა — გადაამოწმე განახლების შემდეგ.'); await tmProfLoad(true); return; }
+    TMP.rows[row.email] = row; TMP.state = 'ok';
+    var sel = TM.ret; tmClose(); feedback('შენახულია — ' + x.name);
+    if (uiActive() && MTAB === 'team') { render(); var b = null; try { b = sel ? document.querySelector(sel) : null; } catch (e) {} if (b) { try { b.focus({ preventScroll: true }); } catch (e) {} } }
+  } catch (e) { say('ვერ შეინახა (' + h(uErr(e)) + '). არაფერი შეცვლილა — სცადე ხელახლა.'); }
+  finally { TM.saving = false; if (btn.isConnected) { btn.disabled = false; btn.textContent = 'შენახვა'; } }
+}
 function tmFind(id) { return (TM.last || []).filter(function (x) { return x.id === id; })[0] || null; }
 PAGES.team = {
   paint: function (view) {
     TM.dlg = null; TM.ret = null;                                                     /* a repaint replaces the page, an open dialog included */
-    if (uReady() && TMH.state === 'unknown' && !TMH.loading) tmHistLoad(false).then(function () { if (uiActive() && MTAB === 'team' && !busyEditing() && !selectOpen()) render(); });
+    if (uReady()) {
+      var again = function () { if (uiActive() && MTAB === 'team' && !busyEditing() && !selectOpen()) render(); };
+      if (TMH.state === 'unknown' && !TMH.loading) tmHistLoad(false).then(again);
+      if (TMP.state === 'unknown' && !TMP.loading) tmProfLoad(false).then(again);
+      if (TME.state === 'unknown' && !TME.loading) tmEqLoad(false).then(again);
+    }
     var st = uStateHtml(), model = uReady() ? tmModel() : [], S = model.sum || { total: 0, cards: 0, others: 0, none: 0 };
-    var shown = model.filter(function (x) { return x.show; }), list = tmSorted(shown, TM.sort, TM.dir); TM.last = model;
-    var free = shown.slice().sort(function (a, b) { return a.n - b.n || a.idx - b.idx; }), all = SCOPE.co === 'ALL';
-    var hist = all ? (TMH.state === 'ok' ? '' : TMH.state === 'error' ? 'ისტორიული ჩანაწერები ვერ წაიკითხა — ჯამებში მხოლოდ აპის ჩანაწერებია.' : TMH.state === 'absent' ? 'ისტორიული ფაილების ჩანაწერები ჯერ არ არის ჩატვირთული — ჯამებში მხოლოდ აპის ჩანაწერებია.' : 'ისტორიული ჩანაწერები იტვირთება…')
-      : 'კომპანიის ფილტრით ჯამებში მხოლოდ ამ კომპანიის აპის ჩანაწერებია; ისტორიული ფაილები ჩანს „ყველა კომპანია“ ხედში.';
-    var cell = function (label, first) { return '<div class="u-tm-sumcell' + (first ? ' u-tm-sumfirst' : '') + '"><small>' + label + '</small><span><strong>—</strong>' + (first ? '<em class="u-tm-unk">შესავსებია · ' + model.length + ' დისპეჩერი</em>' : '<em>საცდელად —</em>') + '</span></div>'; };
+    var shown = model.filter(function (x) { return x.show; }), list = tmSorted(shown, TM.sort, TM.dir), all = SCOPE.co === 'ALL'; TM.last = model;
+    var notes = [];
+    if (!all) notes.push('კომპანიის ფილტრით ჯამებში მხოლოდ ამ კომპანიის აპის ჩანაწერებია; ისტორიული ფაილები ჩანს „ყველა კომპანია“ ხედში. მძღოლები და თავისუფალი ადგილები ითვლება ყველა კომპანიით.');
+    else if (TMH.state === 'error') notes.push('ისტორიული ჩანაწერები ვერ წაიკითხა — ჯამებში მხოლოდ აპის ჩანაწერებია.');
+    else if (TMH.state === 'absent') notes.push('ისტორიული ფაილების ჩანაწერები ჯერ არ არის ჩატვირთული — ჯამებში მხოლოდ აპის ჩანაწერებია.');
+    else if (TMH.state !== 'ok') notes.push('ისტორიული ჩანაწერები იტვირთება…');
+    if (TMP.state === 'error') notes.push('სტაჟი და ლიმიტი ვერ წაიკითხა (' + TMP.err + ').');
+    if (TME.state === 'error') notes.push('ტვირთების მისაბმელის ტიპი ვერ წაიკითხა — გამოცდილებაში აპის ტვირთები ტიპის გარეშეა.');
+    /* one truthful total: free places of the dispatchers that HAVE a limit, and how many have one at all (none = unknown, not 0) */
+    var withLim = shown.filter(function (x) { return x.limit != null && !x.partial; }), freeSum = withLim.reduce(function (s, x) { return s + x.free; }, 0), overN = withLim.filter(function (x) { return x.over; }).length;
+    var sumTxt = 'ლიმიტი შეყვანილია ' + withLim.length + ' / ' + shown.length + ' დისპეჩერზე' + (overN ? ' · ' + overN + ' ლიმიტს აჭარბებს' : '');
     view.innerHTML = '<div class="u-page" id="u-team"><div class="u-head"><div><h1>დისპეჩერები <span class="u-tm-count" aria-label="სულ ' + model.length + ' დისპეჩერი">' + (uReady() ? model.length : '') + '</span></h1><p class="u-sub">გამოცდილება და მძღოლების განაწილება</p></div>' +
       '<span class="u-tm-headact"><button type="button" class="u-btn" data-u-route="dispatchers">წვდომა და დარჩენილი საქმეები →</button><button type="button" class="u-btn u-primary" id="u-tm-add" data-u-tm-add>' + ic('plus') + 'დისპეჩერის დამატება</button></span></div>' + st +
-      (uReady() ? '<section class="u-tm-sum" aria-label="თავისუფალი ადგილები: შესავსებია ' + model.length + ' დისპეჩერისთვის">' + cell('ჯამში თავისუფალი', true) + cell('1-მანქანიანი') + cell('2-მანქანიანი') + cell('3-მანქანიანი') + '</section>' +
+      (uReady() ? '<section class="u-tm-sum" aria-label="თავისუფალი ადგილები სულ: ' + (withLim.length ? freeSum : 'უცნობია') + '. ' + h(sumTxt) + '"><small>თავისუფალი ადგილები სულ</small><strong>' + (withLim.length ? freeSum : '—') + '</strong><em' + (withLim.length < shown.length ? ' class="u-tm-unk"' : '') + '>' + h(sumTxt) + '</em></section>' +
         '<div class="u-toolbar">' + uScopeSelect('u-tm-co') + '<span class="u-count" id="u-tm-count">' + S.total + ' მიმდინარე მძღოლი · ბარათებზე ' + S.cards + (S.others ? ' · სხვა სახელებზე ' + S.others : '') + (S.none ? ' · დისპეჩერის გარეშე ' + S.none : '') + (all ? '' : ' · ნაჩვენებია ' + shown.length + ' / ' + model.length + ' დისპეჩერი') + '</span>' +
         '<label class="u-tm-sortl" for="u-tm-sort">დალაგება<select id="u-tm-sort">' + TM_SORTS.map(function (o) { return '<option value="' + o[0] + '"' + (TM.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' +
         '<button type="button" class="u-btn u-tm-dir" id="u-tm-dir" data-u-tm-dir' + (TM.sort === 'original' ? ' disabled' : '') + ' aria-label="' + (TM.dir < 0 ? 'კლებადი' : 'ზრდადი') + ' დალაგება. მიმართულების შეცვლა">' + ic(TM.dir < 0 ? 'arrow-down-wide-narrow' : 'arrow-up-narrow-wide') + '<span>' + (TM.dir < 0 ? 'კლებადი' : 'ზრდადი') + '</span></button></div>' + uScopeNote() +
-        '<p class="u-tm-note">თავისუფალი ადგილები, რეიტინგი და სამუშაო სტაჟი ჯერ არ არის შეყვანილი — ნაჩვენებია „შესავსებია“ (' + model.length + ' დისპეჩერი); დალაგებისას ასეთი ბარათები ბოლოშია.' + (hist ? ' ' + h(hist) : '') + '</p>' +
-        '<div class="u-teamwrap"><div class="u-teamcards">' + (list.map(tmCard).join('') || shEmpty(all ? 'აქტიური დისპეჩერი არ ჩანს' : 'ამ კომპანიაში მიმდინარე მძღოლებით დისპეჩერი არ არის', all ? 'შეამოწმე წვდომის სია.' : 'ყველა დისპეჩერი ჩანს „ყველა კომპანია“ ხედში.')) + '</div>' +
-        '<aside class="u-free"><h2>ადგილი ახალი მძღოლისთვის</h2><small>' + shown.length + ' დისპეჩერი · დალაგებულია მიმაგრებული მძღოლების რაოდენობით</small><div class="u-freelist">' +
-        free.map(function (x) { return '<button type="button" class="u-freerow" data-u-team-focus="' + h(x.id) + '"><span><b>' + h(x.name) + '</b><small>' + h(x.codes.join(' · ') || 'მძღოლი ჯერ არ ჰყავს') + (x.nDorm ? ' · +' + x.nDorm + ' უტვირთო' : '') + '</small></span><span class="u-freen">' + x.n + '<small>მძღოლი</small></span></button>'; }).join('') +
-        '</div><p class="u-note" style="margin-top:10px">თავისუფალი ადგილების რაოდენობა <b>უცნობია</b>: დისპეჩერის ტევადობა აპში არ ინახება. სია არ არის შეფასება ან რეიტინგი — ნაჩვენებია მხოლოდ მიმაგრებული აქტიური მძღოლების რაოდენობა დღევანდელი სამუშაო დღისთვის. მძღოლი, რომელსაც ბოლო 30 დღეში ტვირთი არ ჰქონია და არც ისვენებს, მთავარ რიცხვში არ შედის და ცალკეა მითითებული („+N უტვირთო“).</p></aside></div>' +
+        (notes.length ? '<p class="u-tm-note">' + h(notes.join(' ')) + '</p>' : '') +
+        '<div class="u-teamcards">' + (list.map(tmCard).join('') || shEmpty(all ? 'აქტიური დისპეჩერი არ ჩანს' : 'ამ კომპანიაში მიმდინარე მძღოლებით დისპეჩერი არ არის', all ? 'შეამოწმე წვდომის სია.' : 'ყველა დისპეჩერი ჩანს „ყველა კომპანია“ ხედში.')) + '</div>' +
         (model.others && model.others.length ? '<p class="u-note" id="u-team-others" style="margin-top:14px"><b>სხვა სახელებზე მიბმული მძღოლები.</b> ეს სახელები აქტიური დისპეჩერის ანგარიშად არ ჩანს (წასული დისპეჩერი, გამორთული ანგარიში ან მენეჯერი), თუმცა რეესტრში მათზე აქტიური მძღოლებია მიბმული: ' + model.others.map(function (o) { return h(o.name) + ' — ' + o.n + (o.nDorm ? ' (+' + o.nDorm + ' უტვირთო)' : ''); }).join(' · ') + '. <button type="button" class="u-btn u-link" data-u-route="drivers">მძღოლების დაფა →</button></p>' : '') +
-        '<p class="u-note" style="margin-top:14px">„ტვირთები სულ“ და „გროსი სულ“ — აპში ამ დისპეჩერზე მითითებული ჩაბარებული ტვირთები (იგივე ველი, რომელსაც არსებული რეიტინგი და ანაზღაურების გვერდი იყენებს; გაუქმებულის გარეშე) და, „ყველა კომპანია“ ხედში, ისტორიული ფაილების დადასტურებული ჩანაწერები — ორჯერ დათვლის გარეშე. ფასი უცნობია — ცალკე, ნულად არ ითვლება. ეს სრული კარიერის ჯამი არ არის: ჩანაწერები ყველა პერიოდს არ ფარავს. GROSS არ არის ანაზღაურება. დეტალები — ბარათის უკანა მხარეს, ღილაკით ⓘ.</p>' : '') +
+        '<p class="u-note" style="margin-top:14px">„ტვირთები სულ“ და „გროსი სულ“ — ჩაბარებული ტვირთები აპიდან და („ყველა კომპანია“ ხედში) ისტორიული ფაილების დადასტურებული ჩანაწერები, ორჯერ დათვლის გარეშე; GROSS არ არის ანაზღაურება. დეტალები — ბარათის უკანა მხარეს, ღილაკით ⓘ.</p>' : '') +
       '<dialog id="u-tm-dlg" class="u-tm-dlg" aria-labelledby="u-tm-dtitle"></dialog></div>';
   },
   editing: function () { return !!TM.dlg; },
-  refresh: function (manual, current) { if (current && manual) return tmHistLoad(true); },
+  refresh: function (manual, current) { if (current && manual) return Promise.all([tmHistLoad(true), tmProfLoad(true), tmEqLoad(true)]); },
   outside: function () { if (TM.dlg) return; if (TM.flip) tmFlip(null); },
   change: function (e, el) {
     if (el.hasAttribute('data-u-scope')) { SCOPE.co = el.value; TM.flip = null; render(); return; }
@@ -13414,11 +13601,11 @@ PAGES.team = {
     if ((a = el.closest('[data-u-tm-add]'))) { tmOpen('add', null, a); return; }
     if ((a = el.closest('[data-u-tm-dir]'))) { if (TM.sort !== 'original') { TM.dir = -TM.dir; render(); } return; }
     if ((a = el.closest('[data-u-tm-rate]'))) { e.stopPropagation(); tmOpen('rate', tmFind(a.getAttribute('data-u-tm-rate')), a); return; }
-    if ((a = el.closest('[data-u-tm-cap]'))) { e.stopPropagation(); tmOpen('cap', tmFind(a.getAttribute('data-u-tm-cap')), a); return; }
+    if ((a = el.closest('[data-u-tm-edit]'))) { e.stopPropagation(); tmOpen('edit', tmFind(a.getAttribute('data-u-tm-edit')), a); return; }
+    if ((a = el.closest('[data-u-tm-cap]'))) { e.stopPropagation(); tmOpen('edit', tmFind(a.getAttribute('data-u-tm-cap')), a); return; }
     if ((a = el.closest('[data-u-tm-info]'))) { e.stopPropagation(); tmOpen('info', tmFind(a.getAttribute('data-u-tm-info')), a); return; }
     if ((a = el.closest('[data-u-unflip]'))) { var cid = a.getAttribute('data-u-unflip'); tmFlip(null); var mc = document.querySelector('#u-team [data-u-card="' + (window.CSS && CSS.escape ? CSS.escape(cid) : cid) + '"] .u-tm-main'); if (mc) setTimeout(function () { try { mc.focus({ preventScroll: true }); } catch (x) {} }, 60); return; }
     if ((a = el.closest('[data-u-flip]'))) { tmFlip(a.getAttribute('data-u-flip')); var b = a.closest('[data-u-card]').querySelector('.u-backclose'); if (b) setTimeout(function () { try { b.focus({ preventScroll: true }); } catch (x) {} }, 60); return; }
-    if ((a = el.closest('[data-u-team-focus]'))) { var id = a.getAttribute('data-u-team-focus'); e.stopPropagation(); tmFlip(id); var c = document.querySelector('#u-team [data-u-card="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]'); if (c) { try { c.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (x) {} } return; }
   },
   key: function (e) {
     if (e.key !== 'Escape') return;
@@ -13690,7 +13877,7 @@ window.addEventListener('resize', place);
 window.addEventListener('scroll', place, { passive: true });
 try { if (typeof ResizeObserver === 'function') { var uBar = document.querySelector('.topbar'); if (uBar) new ResizeObserver(place).observe(uBar); } } catch (e) {}
 /* the pure view models are exposed to the local regression harness only (config mode "test"), never as an application hook */
-if (window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test') window.UIM_TEST = { U: U, SH: SH, PAGES: PAGES, TM: TM, TMH: TMH, tmModel: tmModel, tmSorted: tmSorted, uPlan: uPlan, uLoad: uLoad, shOpenRows: shOpenRows, shFailed: shFailed, pure: { uPlanSelect: uPlanSelect, uPrepLoads: uPrepLoads, uDayRange: uDayRange, uTzDay: uTzDay, uTzTime: uTzTime, uElapsed: uElapsed, uGrossRows: uGrossRows, uGroup: uGroup } };
+if (window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test') window.UIM_TEST = { U: U, SH: SH, PAGES: PAGES, TM: TM, TMH: TMH, tmModel: tmModel, tmSorted: tmSorted, TMP: TMP, TME: TME, tmTenure: tmTenure, tmTenureText: tmTenureText, tmShares: tmShares, tmCalc: tmCalc, uPlan: uPlan, uLoad: uLoad, shOpenRows: shOpenRows, shFailed: shFailed, pure: { uPlanSelect: uPlanSelect, uPrepLoads: uPrepLoads, uDayRange: uDayRange, uTzDay: uTzDay, uTzTime: uTzTime, uElapsed: uElapsed, uGrossRows: uGrossRows, uGroup: uGroup } };
 try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', e); }
 })();
 </script>
