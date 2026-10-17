@@ -1019,6 +1019,14 @@ var LOAD_COLS_='order_number,status,price,gross,broker_fee,vehicle_count,driver_
 function histDoc_(l){ var d=l&&Date.parse(String(l.delivery_completed||'').replace(' ','T')), f=l&&Date.parse(String(l.first_seen||'').replace(' ','T')); return !!(d && f && d < f); }
 var HISTDOC_TIP='ეს ტვირთი აპში შემოსვლამდე ჩაბარდა. Super Dispatch-ში ინვოისის გაგზავნის ჩანაწერი არ ჩანს, მაგრამ შეიძლება სხვა გზით გაიგზავნა. ჯერ შეამოწმე: თუ უკვე გაგზავნილია, ხელახლა ნუ გააგზავნი — მონიშნე ან ახსნა მოითხოვე; თუ არ გაგზავნილა, გააგზავნე.';
 function histDocChip_(l){ return histDoc_(l) ? " <span class='chip y' title='"+HISTDOC_TIP+"'>აპამდე ჩაბარებული · გაგზავნის ჩანაწერი არ გვაქვს</span>" : ''; }
+/* DOS-DOCUMENT-RESPONSIBILITY-20261017: an invoice / check duty whose booking is not established (no booking record) is asked of the
+   dispatcher by inference — the load carries their name, its driver is with them, or it is in their next-day plan (close_gates_co's rule,
+   unchanged). The row says so, and tells them what to do if it is not their booking. Rows the server added on its own (_scOnly) carry
+   no booking data. */
+var DOCUNCONF_TIP='ამ ტვირთის დამჯავშნელი ჩანაწერში არ არის და გეკითხება, რადგან ტვირთზე შენი სახელი წერია, მძღოლი შენთანაა ან ტვირთი შენს ხვალინდელ გეგმაშია — თუ ეს შენი დაჯავშნილი არ არის, უთხარი მენეჯმენტს.';
+function docUnconf_(l){ return !!(l && !l._scOnly && !l.booking_dispatcher); }
+function docUnconfChip_(l){ return docUnconf_(l) ? " <span class='chip y' title='"+DOCUNCONF_TIP+"'>ჯავშანი დაუდასტურებელია</span>" : ''; }
+function docUnconfTag_(l){ return docUnconf_(l) ? " · <span class='scp-tag' title='"+DOCUNCONF_TIP+"'>ჯავშანი დაუდასტურებელია</span>" : ''; }
 /* SC-GIORGI-002-X1R2: durable owner-approved document duties, never evidence of sending.
    Read with the critical company snapshot; failed reads keep sync stale and cannot clear a gate. */
 var DOC_HIST={co:null,rows:Object.create(null)};
@@ -2279,7 +2287,7 @@ function rBoard(){
           "<button class='fixbtn' style='margin-right:6px' title='ჩეკი მძღოლმა თვითონ გაანაღდა — ფული მასთანაა' onclick=\"chkResolve('"+e0+"','driver_cashed')\">მძღოლმა გაანაღდა</button>"+
           "<button class='fixbtn' title='ჩეკის ნაცვლად ადგილზე ქეში დაგვახვედრეს' onclick=\"chkResolve('"+e0+"','cash_on_site')\">ქეში იყო</button>"; }
       var dz=(kind==='chk')?(" ondragover=\"event.preventDefault()\" ondrop=\"chkDrop('"+encodeURIComponent(l.order_number)+"',event)\" title='ჩეკის ფოტო აქ ჩააგდე ან დააჭირე „ჩასმა Ctrl+V“'"):"";
-      return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+(kind==='bol'?histDocChip_(l):'')+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
+      return "<div class='gate' style='padding-left:34px'"+dz+"><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>"+esc(l.order_number)+"</b>"+inopChip_(l)+(kind==='bol'?histDocChip_(l):'')+docUnconfChip_(l)+"<span>"+esc(l.driver_name||'—')+" · "+esc(locShort(l.pickup_location))+" → "+esc(locShort(l.delivery_location))+" · "+money(grossOf_(l))+"</span></div>"+act+"</div>";
     }).join('') + (items.length>(lim||8) ? "<div class='muted' style='padding:4px 15px 12px 49px;font-size:12px'>…და კიდევ "+(items.length-(lim||8))+"</div>" : '');
   }
   var CC=(PCONT||[]).filter(function(r){ return !r.not_required && callNeeded_(r.order_number); });
@@ -8290,20 +8298,31 @@ loadPlanContacts = async function(){
       if (sameUser_(email)) { paint_(); loadObligations_(); }
     }
   }
+  /* DOS-DOCUMENT-RESPONSIBILITY-20261017 · the remaining-work section becomes the document-responsibility list of this company
+     (mgmt_doc_obligations_v2, management only, read-only): every outstanding invoice (only the Super Dispatch send counts) and check,
+     who booked the load (persistent), and — for the shift being closed — every dispatcher whose shift close carries it, why (booking,
+     the load's name, the driver, the next-day plan) and its state for that shift (asked / passed by an explanation — still
+     outstanding); nobody, when nobody is (REVIEW-01 R1). A load whose booking is not established can be settled here
+     (booking_resolve_v2: evidence note, confirmation, refused when the booking changed meanwhile, audited).
+     Until that function is installed — or after its rollback — the page reads mgmt_doc_obligations_review exactly as before and
+     shows its departed-booker part with the earlier layout. */
+  var obligationsMode = 'v2', obFilter = 'attention', resolving = null, accounts = null, accountsError = '', accountsLoading = false, resolveBusy = false, obNotice = '';
+  function missingFn_(e) { return !!e && /PGRST202|Could not find the function/i.test(String(e.code || '') + ' ' + String(e.message || '')); }
   async function loadObligations_() {
     if (!manager_() || MTAB !== 'dispatchers' || obligationsLoading) return;
     var company = COID(), email = USER.email, token = obligationsGeneration;
     if (obligationsCompany === company && obligations !== null) return;
     obligationsLoading = company; obligationsError = '';
     try {
-      var result = await sb.rpc('mgmt_doc_obligations_review', { p_company_id: company });
+      var mode = 'v2', result = await sb.rpc('mgmt_doc_obligations_v2', { p_company_id: company });
+      if (result.error && missingFn_(result.error)) { mode = 'v1'; result = await sb.rpc('mgmt_doc_obligations_review', { p_company_id: company }); }
       if (result.error) throw result.error;
       if (!Array.isArray(result.data)) throw new Error('Missing document obligations');
       if (!sameUser_(email) || COID() !== company || token !== obligationsGeneration) return;
-      obligations = result.data.filter(function (r) { return r.review === 'departed_booker'; });
-      obligationsCompany = company;
+      obligations = mode === 'v2' ? result.data : result.data.filter(function (r) { return r.review === 'departed_booker'; });
+      obligationsMode = mode; obligationsCompany = company;
     } catch (e) {
-      console.error('Departed dispatcher obligations read failed', e);
+      console.error('Document obligations read failed', e);
       if (sameUser_(email) && COID() === company && token === obligationsGeneration) {
         obligationsError = 'დარჩენილი საქმეები ვერ ჩაიტვირთა — ხელახლა სცადე.';
       }
@@ -8312,6 +8331,221 @@ loadPlanContacts = async function(){
       if (sameUser_(email) && COID() === company && manager_() && MTAB === 'dispatchers') renderDispatchers_();
       if (sameUser_(email) && manager_() && MTAB === 'dispatchers' && (COID() !== company || token !== obligationsGeneration)) loadObligations_();
     }
+  }
+  function reloadObligations_() { obligations = null; obligationsGeneration++; renderDispatchers_(); loadObligations_(); }
+  var OB_CAT = { booking_unknown: 'ჯავშნის ჩანაწერი არ არის', booking_unresolved: 'ჯავშანი გაურკვეველია', management_booker: 'მენეჯმენტის ანგარიში',
+    departed_booker: 'არააქტიური დისპეჩერი', booked: 'აქტიური დისპეჩერი' };
+  function obUnsettled_(o) { return o.category === 'booking_unknown' || o.category === 'booking_unresolved'; }
+  /* REVIEW-01 R1: recipients = every dispatcher whose shift close for shift_day carries the order (the evaluator's own branches), each with
+     its state for that shift; [] = nobody. An explanation passes one shift only — the order stays listed as outstanding. */
+  function obRecips_(o) { return Array.isArray(o.recipients) ? o.recipients : []; }
+  function obAttention_(o) { return !obRecips_(o).length || o.category !== 'booked'; }
+  var OB_VIA = { booking: 'დამჯავშნელი', load_dispatcher: 'ტვირთზე მისი სახელია', driver_owner: 'მძღოლი მასთანაა', next_day_plan: 'ხვალინდელ გეგმაში აქვს' };
+  function obState_(r, day) {
+    if (r.state === 'explained') return { t: 'ახსნით გავლილი ' + gd(day) + '-ს — ვალი რჩება', c: 'var(--warn, #8b631e)' };
+    if (r.state === 'gate_explained') return { t: 'ჯგუფური ახსნით გავლილი ' + gd(day) + '-ს — ვალი რჩება', c: 'var(--warn, #8b631e)' };
+    return { t: 'მოეთხოვება', c: 'var(--crit)' };
+  }
+  function el_(tag, text, css) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (css) e.style.cssText = css; return e; }
+  function line_(parent, text, muted, css) { var d = el_('div', text, css); if (muted) d.className = 'muted'; parent.appendChild(d); return d; }
+  /* who the server's rule will ask once this account is recorded as the booker (mgmt_doc_obligations_v2: an active dispatcher account
+     of this company; anyone else asks nobody and the load stays on this list) */
+  function accountInfo_(name) {
+    var mine = (accounts || []).filter(function (a) { return a.dispatcher_name === name; });
+    return { active: mine.some(function (a) { return a.active; }), mgmt: mine.some(function (a) { return a.active && a.role === 'management'; }),
+      disp: mine.some(function (a) { return a.active && a.role === 'dispatcher'; }), asks: mine.some(function (a) { return a.active && a.role === 'dispatcher' && inCompany_(a); }) };
+  }
+  async function loadAccounts_() {
+    if (accounts || accountsLoading) return;
+    var email = USER.email; accountsLoading = true; accountsError = '';
+    try {
+      var result = await sb.from('access_allowlist').select('dispatcher_name,role,active,company_codes');
+      if (result.error) throw result.error;
+      if (!Array.isArray(result.data)) throw new Error('Missing accounts');
+      if (sameUser_(email)) accounts = result.data.filter(function (a) { return a.dispatcher_name; });
+    } catch (e) {
+      console.error('Account list read failed', e);
+      if (sameUser_(email)) accountsError = 'ანგარიშების სია ვერ ჩაიტვირთა — დახურე და ხელახლა სცადე.';
+    } finally {
+      accountsLoading = false;
+      if (sameUser_(email) && manager_() && MTAB === 'dispatchers') renderDispatchers_();
+    }
+  }
+  function openResolve_(o) {
+    if (resolveBusy || !manager_()) return;
+    resolving = { company: COID(), order: o.order_number, source: o.booking_source == null ? null : o.booking_source, step: 1, who: '', note: '', error: '', focus: '' };
+    if (!accountsLoading) accounts = null;          /* a fresh account list for every form (an account added meanwhile is offered) */
+    obNotice = ''; renderDispatchers_(); loadAccounts_();
+  }
+  function closeResolve_() { if (resolveBusy) return; resolving = null; renderDispatchers_(); }
+  async function submitResolve_() {
+    var r0 = resolving;
+    if (!r0 || r0.step !== 2 || resolveBusy || !manager_() || r0.company !== COID()) return;
+    var email = USER.email, settled = false; resolveBusy = true; r0.error = ''; renderDispatchers_();
+    try {
+      var result = await sb.rpc('booking_resolve_v2', { p_company_id: r0.company, p_order: r0.order, p_dispatcher: r0.who, p_note: r0.note, p_expected_source: r0.source });
+      if (result.error) throw result.error;
+      if (!result.data || result.data.booking_dispatcher !== r0.who || result.data.booking_source !== 'management') throw new Error('unconfirmed answer');
+      if (!sameUser_(email)) return;
+      settled = true; resolving = null; obNotice = 'ტვირთი ' + r0.order + ': დამჯავშნელი ჩაიწერა — ' + r0.who + ' ✓';
+    } catch (e) {
+      console.error('Booking resolve failed', e);
+      if (!sameUser_(email)) return;
+      var m = String((e && e.message) || ''), c = String((e && e.code) || '');
+      if (c === '40001' || /already_decided|load_not_found|load_deleted/.test(m)) {
+        /* the load is no longer what the manager decided on: close the form, show why, read the list again */
+        resolving = null;
+        obNotice = 'ტვირთი ' + r0.order + ': ' + (c === '40001' ? 'ჯავშანი ამასობაში შეიცვალა — სია ხელახლა ჩაიტვირთა. გადაამოწმე და, თუ ისევ საჭიროა, თავიდან დაიწყე.'
+          : /already_decided/.test(m) ? 'დამჯავშნელი უკვე დადგენილია — სია ხელახლა ჩაიტვირთა.' : 'ტვირთი ვერ მოიძებნა ან წაშლილია — სია ხელახლა ჩაიტვირთა.');
+      } else {
+        r0.error = /not_an_app_account/.test(m) ? 'არჩეული სახელი აპის ანგარიში აღარ არის — აირჩიე სხვა.'
+          : /evidence_note_required/.test(m) ? 'მიუთითე, რაზე დაყრდნობით (მინიმუმ 5 სიმბოლო).'
+          : c === '42501' ? 'ამის უფლება არ გაქვს.'
+          : missingFn_(e) ? 'ეს მოქმედება სერვერზე ჯერ ჩართული არ არის.'
+          : 'პასუხი ვერ დადასტურდა — სია ხელახლა ჩაიტვირთა. გადაამოწმე, ჩაიწერა თუ არა, სანამ ხელახლა სცდი.';
+        if (/not_an_app_account|evidence_note_required/.test(m)) r0.step = 1;
+      }
+    } finally {
+      resolveBusy = false;
+      if (sameUser_(email)) reloadObligations_();
+    }
+    return settled;
+  }
+  function renderResolve_(work, list) {
+    var r = resolving, box = el_('div', null, 'margin:12px 0;padding:12px 14px;border:1.5px solid var(--line, #c9d1c6);border-radius:10px');
+    box.setAttribute('data-ob-form', r.order); work.appendChild(box);
+    box.appendChild(el_('div', 'ტვირთი ' + r.order + ' — პასუხისმგებლის დადგენა', 'font-weight:700;margin-bottom:6px'));
+    var row = list.filter(function (o) { return o.order_number === r.order && obUnsettled_(o); })[0];
+    var actions = el_('div', null, 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px');
+    var cancel = button_(r.step === 2 ? 'უკან' : 'გაუქმება', function () { if (r.step === 2) { r.step = 1; r.error = ''; renderDispatchers_(); } else closeResolve_(); }, false);
+    cancel.className = 'fixbtn'; cancel.disabled = resolveBusy; cancel.setAttribute('data-ob-cancel', '1');
+    if (!row || (row.booking_source == null ? null : row.booking_source) !== r.source) {
+      if (r.error) { var er0 = line_(box, r.error, false, 'color:var(--crit);font-size:12.5px;margin-bottom:4px'); er0.setAttribute('role', 'alert'); }
+      line_(box, 'ეს ტვირთი სიაში აღარ ელოდება პასუხისმგებლის დადგენას ისე, როგორც ფორმის გახსნისას — ჩანაწერი შეიცვალა ან უკვე ჩაიწერა. დახურე და, თუ საჭიროა, თავიდან დაიწყე სიიდან.', false, 'font-size:12.5px');
+      cancel.textContent = 'დახურვა'; cancel.onclick = function () { resolving = null; renderDispatchers_(); }; actions.appendChild(cancel); box.appendChild(actions); return;
+    }
+    if (r.step === 1) {
+      line_(box, 'ვინ დაჯავშნა ეს ტვირთი? ჩაიწერება მენეჯმენტის გადაწყვეტილებად, შენი სახელით, და ეხება ამ ტვირთის ინვოისსაც და ჩეკსაც. ჩანაწერი ჩანს ქვემოთ — დისპეჩერის სახელი ტვირთზე, ახსნები და მძღოლის ისტორია.', true, 'font-size:12.5px');
+      if (accountsError) line_(box, accountsError, false, 'color:var(--crit);font-size:12.5px');
+      else if (!accounts) line_(box, 'ანგარიშების სია იტვირთება…', true, 'font-size:12.5px');
+      else {
+        var sel = el_('select', null, 'display:block;margin:8px 0;min-width:280px;max-width:100%;padding:6px'); sel.setAttribute('data-ob-who', '1'); sel.setAttribute('aria-label', 'დამჯავშნელი');
+        var names = Array.from(new Set(accounts.map(function (a) { return a.dispatcher_name; }))).sort(function (a, b) { return a.localeCompare(b, 'ka'); });
+        var groups = [['here', 'აქტიური დისპეჩერები — ეს კომპანია'], ['other', 'აქტიური დისპეჩერები — სხვა კომპანია'], ['mgmt', 'მენეჯმენტი'], ['off', 'არააქტიური ანგარიშები']];
+        var first = el_('option', '— აირჩიე —'); first.value = ''; sel.appendChild(first);
+        groups.forEach(function (g) {
+          var og = document.createElement('optgroup'); og.label = g[1];
+          names.forEach(function (n) { var i = accountInfo_(n), k = i.asks ? 'here' : i.disp ? 'other' : i.mgmt ? 'mgmt' : 'off'; if (k !== g[0]) return; var op = el_('option', n); op.value = n; og.appendChild(op); });
+          if (og.children.length) sel.appendChild(og);
+        });
+        sel.value = r.who; sel.disabled = resolveBusy;
+        sel.addEventListener('change', function () { r.who = sel.value; });
+        box.appendChild(sel);
+        var note = el_('textarea', null, 'display:block;width:100%;max-width:560px;min-height:58px;margin:4px 0;padding:6px;font:inherit');
+        note.setAttribute('data-ob-note', '1'); note.setAttribute('aria-label', 'საფუძველი');
+        note.placeholder = 'რაზე დაყრდნობით? (სავალდებულო) — მაგ.: ჯავშნის ცხრილი, დისპეჩერის დადასტურება, Super Dispatch-ის ისტორია';
+        note.value = r.note; note.disabled = resolveBusy;
+        note.addEventListener('input', function () { r.note = note.value; });
+        note.addEventListener('focus', function () { r.focus = 'note'; });
+        note.addEventListener('blur', function () { if (note.isConnected) r.focus = ''; });
+        box.appendChild(note);
+        if (r.focus === 'note') { note.focus(); try { note.setSelectionRange(note.value.length, note.value.length); } catch (e) {} }
+        var next = button_('შემდეგი', function () {
+          r.who = sel.value; r.note = note.value;
+          if (!r.who) r.error = 'აირჩიე, ვინ დაჯავშნა ტვირთი.';
+          else if (r.note.trim().length < 5) r.error = 'მიუთითე, რაზე დაყრდნობით (მინიმუმ 5 სიმბოლო).';
+          else { r.error = ''; r.step = 2; r.focus = ''; }
+          renderDispatchers_();
+        }, false);
+        next.className = 'fixbtn'; next.disabled = resolveBusy; next.setAttribute('data-ob-next', '1'); actions.appendChild(next);
+      }
+    } else {
+      var info = accountInfo_(r.who);
+      line_(box, 'დამჯავშნელად ჩაიწერება: ' + r.who + (info.mgmt ? ' (მენეჯმენტი)' : !info.active ? ' (არააქტიური ანგარიში)' : !info.asks ? ' (სხვა კომპანიის დისპეჩერი)' : ''), false, 'font-weight:650');
+      line_(box, 'საფუძველი: ' + r.note.trim(), false, 'font-size:12.5px;white-space:pre-wrap');
+      line_(box, info.asks ? ('შედეგი: ცვლის დახურვისას ამ ტვირთის ინვოისი და ჩეკი მოეთხოვება დისპეჩერს — ' + r.who + '.')
+        : 'შედეგი: ცვლის დახურვისას ეს არავის მოეთხოვება — ტვირთი ამ სიაში დარჩება, სანამ ინვოისი არ გაიგზავნება (ან ჩეკი არ აიტვირთება).', false, 'font-size:12.5px');
+      /* every dispatcher the inference asks today stops being asked once a booker is recorded (only the booker is asked then) */
+      var dropped = obRecips_(row).map(function (x) { return x.dispatcher; }).filter(function (d, i, s) { return d !== r.who && s.indexOf(d) === i; });
+      if (dropped.length) { var dl = line_(box, 'ამიერიდან აღარ მოეთხოვება: ' + dropped.join(', ') + '.', false, 'font-size:12.5px'); dl.setAttribute('data-ob-dropped', '1'); }
+      line_(box, 'ჩაიწერება შენი სახელით. დაჯავშნის შეცვლა ამ გვერდიდან შემდეგ აღარ შეიძლება.', true, 'font-size:12px');
+      var ok = button_(resolveBusy ? 'იწერება…' : 'დადასტურება და ჩაწერა', function () { submitResolve_(); }, false);
+      ok.className = 'fixbtn'; ok.style.cssText = 'background:var(--good);color:#fff;border-color:var(--good)'; ok.disabled = resolveBusy; ok.setAttribute('data-ob-confirm', '1'); actions.appendChild(ok);
+    }
+    if (r.error) { var er = line_(box, r.error, false, 'color:var(--crit);font-size:12.5px;margin-top:6px'); er.setAttribute('role', 'alert'); }
+    actions.appendChild(cancel); box.appendChild(actions);
+  }
+  function obRow_(o) {
+    var tr = el_('tr'); tr.setAttribute('data-ob-order', o.order_number); tr.setAttribute('data-ob-kind', o.kind); tr.setAttribute('data-ob-cat', o.category);
+    var t1 = el_('td'); line_(t1, o.order_number, false, 'font-weight:650'); line_(t1, (o.driver_name || '—') + (o.gross != null ? ' · ' + money(o.gross) : ''), true, 'font-size:12px'); tr.appendChild(t1);
+    textCell_(tr, o.kind === 'check' ? 'ჩეკი' : 'ინვოისი / BOL');
+    textCell_(tr, gd(o.due_or_delivered));
+    var t4 = el_('td', null, 'white-space:normal;min-width:130px;max-width:210px'); if (o.booking_dispatcher) line_(t4, o.booking_dispatcher, false, 'font-weight:600');
+    line_(t4, OB_CAT[o.category] || o.category, true, 'font-size:12px');
+    if (o.workbook_label) line_(t4, 'ცხრილში: ' + o.workbook_label, true, 'font-size:12px');
+    tr.appendChild(t4);
+    var t5 = el_('td', null, 'white-space:normal;min-width:170px;max-width:260px'), rec = obRecips_(o), recNames = rec.map(function (x) { return x.dispatcher; });
+    if (rec.length) rec.forEach(function (x) {
+      var st = obState_(x, o.shift_day), box5 = el_('div', null, 'margin-bottom:4px'); box5.setAttribute('data-ob-recipient', x.dispatcher); box5.setAttribute('data-ob-state', x.state);
+      line_(box5, x.dispatcher, false, 'font-weight:600');
+      line_(box5, (x.via || []).map(function (v) { return OB_VIA[v] || v; }).join(' · ') + (obUnsettled_(o) ? ' — ჯავშანი დაუდასტურებელია' : ''), true, 'font-size:12px');
+      line_(box5, st.t, false, 'font-size:12px;font-weight:600;color:' + st.c);
+      t5.appendChild(box5);
+    });
+    else line_(t5, 'არავის', false, 'color:var(--crit);font-weight:650');
+    tr.appendChild(t5);
+    var t6 = el_('td', null, 'white-space:normal;font-size:12px;min-width:170px;max-width:290px'), notes = [];
+    if (o.explanations) notes.push('დადასტურებული ახსნა: ' + o.explanations + (o.last_explained ? ' (ბოლოს ' + gd(o.last_explained) + ')' : ''));
+    if (o.in_off_record) notes.push('ტვირთის დღეს მძღოლი დასვენებაზე ეწერა (დისპეჩერი: ' + (o.load_dispatcher || '—') + ')');
+    if (o.load_dispatcher && o.load_dispatcher !== o.booking_dispatcher && recNames.indexOf(o.load_dispatcher) < 0) notes.push('ტვირთზე წერია: ' + o.load_dispatcher);
+    if (o.driver_name && o.driver_dispatcher && o.driver_dispatcher !== o.booking_dispatcher && recNames.indexOf(o.driver_dispatcher) < 0) notes.push('მძღოლი ახლა: ' + o.driver_dispatcher);
+    if (o.app_mark_only) notes.push('აპში მონიშნულია „გავაგზავნე“, Super Dispatch-ში გაგზავნა არ ჩანს');
+    if (notes.length) notes.forEach(function (n) { line_(t6, n); }); else t6.textContent = '—';
+    tr.appendChild(t6);
+    var t7 = el_('td', null, 'white-space:nowrap');
+    if (obUnsettled_(o)) {
+      var b = button_('პასუხისმგებლის დადგენა', function () { openResolve_(o); }, false);
+      b.className = 'fixbtn'; b.disabled = resolveBusy || !!resolving; b.setAttribute('data-ob-resolve', o.order_number); t7.appendChild(b);
+    }
+    tr.appendChild(t7);
+    return tr;
+  }
+  function renderResponsibility_(work) {
+    work.appendChild(el_('h4', 'ინვოისები და ჩეკები — ვისზეა დარჩენილი · ' + (CO ? CO.legal_name : '')));
+    line_(work, 'ყველა დარჩენილი ინვოისი (ითვლება მხოლოდ Super Dispatch-ში გაგზავნა) და ჩეკი ამ კომპანიაში. პასუხისმგებელია ტვირთის დამჯავშნელი — მძღოლის გადაყვანა ან დროებითი ჩანაცვლება ამას არ ცვლის.', true, 'font-size:12px;margin-bottom:8px');
+    if (obligationsError || obligations === null || obligationsCompany !== COID()) { work.appendChild(el_('p', obligationsError || 'დარჩენილი საქმეები იტვირთება…')); return; }
+    var list = obligations, att = list.filter(obAttention_), shown = obFilter === 'all' ? list : att;
+    if (resolving && resolving.company !== COID()) resolving = null;
+    var last = list.length ? list[0].company_last_close : null, lastMs = last ? Date.parse(String(last).replace(/(\.\d{3})\d+/, '$1')) : NaN;   /* the database sends microseconds */
+    if (list.length && (!last || Date.now() - lastMs > 7 * 864e5)) {
+      var warn = line_(work, last ? ('ამ კომპანიაში ცვლა ბოლოს ' + gd(last) + '-ს დაიხურა — აქ დარჩენილ საქმეებს ცვლის დახურვისას ახლა არავინ ამოწმებს.')
+        : 'ამ კომპანიაში ცვლა ჯერ არ დახურულა — აქ დარჩენილ საქმეებს ცვლის დახურვისას არავინ ამოწმებს.', false, 'color:var(--crit);font-weight:650;font-size:12.5px;margin-bottom:8px');
+      warn.setAttribute('data-ob-noclose', '1');
+    }
+    var bar = el_('div', null, 'display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px');
+    [['attention', 'საყურადღებო', att.length], ['all', 'ყველა', list.length]].forEach(function (f) {
+      var b = button_(f[1] + ' (' + f[2] + ')', function () { obFilter = f[0]; renderDispatchers_(); }, obFilter === f[0]); b.setAttribute('data-ob-filter', f[0]); bar.appendChild(b);
+    });
+    work.appendChild(bar);
+    line_(work, 'საყურადღებოა: ვისაც ცვლის დახურვისას არავინ ეკითხება, ჯავშანი დაუდასტურებელია, ან დამჯავშნელი არააქტიური / მენეჯმენტის ანგარიშია.', true, 'font-size:12px;margin-bottom:8px');
+    /* this shift, counted in ORDERS (an order may have several recipients): asked of someone (at least one recipient is asked) · passed
+       only by explanations (every recipient explained it for this shift — still outstanding) · asked of nobody; they add up to the list */
+    if (list.length) {
+      var rcs = list.map(obRecips_), pendingIn = function (r) { return r.some(function (x) { return x.state === 'pending'; }); };
+      var nAsk = rcs.filter(pendingIn).length, nNo = rcs.filter(function (r) { return !r.length; }).length, nPass = list.length - nAsk - nNo;
+      var anyExp = rcs.some(function (r) { return r.some(function (x) { return x.state !== 'pending'; }); });
+      var sum = line_(work, 'ცვლის დახურვა ' + gd(list[0].shift_day) + ' — ' + list.length + ' დარჩენილი ტვირთიდან: მოეთხოვება — ' + nAsk + ' · მხოლოდ ახსნით გავლილი — ' + nPass +
+        ' · არავის ეკითხება — ' + nNo + (anyExp ? ' (ახსნა ერთ ცვლას ატარებს, ინვოისი / ჩეკი ისევ დარჩენილია)' : ''), false, 'font-size:12.5px;margin-bottom:8px');
+      sum.setAttribute('data-ob-shift', '1');
+    }
+    if (obNotice) { var on = line_(work, obNotice, false, 'margin:0 0 10px;font-weight:600'); on.setAttribute('role', 'status'); on.setAttribute('data-ob-notice', '1'); }
+    if (resolving) renderResolve_(work, list);
+    if (!shown.length) { line_(work, obFilter === 'all' ? 'დარჩენილი ინვოისი ან ჩეკი არ არის.' : 'საყურადღებო საქმე არ არის — ყველა დარჩენილ საქმეს ცვლის დახურვისას მისი დამჯავშნელი ხედავს.', true); return; }
+    var ow = el_('div'); ow.className = 'tablewrap';
+    var ot = el_('table', null, 'min-width:900px'); ot.setAttribute('data-ob-table', obFilter);
+    ot.innerHTML = '<thead><tr><th>ტვირთი</th><th>დარჩენილია</th><th>თარიღი</th><th>ვინ დაჯავშნა</th><th>ცვლის დახურვა ' + esc(gd(list[0].shift_day)) + ' — ვის ეკითხება</th><th>შენიშვნა</th><th></th></tr></thead><tbody></tbody>';
+    shown.forEach(function (o) { ot.tBodies[0].appendChild(obRow_(o)); });
+    ow.appendChild(ot); work.appendChild(ow);
   }
   function renderDispatchers_() {
     if (!manager_()) return;
@@ -8362,6 +8596,7 @@ loadPlanContacts = async function(){
     });
     if (!shown.length) { var empty = document.createElement('tr'); textCell_(empty, 'ამ სიაში დისპეჩერი არ არის.').colSpan = 3; table.tBodies[0].appendChild(empty); }
     var work = document.createElement('div'); work.className = 'card p'; work.style.marginTop = '16px'; view.appendChild(work);
+    if (obligationsMode === 'v2') { renderResponsibility_(work); return; }   /* DOS-DOCUMENT-RESPONSIBILITY-20261017; below: the earlier list (v1 fallback) */
     var title = document.createElement('h4'); title.textContent = 'არააქტიურების დარჩენილი საქმეები · ' + (CO ? CO.legal_name : ''); work.appendChild(title);
     var help = document.createElement('p'); help.className = 'muted'; help.style.fontSize = '12px';
     help.textContent = 'დარჩენილი ინვოისები და ჩეკები მენეჯმენტთან რჩება. ტვირთის თავდაპირველი პასუხისმგებელი არ იცვლება.'; work.appendChild(help);
@@ -9274,7 +9509,7 @@ function scpGates_(M) {
   var iRows = M.invP.slice(0, 12).map(function (l) {
     return scpRow_(l.order_number, esc(l.driver_name || '—') + " · " + esc(locShort(l.pickup_location)) + " → " + esc(locShort(l.delivery_location)) +
       " · " + money(grossOf_(l)) + " · <span class='scp-c no'>ინვოისის გაგზავნა SD-ში არ ჩანს</span>" +
-      (histDoc_(l) ? " · <span class='scp-tag' title='" + HISTDOC_TIP + "'>აპამდე ჩაბარებული · გაგზავნის ჩანაწერი არ გვაქვს</span>" : ''),
+      (histDoc_(l) ? " · <span class='scp-tag' title='" + HISTDOC_TIP + "'>აპამდე ჩაბარებული · გაგზავნის ჩანაწერი არ გვაქვს</span>" : '') + docUnconfTag_(l),
       "<button type='button' class='scp-btn rfbtn' data-ord='" + scpAttr_(l.order_number) + "' title='SD-ში ინვოისი და BOL გააგზავნე, მერე შეამოწმე' onclick=\"return window.sdRefresh(decodeURIComponent('" + scpEnc_(l.order_number) + "'),this,true)\">SD-ში შემოწმება</button>" +
       waivChip_('invoice', l.order_number, 'ინვოისი და BOL — ' + l.order_number, tday));
   });
@@ -9289,7 +9524,7 @@ function scpGates_(M) {
   /* checks — the existing upload / mark workflow */
   var kRows = M.chkP.slice(0, 12).map(function (l) {
     var a0 = actOf_(l.order_number), e0 = scpEnc_(l.order_number);
-    return scpRow_(l.order_number, esc(l.driver_name || '—') + " · " + esc(locShort(l.pickup_location)) + " → " + esc(locShort(l.delivery_location)) + " · " + money(grossOf_(l)),
+    return scpRow_(l.order_number, esc(l.driver_name || '—') + " · " + esc(locShort(l.pickup_location)) + " → " + esc(locShort(l.delivery_location)) + " · " + money(grossOf_(l)) + docUnconfTag_(l),
       (a0.check_path ? ("<a class='scp-btn' href='#' onclick=\"openCheck('" + scpEnc_(a0.check_path) + "');return false\">ნახვა</a>") : "") +
       "<button type='button' class='scp-btn' onclick=\"chkArm('" + e0 + "')\">ჩასმა Ctrl+V</button>" +
       "<label class='scp-btn'>ფაილი<input type='file' accept='image/*,application/pdf' capture='environment' style='display:none' onchange=\"upCheck('" + e0 + "',this)\"></label>" +
@@ -14369,5 +14604,34 @@ try { if (typeof ResizeObserver === 'function') { var uBar = document.querySelec
 /* the pure view models are exposed to the local regression harness only (config mode "test"), never as an application hook */
 if (window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test') window.UIM_TEST = { U: U, SH: SH, PAGES: PAGES, TM: TM, TMH: TMH, tmModel: tmModel, tmSorted: tmSorted, TMP: TMP, TME: TME, tmTenure: tmTenure, tmTenureText: tmTenureText, tmShares: tmShares, tmCalc: tmCalc, tmCap: tmCap, tmTeamSum: tmTeamSum, tmWhy: tmWhy, tmComp: tmComp, tmFormInts: tmFormInts, tmCreateErr: tmCreateErr, tmSquares: tmSquares, uPlan: uPlan, uLoad: uLoad, shOpenRows: shOpenRows, shFailed: shFailed, pure: { uPlanSelect: uPlanSelect, uPrepLoads: uPrepLoads, uDayRange: uDayRange, uTzDay: uTzDay, uTzTime: uTzTime, uElapsed: uElapsed, uGrossRows: uGrossRows, uGroup: uGroup } };
 try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', e); }
+})();
+</script>
+
+<!-- =====================================================================
+     INV-SD-001 (2026-10-07) - invoice sending evidence on the close screen.
+     Owner decision 2026-10-07: where an invoice is required, it counts as sent only when Super Dispatch confirms the
+     invoice send (loads.invoice_sent_at). The app's own "sent" mark (load_actions.bol_sent_at) is not sending evidence.
+     This block is the screen-side mirror of the same correction in the server evaluator close_gates_co; the server
+     remains the only authority to close. It replaces ONE function for every role - docsGate_ - and nothing else.
+     'split' document mode is unchanged. It is separate from the management interface block (uimgmt-001).
+     Rollback: remove this block (the previous rule "SD invoice OR app mark" returns on screen).
+===================================================================== -->
+<script id="inv-sd-001">
+(function () {
+  'use strict';
+  try {
+    if (typeof window.docsGate_ !== 'function' || typeof window.docMode_ !== 'function' || typeof window.actOf_ !== 'function') {
+      try { console.error('INV-SD-001: the close-screen document rule was not found - it stays as it was; the server still decides'); } catch (e) {}
+      return;
+    }
+    window.docsGate_ = function (l) {
+      if (!l) return false;
+      var inv = !!l.invoice_sent_at;
+      if (docMode_() !== 'split') return inv;                       /* the SD invoice-send record, and only that */
+      var a = actOf_(l.order_number) || {};
+      return inv && !!a.bol_sent_at;                                 /* 'split' exactly as before */
+    };
+    window.__invsd001 = '2026-10-07';
+  } catch (e) { try { console.error('INV-SD-001 failed to install', e); } catch (x) {} }
 })();
 </script>
