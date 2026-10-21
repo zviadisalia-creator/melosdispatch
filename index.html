@@ -2593,7 +2593,12 @@ function scItems_(r){
       if(!cp.length && !cu.length && !cn.length) add('calls','', 'ზარების gate წითელია');
       return;
     }
-    if(base==='standard'){ add('standard','', 'მძღოლის დღიური სტანდარტი არ სრულდება'); return; }
+    if(base==='standard'){
+      /* SANDRO-CLOSE-01: name the driver(s) the server refused on - close_gates_co reports each driver's result (ok) since SC01c;
+         without it the text stays as before. A driver the board does not show is named too: that is the case to ask management about. */
+      var sd0=((g.standard||{}).detail), sbad=(Array.isArray(sd0)?sd0:[]).filter(function(x){ return x && x.ok===false; })
+        .map(function(x){ return String(x.driver==null?'':x.driver).trim(); }).filter(function(n,i,a){ return n && a.indexOf(n)===i; });
+      add('standard','', 'მძღოლის დღიური სტანდარტი არ სრულდება'+(sbad.length?(' — '+sbad.join(', ')):'')); return; }
     if(base==='roster'){ add('roster','', 'კვირის როსტერი დასადასტურებელია'); return; }
     add('unknown','', k);
   });
