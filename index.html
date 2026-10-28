@@ -5606,6 +5606,32 @@ loadPlanContacts = async function(){
     }).catch(function(){ SMS_CHK_.busy=false; });
   }catch(e){ SMS_CHK_.busy=false; console.error('sms check', e); }
 };
+/* DOS-GATE-RELIABILITY-20261028-04 · owner 2026-10-28 (rules r11): an SD delivery date that differs from the day agreed with the
+   receiver is a NONBLOCKING correction warning — the gate already uses the agreed day. Read-only RPC lv5_date_warnings_v1 (the
+   evaluator's own warning, current evidence only); never a gate input. The pickup side keeps sdDayWarn_ (plan day vs SD date). */
+var LV5DW = {}, LV5DW_CO = '';
+var __contactsWithDateWarn = loadPlanContacts;
+loadPlanContacts = async function(){
+  await __contactsWithDateWarn.apply(this, arguments);
+  var company = COID(), day = ymd_(nextWorkDay_());
+  try{
+    var ons = planLoads_(day).map(function(l){ return l.order_number; }).filter(Boolean);
+    if(!company || !ons.length){ LV5DW = {}; LV5DW_CO = String(company||''); return; }
+    var r = await sb.rpc('lv5_date_warnings_v1', { p_company_id: company, p_orders: ons.slice(0, 60) });
+    if(!r || r.error || company !== COID()) return;   /* an optional line: no answer keeps the screen as it is */
+    var m = {};
+    (Array.isArray(r.data) ? r.data : []).forEach(function(w){
+      if(w && w.leg === 'delivery' && w.kind === 'sd_delivery_date_differs' && w.order_number) m[w.order_number] = w;
+    });
+    LV5DW = m; LV5DW_CO = String(company);
+  }catch(e){ console.error('date warnings', e); }
+};
+function sdDelWarn_(l){
+  var w = (l && LV5DW_CO === String(COID())) ? LV5DW[l.order_number] : null;
+  if(!w) return '';
+  var d = w.sd_date ? gd(w.sd_date) : '—';
+  return " <span class='sd-del-warn' style='color:var(--crit);font-size:10.5px;font-weight:640' title='SD-ში ჩაბარების თარიღი "+esc(d)+"-ია, მიმღებთან სხვა დღე შეთანხმდა. გაასწორე SD-ში — ცვლის დახურვას ეს არ აფერხებს.'>⚠ SD-ში ჩაბარების თარიღი "+esc(d)+" — შეთანხმებულია სხვა დღე: გაასწორე SD-ში</span>";
+}
 
 
 </script>
@@ -9372,7 +9398,7 @@ function scpDriver_(d, M) {
         "<div class='scp-lmain'><div class='scp-path'>" +
           "<div class='scp-stop scp-pu'><span class='scp-mk' title='ფიქაფი'>" + scpIc_('dot') + "</span><span>" + esc(locShort(l.pickup_location)) + "</span></div>" +
           "<div class='scp-stop'><span class='scp-mk' title='დელივერი'>" + scpIc_('pin') + "</span><span>" + esc(locShort(l.delivery_location)) + "</span></div>" +
-          (dd ? ("<span class='scp-date'>ჩაბარება · " + esc(gd(dd)) + "</span>") : '') + sdDayWarn_(l, tday) +
+          (dd ? ("<span class='scp-date'>ჩაბარება · " + esc(gd(dd)) + "</span>") : '') + sdDayWarn_(l, tday) + sdDelWarn_(l) +
         "</div><div class='scp-fig'><strong>" + money(gross) + "</strong><span class='scp-nums'>" +
           (mi > 0 ? ("<span>" + Math.round(mi).toLocaleString('en-US') + " მილი</span>") : "<span>მილი უცნობია</span>") +
           (rate ? ("<span class='scp-rate' title='$" + rate + " თითო მილზე' aria-label='" + rate + " დოლარი თითო მილზე'>$" + rate + "</span>") : '') +
