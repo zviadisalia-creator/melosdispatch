@@ -5609,22 +5609,27 @@ loadPlanContacts = async function(){
 /* DOS-GATE-RELIABILITY-20261028-04 · owner 2026-10-28 (rules r11): an SD delivery date that differs from the day agreed with the
    receiver is a NONBLOCKING correction warning — the gate already uses the agreed day. Read-only RPC lv5_date_warnings_v1 (the
    evaluator's own warning, current evidence only); never a gate input. The pickup side keeps sdDayWarn_ (plan day vs SD date). */
-var LV5DW = {}, LV5DW_CO = '';
+var LV5DW = {}, LV5DW_CO = '', LV5DW_GEN = 0;
 var __contactsWithDateWarn = loadPlanContacts;
 loadPlanContacts = async function(){
   await __contactsWithDateWarn.apply(this, arguments);
-  var company = COID(), day = ymd_(nextWorkDay_());
+  /* each refresh owns the cache only while it is the newest one for this company: a slower, older reply never replaces a newer
+     result, and a failed request clears the line (an unknown warning is shown as none, never as a stale one) */
+  var gen = ++LV5DW_GEN, company = COID(), day = ymd_(nextWorkDay_());
+  var current = function(){ return gen === LV5DW_GEN && company === COID(); };
+  var clear = function(){ if(current()){ LV5DW = {}; LV5DW_CO = String(company || ''); } };
   try{
     var ons = planLoads_(day).map(function(l){ return l.order_number; }).filter(Boolean);
-    if(!company || !ons.length){ LV5DW = {}; LV5DW_CO = String(company||''); return; }
+    if(!company || !ons.length){ clear(); return; }
     var r = await sb.rpc('lv5_date_warnings_v1', { p_company_id: company, p_orders: ons.slice(0, 60) });
-    if(!r || r.error || company !== COID()) return;   /* an optional line: no answer keeps the screen as it is */
+    if(!current()) return;
+    if(!r || r.error){ clear(); return; }
     var m = {};
     (Array.isArray(r.data) ? r.data : []).forEach(function(w){
       if(w && w.leg === 'delivery' && w.kind === 'sd_delivery_date_differs' && w.order_number) m[w.order_number] = w;
     });
     LV5DW = m; LV5DW_CO = String(company);
-  }catch(e){ console.error('date warnings', e); }
+  }catch(e){ clear(); console.error('date warnings', e); }
 };
 function sdDelWarn_(l){
   var w = (l && LV5DW_CO === String(COID())) ? LV5DW[l.order_number] : null;
