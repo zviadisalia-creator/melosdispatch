@@ -10927,6 +10927,103 @@ body.uim .u-card.u-k-idle .u-cardstatus{margin-top:12px}
 body.uim .u-card.u-k-idle .u-route{padding-top:8px}
 body.uim .u-idletime{display:flex;align-items:baseline;gap:5px;color:var(--u-red);font-size:37px;font-weight:500;letter-spacing:-1.2px;line-height:1.15;font-variant-numeric:tabular-nums}
 body.uim .u-idletime small{font-size:12px;letter-spacing:0;font-weight:400;margin-right:3px}
+/* ---- DOS-HOME-VISUAL-20261029-01 · homepage, owner-approved design (2026-10-29): total + status tiles and the card fronts. Scoped to
+   #u-home; card size, grid and flip are the existing ones (282px, padding 18px, radius 13px, gap 15px). Dark values are the approved
+   palette; light values follow the app's light tokens. Each card kind sets --h-* for its front. ---- */
+body.uim #u-home{
+  --h-w-ink:var(--u-text);--h-w-muted:var(--u-muted);--h-w-acc:#4f7a5c;--h-w-panel:#e9f0e2;--h-w-line:var(--u-sep);--h-w-tag-bg:#e0ecd4;--h-w-tag:#42683b;--h-wheel:var(--u-icon-ink);
+  --h-i-bg:var(--u-idle-bg);--h-i-border:#e3cbbd;--h-i-top:var(--u-idle-line);--h-i-ink:#3d2a22;--h-i-loc:#4a3329;--h-i-co:#6b5246;--h-i-muted:#7a5a4c;--h-i-pin:#b24f36;--h-i-line:#e3cbbd;
+  --h-i-hero:#efdfd4;--h-i-hero-muted:#7a5a4c;--h-i-dash:#3d2a22;--h-i-hero-line:#d7b9a8;--h-i-clock:#b24f36;--h-i-tag-bg:var(--u-idle-tag);--h-i-tag:#9b4430;--h-i-acc:#b24f36;
+  --h-r-bg:#f6f2e0;--h-r-border:#ddd3ae;--h-r-top:#c9b56f;--h-r-ink:#3f3719;--h-r-muted:#6f6640;--h-r-acc:#7b672a;--h-r-panel:#ede6c9;--h-r-line:#ddd3ae;
+  --h-s-bg:#eaf2f6;--h-s-border:#c4d6e0;--h-s-top:#7fa9c0;--h-s-ink:#1f3a48;--h-s-muted:#4f6b7a;--h-s-acc:#396c88;--h-s-panel:#dae8f0;--h-s-line:#c4d6e0;
+  --h-t-border:var(--u-line);--h-t-icon:var(--u-icon-ink);
+}
+:root[data-theme="dark"] body.uim #u-home{
+  --h-w-ink:#e8efe8;--h-w-muted:#b7c8ba;--h-w-acc:#acd4b8;--h-w-panel:#334338;--h-w-line:#45594b;--h-w-tag-bg:#334338;--h-w-tag:#acd4b8;--h-wheel:#c4d4ca;
+  --h-i-bg:#3a302b;--h-i-border:#59473d;--h-i-top:#b97f68;--h-i-ink:#fff1e9;--h-i-loc:#f6e5dc;--h-i-co:#d6d6cc;--h-i-muted:#c3b8af;--h-i-pin:#e7a78b;--h-i-line:#5a473b;
+  --h-i-hero:#49382f;--h-i-hero-muted:#dcc3b5;--h-i-dash:#eee2d8;--h-i-hero-line:#705343;--h-i-clock:#ffb296;--h-i-tag-bg:#503a32;--h-i-tag:#ffc0aa;--h-i-acc:#f1957b;
+  --h-r-bg:#34342b;--h-r-border:#535443;--h-r-top:#c9bc7f;--h-r-ink:#f2edd9;--h-r-muted:#d1c9aa;--h-r-acc:#e6d9a0;--h-r-panel:#444431;--h-r-line:#5c5c43;
+  --h-s-bg:#29363c;--h-s-border:#43575f;--h-s-top:#98bfd1;--h-s-ink:#e4f0f5;--h-s-muted:#bdced7;--h-s-acc:#b5d4e4;--h-s-panel:#354750;--h-s-line:#4b626d;
+  --h-t-border:#61786a;--h-t-icon:#c4d4ca;
+}
+body.uim #u-home .h-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+body.uim #u-home .h-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:22px}
+body.uim #u-home .h-stat{background:var(--u-panel);border:1px solid var(--u-line);border-radius:10px;padding:16px;min-width:0;color:var(--u-text)}
+body.uim #u-home .h-stat-head{display:flex;align-items:center;gap:11px;margin-bottom:8px}
+body.uim #u-home .h-stat-ic{display:flex;color:var(--u-green)}
+body.uim #u-home .h-stat-ic .u-ic{width:24px;height:24px;stroke-width:1.8}
+body.uim #u-home .h-stat-n{font-size:32px;line-height:1.1;font-weight:600;font-variant-numeric:tabular-nums}
+body.uim #u-home .h-stat-l{font-size:17px;line-height:1.45;font-weight:500;overflow-wrap:anywhere}
+body.uim #u-home .h-stat.h-total{grid-column:1/-1;border-color:var(--h-t-border);padding:17px 18px}
+body.uim #u-home .h-total-head{display:flex;align-items:center;flex-wrap:wrap;gap:13px}
+body.uim #u-home .h-total .h-stat-ic{color:var(--h-t-icon)}
+body.uim #u-home .h-total .h-stat-ic .u-ic{width:29px;height:29px;stroke-width:2}
+body.uim #u-home .h-total .h-stat-l{font-size:18px}
+body.uim #u-home .h-cos{display:flex;flex-wrap:wrap;gap:12px 27px;margin-top:14px;padding-left:42px}
+body.uim #u-home .h-co-n{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--u-muted)}
+body.uim #u-home .h-co-n strong{font-size:17px;font-weight:500;color:var(--u-text);font-variant-numeric:tabular-nums}
+body.uim #u-home .h-stat.h-s-idle{background:var(--h-i-bg);border-color:var(--h-i-border);border-top:2px solid var(--h-i-top)}
+body.uim #u-home .h-s-idle .h-stat-ic,body.uim #u-home .h-s-idle .h-stat-n{color:var(--h-i-acc)}
+body.uim #u-home .h-stat.h-s-rep{background:#e6dbab;border-color:#cec18d;color:#4e4422}
+body.uim #u-home .h-s-rep .h-stat-ic{color:#7b672a}
+body.uim #u-home .h-stat.h-s-rest{background:#c4ddeb;border-color:#aac9da;color:#234b60}
+body.uim #u-home .h-s-rest .h-stat-ic{color:#396c88}
+body.uim #u-home .u-card{--h-ink:var(--h-w-ink);--h-muted:var(--h-w-muted);--h-co:var(--h-w-muted);--h-acc:var(--h-w-acc);--h-pin:var(--h-w-acc);--h-loc:var(--h-w-ink);--h-panel:var(--h-w-panel);--h-line:var(--h-w-line);--h-tag-bg:var(--h-w-tag-bg);--h-tag:var(--h-w-tag)}
+body.uim #u-home .u-card.u-k-idle{--h-ink:var(--h-i-ink);--h-muted:var(--h-i-muted);--h-co:var(--h-i-co);--h-acc:var(--h-i-acc);--h-pin:var(--h-i-pin);--h-loc:var(--h-i-loc);--h-line:var(--h-i-line);--h-tag-bg:var(--h-i-tag-bg);--h-tag:var(--h-i-tag)}
+body.uim #u-home .u-card.u-k-repair{--h-ink:var(--h-r-ink);--h-muted:var(--h-r-muted);--h-co:var(--h-r-muted);--h-acc:var(--h-r-acc);--h-pin:var(--h-r-acc);--h-loc:var(--h-r-ink);--h-panel:var(--h-r-panel);--h-line:var(--h-r-line);--h-tag-bg:#e6dbab;--h-tag:#4e4422}
+body.uim #u-home .u-card.u-k-rest{--h-ink:var(--h-s-ink);--h-muted:var(--h-s-muted);--h-co:var(--h-s-muted);--h-acc:var(--h-s-acc);--h-pin:var(--h-s-acc);--h-loc:var(--h-s-ink);--h-panel:var(--h-s-panel);--h-line:var(--h-s-line);--h-tag-bg:#c4ddeb;--h-tag:#234b60}
+body.uim #u-home .u-card.u-k-dormant,body.uim #u-home .u-card.u-k-off{--h-acc:var(--u-muted);--h-pin:var(--u-muted);--h-panel:var(--u-inner);--h-tag-bg:var(--u-neutral);--h-tag:var(--u-neutral-text)}
+body.uim #u-home .u-card.u-k-idle .u-front{background:var(--h-i-bg);border-color:var(--h-i-border);border-top-color:var(--h-i-top)}
+body.uim #u-home .u-card.u-k-repair .u-front{background:var(--h-r-bg);border-color:var(--h-r-border);border-top-color:var(--h-r-top)}
+body.uim #u-home .u-card.u-k-rest .u-front{background:var(--h-s-bg);border-color:var(--h-s-border);border-top-color:var(--h-s-top)}
+body.uim #u-home .u-front.h-front{display:grid;grid-template-rows:26px 44px 38px minmax(0,1fr) 32px;gap:4px;color:var(--h-ink)}
+body.uim #u-home .h-top{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+body.uim #u-home .h-co{display:flex;flex-direction:column;justify-content:center;min-width:0;font-size:14px;line-height:15px;font-weight:700;letter-spacing:.8px;color:var(--h-co);white-space:nowrap}
+body.uim #u-home .h-co>span,body.uim #u-home .h-co>small{overflow:hidden;text-overflow:ellipsis}
+body.uim #u-home .h-co>small{font-size:10px;line-height:11px;font-weight:400;letter-spacing:0}
+body.uim #u-home .h-badge{display:inline-flex;align-items:center;gap:6px;flex:none;padding:4px 8px;border-radius:5px;font-size:11px;line-height:18px;font-weight:500;white-space:nowrap;background:var(--h-tag-bg);color:var(--h-tag)}
+body.uim #u-home .h-badge .u-ic{width:13px;height:13px}
+body.uim #u-home .h-dot{width:5px;height:5px;border-radius:50%;background:currentColor;flex:none}
+body.uim #u-home .h-name{display:flex;align-items:center;gap:9px;min-width:0;font-size:19px;line-height:22px;font-weight:700;letter-spacing:-.35px}
+body.uim #u-home .h-name .u-ic{color:var(--h-wheel)}
+body.uim #u-home .h-name>span,body.uim #u-home .h-loc>span{min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+body.uim #u-home .u-ic.h-ic28{width:28px;height:28px;min-width:28px;min-height:28px;flex:0 0 28px;stroke-width:2}
+body.uim #u-home .u-ic.h-pin{stroke-width:2.2;transform:scaleX(1.21);transform-origin:center}
+body.uim #u-home .h-locrow{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+body.uim #u-home .h-loc{display:flex;align-items:center;gap:8px;min-width:0;font-size:17px;line-height:19px;font-weight:600;color:var(--h-loc)}
+body.uim #u-home .h-loc .h-pin{color:var(--h-pin)}
+body.uim #u-home .h-cap{display:flex;align-items:center;gap:5px;flex:none;font-size:11px;line-height:14px;color:var(--h-muted);white-space:nowrap}
+body.uim #u-home .h-cap .u-ic{width:14px;height:14px}
+body.uim #u-home .h-fill{display:flex;align-items:center;gap:6px;flex:none;color:var(--h-acc)}
+body.uim #u-home .h-fill .u-ic{width:17px;height:17px}
+body.uim #u-home .h-fill strong{display:block;font-size:18px;line-height:20px;font-weight:650;font-variant-numeric:tabular-nums;white-space:nowrap}
+body.uim #u-home .h-fill small{display:block;font-size:10px;line-height:13px;color:var(--h-muted)}
+body.uim #u-home .h-next{display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;min-height:0;overflow:hidden;background:var(--h-panel);border-radius:8px;padding:8px 10px}
+body.uim #u-home .h-label{display:block;font-size:11px;line-height:14px;color:var(--h-muted)}
+body.uim #u-home .h-main{display:flex;align-items:center;gap:7px;min-width:0;font-size:17px;line-height:20px;font-weight:650;color:var(--h-ink)}
+body.uim #u-home .u-k-repair .h-main,body.uim #u-home .u-k-rest .h-main{font-size:15px;line-height:19px}
+body.uim #u-home .u-k-repair .h-next,body.uim #u-home .u-k-rest .h-next{padding:7px 10px;gap:2px}
+body.uim #u-home .h-main .u-ic{width:17px;height:17px;color:var(--h-acc)}
+body.uim #u-home .h-main>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.uim #u-home .u-k-repair .h-main>span,body.uim #u-home .u-k-rest .h-main>span{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+body.uim #u-home .h-meta{font-size:11px;line-height:15px;color:var(--h-muted);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+body.uim #u-home .h-disp{display:flex;align-items:center;gap:7px;min-width:0;border-top:1px solid var(--h-line);padding-top:8px;font-size:12px;line-height:16px;color:var(--h-muted)}
+body.uim #u-home .h-disp .u-ic{width:15px;height:15px}
+body.uim #u-home .h-disp>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.uim #u-home .h-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:center;min-height:0;overflow:hidden;background:var(--h-i-hero);border-radius:8px;padding:8px 10px}
+body.uim #u-home .h-now,body.uim #u-home .h-freq{display:flex;flex-direction:column;min-width:0}
+body.uim #u-home .h-clock{font-size:36px;font-weight:650;line-height:1.15;letter-spacing:-1px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--h-i-clock)}
+body.uim #u-home .h-now small,body.uim #u-home .h-freq small{display:block;font-size:11px;line-height:15px;color:var(--h-i-hero-muted)}
+body.uim #u-home .h-freq{border-left:1px solid var(--h-i-hero-line);padding-left:10px}
+body.uim #u-home .h-freq b{font-size:25px;line-height:25px;font-weight:600;color:var(--h-i-dash)}
+body.uim #u-home .h-backfreq{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px;margin-top:6px;font-size:10px;line-height:13px;color:var(--u-muted)}
+body.uim #u-home .h-backfreq strong{font-size:13px;line-height:13px;font-weight:600;color:var(--u-text)}
+/* the back face is already full: the one-line field gets its height from the back's own gaps, so nothing on it moves out of view */
+body.uim #u-home .u-back .u-cardname{margin-bottom:3px}
+body.uim #u-home .u-back .u-fin{margin-top:8px;row-gap:8px}
+@media(max-width:850px){body.uim #u-home .h-stat{padding:13px}body.uim #u-home .h-stat-l{font-size:16px}body.uim #u-home .h-stat.h-total{padding:15px 16px}}
+@media(max-width:600px){body.uim #u-home .h-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}body.uim #u-home .h-cos{padding-left:0}body.uim #u-home .h-stat-l{font-size:17px}}
+@media(max-width:400px){body.uim #u-home .h-clock{font-size:32px}body.uim #u-home .h-name{font-size:18px}}
 body.uim .u-idlecap{font-size:10px;color:var(--u-bad);display:block;margin-top:5px}
 body.uim .u-fin{display:grid;grid-template-columns:1fr 1fr;gap:16px 10px;margin-top:15px;font-size:11px}
 body.uim .u-fin small{color:var(--u-muted);display:block;line-height:1.5}
@@ -11692,6 +11789,8 @@ var ICONS = {
   'wrench': '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/>',
   'user-round': '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
   'map-pin': '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  'steering-wheel': '<circle cx="12" cy="12" r="10"/><path d="m3.3 7 7 4"/><path d="m13.7 11 7-4"/><path d="M12 14v8"/><circle cx="12" cy="12" r="2"/>',
+  'circle-pause': '<circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/>',
   'arrow-right': '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>', 'arrow-down': '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
   'clock-3': '<circle cx="12" cy="12" r="10"/><path d="M12 6v6h4"/>',
   'rotate-ccw': '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
@@ -12607,46 +12706,67 @@ function hmDrivers() {
   var rank = { idle: 0, loaded: 1, pickup: 1, repair: 4, rest: 5, dormant: 6, off: 7 };
   return out.sort(function (a, b) { return rank[a.kind] - rank[b.kind] || (a.kind === 'idle' ? ((b.idleMs == null ? -1 : b.idleMs) - (a.idleMs == null ? -1 : a.idleMs)) : 0) || a.name.localeCompare(b.name, 'ka'); });
 }
+/* DOS-HOME-VISUAL-20261029-01 (owner-approved design): the "stops in the last 30 days" field is a placeholder until the agreed
+   statistic exists - it never shows a count or a zero */
+function hmFreqHtml() { return '<span class="h-freq" aria-label="ტვირთის არქონით გაჩერებების რაოდენობის მომავალი ველი; სტატისტიკა ჯერ არ ითვლება"><small>გაჩერება<br>ბოლო 30 დღე</small> <b>—</b> <small>არ ითვლება</small></span>'; }
+function hmFreqBackHtml() { return '<div class="h-backfreq"><small>გაჩერება · ბოლო 30 დღე</small> <strong>—</strong> <small>არ ითვლება</small></div>'; }
+function hmNextHtml(label, main, meta, arrow) { return '<span class="h-next"><small class="h-label">' + h(label) + '</small><span class="h-main">' + (arrow ? ic('arrow-right') : '') + '<span>' + h(main || '—') + '</span></span>' + (meta ? '<small class="h-meta">' + h(meta) + '</small>' : '') + '</span>'; }
 function hmCard(x) {
   var d = x.d, cap = d.cap != null && Number(d.cap) > 0 ? Number(d.cap) : (x.d._unreg ? null : 1), capTxt = cap ? cap + '-მანქ.' : 'ზომა უცნობია';
-  var tag, status, vicon = 'truck', r1 = '', r2 = '', r2i = 'clock-3', small = '';
+  /* front: company and status, the driver, the place with the truck size (or the load), the status block, the dispatcher. The place is
+     the last one the loads show (the planned pickup for a driver going to one) - never live GPS. */
+  var badge, info, loc = x.lastDel ? locShort(x.lastDel.l.delivery_location) : 'მდებარეობა უცნობია', where = 'ბოლო ცნობილი მდებარეობა; არა პირდაპირი GPS',
+      side = '<span class="h-cap">' + ic('truck') + h(capTxt) + '</span>';
   if (x.kind === 'idle') {
-    var el = x.idleMs != null ? uElapsed(x.idleMs) : null;
-    tag = '<span class="u-tag u-warn"><i class="u-dot"></i> ყურადღება</span>';
-    status = '<span><span class="u-idletime">' + (el ? el.map(function (p) { return p[0] + ' <small>' + p[1] + '</small>'; }).join(' ') : '—') + '</span><span class="u-idlecap">' + (el ? 'გაჩერებულია · ბოლო ჩაბარებიდან' : 'ტვირთის გარეშე · ბოლო ჩაბარების დრო უცნობია') + '</span></span>';
-    r1 = x.lastDel ? locShort(x.lastDel.l.delivery_location) : 'მდებარეობა უცნობია'; r2 = 'თავისუფალია ახალი ტვირთისთვის';
-    small = x.lastDel ? 'ბოლო ჩაბარება · ' + uWhen(x.lastDel.t) + ' (თბილისის დრო) · SD' : 'ჩაბარებული ტვირთი აპში არ ჩანს';
+    var el = x.idleMs != null ? uElapsed(x.idleMs) : null, days = !!el && el[0][1] !== 'სთ';
+    badge = '<span class="h-badge"><i class="h-dot"></i>გაჩერებულია</span>';
+    info = '<span class="h-hero">' + (el ? '<span class="h-now" aria-label="გაჩერებულია ' + el[0][0] + (days ? ' დღე და ' : ' საათი და ') + el[1][0] + (days ? ' საათი' : ' წუთი') + '"><b class="h-clock">' + el[0][0] + ':' + ('0' + el[1][0]).slice(-2) + '</b><small>' + (days ? 'დღე : საათი' : 'საათი : წუთი') + '</small></span>'
+      : '<span class="h-now" title="ბოლო ჩაბარების დრო აპში არ ჩანს"><b class="h-clock">—</b><small>დრო უცნობია</small></span>') + hmFreqHtml() + '</span>';
   } else if (x.kind === 'loaded') {
     var l = x.picked[0], k = x.picked.reduce(function (s, y) { return s + cars_(y); }, 0);
-    tag = '<span class="u-tag">გზაში</span>'; status = '<b>დატვირთულია ' + k + (cap ? '/' + cap : '') + '</b>';
-    r1 = locShort(l.pickup_location); r2 = locShort(l.delivery_location); r2i = 'arrow-right';
-    small = (l.vehicle || 'ტვირთი') + (x.picked.length > 1 ? ' + ' + (x.picked.length - 1) : '') + ' · ' + money(x.picked.reduce(function (s, y) { return s + grossOf_(y); }, 0)) + ' · ბოლო ცნობილი → შემდეგი ჩაბარება';
+    badge = '<span class="h-badge">' + ic('truck') + 'გზაში</span>';
+    loc = locShort(l.pickup_location);
+    side = '<span class="h-fill">' + ic('truck') + '<span><strong>' + k + (cap ? ' / ' + cap : '') + '</strong><small>დატვირთულია</small></span></span>';
+    info = hmNextHtml('შემდეგი ჩაბარება', locShort(l.delivery_location), (l.vehicle || 'ტვირთი') + (x.picked.length > 1 ? ' + ' + (x.picked.length - 1) : '') + ' · ' + money(x.picked.reduce(function (s, y) { return s + grossOf_(y); }, 0)), true);
   } else if (x.kind === 'pickup') {
     var nl = x.next.slice().sort(function (a, b) { return puDay_(a) < puDay_(b) ? -1 : 1; })[0];
-    tag = '<span class="u-tag">სამუშაო</span>'; status = '<b>აღებაზე მიდის</b>';
-    r1 = locShort(nl.pickup_location); r2 = 'აღება · ' + (nl.vehicle || 'ტვირთი');
-    small = 'დაგეგმილი ტვირთი · ' + money(grossOf_(nl)) + (puDay_(nl) ? ' · ' + uDayShort(puDay_(nl)) : '') + (x.next.length > 1 ? ' · კიდევ ' + (x.next.length - 1) : '');
+    badge = '<span class="h-badge">' + ic('truck') + 'აღებაზე მიდის</span>';
+    loc = locShort(nl.pickup_location); where = 'დაგეგმილი აღების ადგილი';
+    info = hmNextHtml('დაგეგმილი ტვირთი', nl.vehicle || 'ტვირთი', money(grossOf_(nl)) + (puDay_(nl) ? ' · ' + uDayShort(puDay_(nl)) : '') + (x.next.length > 1 ? ' · კიდევ ' + (x.next.length - 1) : ''), false);
   } else if (x.kind === 'repair' || x.kind === 'rest') {
-    var rep = x.kind === 'repair'; vicon = rep ? 'wrench' : 'moon';
-    tag = rep ? '<span class="u-tag u-repair">შეკეთება</span>' : '<span class="u-tag u-neutral">პაუზა</span>'; status = '<b>' + (rep ? 'მანქანას აკეთებს' : 'ისვენებს') + '</b>';
-    r1 = x.lastDel ? locShort(x.lastDel.l.delivery_location) : 'მდებარეობა უცნობია'; r2i = rep ? 'wrench' : 'clock-3';
-    r2 = rep ? String(x.off.reason || '').replace(/^\s*შეკეთება\s*[:·—-]?\s*/, '') || 'შეკეთება' : (x.off.reason || 'ისვენებს');
-    small = (rep ? 'შეკეთებაზეა' : 'ისვენებს') + (x.off.to_day ? ' · ' + uDayShort(x.off.to_day) + '-ის ჩათვლით' : ' · ვადა მითითებული არ არის');
+    var rep = x.kind === 'repair';
+    badge = '<span class="h-badge">' + ic(rep ? 'wrench' : 'moon') + (rep ? 'მანქანას აკეთებს' : 'ისვენებს') + '</span>';
+    info = hmNextHtml(rep ? 'მიზეზი' : 'მიმდინარე მდგომარეობა', rep ? String(x.off.reason || '').replace(/^\s*შეკეთება\s*[:·—-]?\s*/, '') || 'მიზეზი მითითებული არ არის' : (x.off.reason || 'ისვენებს'),
+      x.off.to_day ? uDayShort(x.off.to_day) + '-ის ჩათვლით' : 'ვადა მითითებული არ არის', false);
   } else if (x.kind === 'dormant') {
-    vicon = 'truck'; tag = '<span class="u-tag u-neutral">ტვირთის გარეშე</span>'; status = '<b>' + (x.lastPu ? '30 დღეზე მეტია ტვირთი არ ჰქონია' : 'ტვირთი აპში არ ჩანს') + '</b>';
-    r1 = x.lastDel ? locShort(x.lastDel.l.delivery_location) : 'მდებარეობა უცნობია'; r2 = x.lastPu ? 'ბოლო ტვირთი · ' + uDayShort(x.lastPu) : 'ჯერ არცერთი ტვირთი';
-    small = 'თუ აქ აღარ მუშაობს — მძღოლების დაფაზე მოხსენი „მუშაობს“';
-  } else { vicon = 'moon'; tag = '<span class="u-tag u-neutral">გამორთული</span>'; status = '<b>მიმდინარე კომპანია არ აქვს</b>'; r1 = 'რეესტრში გამორთულია · ' + x.codes.join(' · '); r2 = x.lastPu ? 'ბოლო ტვირთი · ' + uDayShort(x.lastPu) : 'ტვირთი აპში არ ჩანს'; small = 'დასაბრუნებლად — მძღოლების დაფა, „არააქტიური და ადრინდელი წევრობები“'; }
+    badge = '<span class="h-badge">ტვირთის გარეშე</span>';
+    info = hmNextHtml(x.lastPu ? '30 დღეზე მეტია ტვირთი არ ჰქონია' : 'ტვირთი აპში არ ჩანს', x.lastPu ? 'ბოლო ტვირთი · ' + uDayShort(x.lastPu) : 'ჯერ არცერთი ტვირთი', 'თუ აქ აღარ მუშაობს — მძღოლების დაფაზე მოხსენი „მუშაობს“', false);
+  } else {
+    badge = '<span class="h-badge">გამორთული</span>';
+    loc = 'რეესტრში გამორთულია · ' + x.codes.join(' · '); where = '';
+    info = hmNextHtml('მიმდინარე კომპანია არ აქვს', x.lastPu ? 'ბოლო ტვირთი · ' + uDayShort(x.lastPu) : 'ტვირთი აპში არ ჩანს', 'დასაბრუნებლად — მძღოლების დაფა, „არააქტიური და ადრინდელი წევრობები“', false);
+  }
   var flipped = HM.flip === x.id;
   return '<article class="u-card u-k-' + x.kind + (flipped ? ' u-flipped' : '') + '" data-u-card="' + h(x.id) + '"><div class="u-turn">' +
-    '<button type="button" class="u-front" data-u-flip="' + h(x.id) + '" aria-expanded="' + flipped + '"' + (flipped ? ' inert' : '') + '><span class="u-cardtop"><span>' + h(x.code) + (x.d._unreg ? ' · რეესტრში არ არის' : '') + '</span>' + tag + '</span>' +
-    '<span class="u-cardname">' + h(x.name) + '</span><span class="u-carddisp">' + ic('user-round') + h(x.owner || 'დისპეჩერი მიუნიჭებელია') + '</span>' +
-    '<span class="u-cardstatus">' + status + '<span class="u-vehicle">' + ic(vicon) + h(capTxt) + '</span></span>' +
-    '<span class="u-route"><span class="u-routeplace">' + ic('map-pin') + '<span>' + h(r1 || '—') + '</span></span><span class="u-routeplace">' + ic(r2i) + '<span>' + h(r2 || '—') + '</span></span><small>' + h(small) + '</small></span></button>' +
-    '<div class="u-back"' + (flipped ? '' : ' inert') + '><button type="button" class="u-iconbtn u-backclose" data-u-unflip="' + h(x.id) + '" aria-label="ბარათის წინა მხარე">' + ic('rotate-ccw') + '</button><small class="u-muted">კვირის მაჩვენებლები · აღების გეგმის თარიღით</small><span class="u-cardname" style="margin-top:9px">' + h(x.name) + '</span>' +
+    '<button type="button" class="u-front h-front" data-u-flip="' + h(x.id) + '" aria-expanded="' + flipped + '"' + (flipped ? ' inert' : '') + '>' +
+    '<span class="h-top"><span class="h-co"><span>' + h(x.code) + '</span>' + (x.d._unreg ? '<small>რეესტრში არ არის</small>' : '') + '</span>' + badge + '</span>' +
+    '<span class="h-name">' + ic('steering-wheel', 'h-ic28') + '<span>' + h(x.name) + '</span></span>' +
+    '<span class="h-locrow"><span class="h-loc"' + (where ? ' title="' + h(where) + '"' : '') + '>' + ic('map-pin', 'h-ic28 h-pin') + '<span>' + h(loc || '—') + '</span></span>' + side + '</span>' +
+    info + '<span class="h-disp">' + ic('headset') + '<span>' + h(x.owner || 'დისპეჩერი მიუნიჭებელია') + '</span></span></button>' +
+    '<div class="u-back"' + (flipped ? '' : ' inert') + '><button type="button" class="u-iconbtn u-backclose" data-u-unflip="' + h(x.id) + '" aria-label="ბარათის წინა მხარე">' + ic('rotate-ccw') + '</button><small class="u-muted">კვირის მაჩვენებლები · აღების გეგმის თარიღით</small><span class="u-cardname" style="margin-top:5px">' + h(x.name) + '</span>' +
     '<div class="u-fin"><div><small>GROSS · ეს კვირა</small><strong>' + h(money(x.wkGross)) + '</strong></div><div><small>კვირის მიზანი</small>' + (d.target_gross != null ? '<strong>' + h(money(Number(d.target_gross))) + '</strong>' : '<strong class="u-na">მითითებული არ არის</strong>') + '</div>' +
     '<div><small>ტვირთი · ეს კვირა</small><strong>' + x.wkN + (x.wkCars !== x.wkN ? ' <small style="display:inline">· ' + x.wkCars + ' მანქ.</small>' : '') + '</strong></div><div><small>GROSS · ბოლო 30 დღე</small><strong>' + h(money(x.g30)) + '</strong></div></div>' +
+    (x.kind !== 'idle' ? hmFreqBackHtml() : '') +
     '<div class="u-backfoot">' + h(x.owner || 'დისპეჩერი მიუნიჭებელია') + ' · ' + h(x.code) + '<br>GROSS = ტვირთის ღირებულება SD-დან; არ არის ანაზღაურება ან მიღებული თანხა.</div></div></div></article>';
+}
+/* the summary: the eligible drivers (the status tiles' own population, as before) in total and by company, then the status tiles */
+function hmSummaryHtml(act) {
+  var cnt = function (k) { return act.filter(function (x) { return k.indexOf(x.kind) >= 0; }).length; };
+  var tile = function (cls, icon, n, label) { return '<div class="h-stat ' + cls + '"><div class="h-stat-head"><span class="h-stat-ic">' + ic(icon) + '</span><span class="h-stat-n">' + n + '</span></div><div class="h-stat-l">' + label + '</div></div>'; };
+  return '<div class="h-stats" id="u-hm-stats"><div class="h-stat h-total"><div class="h-total-head"><span class="h-stat-ic">' + ic('steering-wheel') + '</span><span class="h-stat-n">' + act.length + '</span><span class="h-stat-l">სულ მძღოლი</span></div>' +
+    '<div class="h-cos" aria-label="განაწილება კომპანიების მიხედვით">' + (U.cos || []).filter(function (c) { return uScopeIn(c.company_id); }).map(function (c) { return '<span class="h-co-n">' + h(c.code) + ' <strong>' + act.filter(function (x) { return x.co === c.company_id; }).length + '</strong></span>'; }).join('') + '</div></div>' +
+    tile('h-s-idle', 'circle-pause', cnt(['idle']), 'გაჩერებული') + tile('h-s-work', 'truck', cnt(['loaded', 'pickup']), 'მუშაობს') +
+    tile('h-s-rep', 'wrench', cnt(['repair']), 'მანქანას აკეთებს') + tile('h-s-rest', 'moon', cnt(['rest']), 'ისვენებს') + '</div>';
 }
 function hmGridHtml(all) {
   var q = HM.q.trim().toLocaleLowerCase();
@@ -12657,8 +12777,6 @@ function hmGridHtml(all) {
   if (off.length) html += '<div class="u-section-t"><button type="button" class="u-btn" data-u-hm-off aria-expanded="' + HM.off + '">' + ic(HM.off ? 'chevron-up' : 'chevron-down') + 'მიმდინარე კომპანიის გარეშე · ' + off.length + '</button><span>რეესტრში გამორთულია და არცერთ კომპანიაში არ მუშაობს. სხვა კომპანიაში გადასული მძღოლის ძველი ჩანაწერი აქ არ ჩანს — ის მძღოლების დაფის ისტორიაშია.</span></div>' + (HM.off ? '<div class="u-cards">' + off.map(hmCard).join('') + '</div>' : '');
   return { html: html, n: on.length, cur: on.length + dorm.length, unreg: on.concat(dorm).filter(function (x) { return x.d._unreg; }).length };
 }
-/* the same base number the Drivers board and the Dispatchers page state: current drivers of the shown companies */
-function hmCountText(g) { return g.cur + ' მიმდინარე მძღოლი' + (g.unreg ? ' · მათ შორის ' + g.unreg + ' რეესტრში არ არის' : '') + (g.cur !== g.n ? ' · ბარათებად ' + g.n : '') + ' · განახლდა ' + uTzTime(U.loadedAt); }
 function hmShiftsHtml() {
   var today = tbToday(), C = SH.closed[today], cn = C && C.rows ? C.rows.length : null, on = mgiReady_() && uReady() ? shOpenRows().length : null, pn = pendingCount();
   if (uReady() && (!C || (!C.rows && !C.error && !C.loading))) shClosedLoad(today).then(function () { if (MTAB === 'overview' && uiActive()) { var e = document.getElementById('u-hm-shifts'); if (e) e.outerHTML = hmShiftsHtml(); } });
@@ -12676,12 +12794,12 @@ PAGES.overview = {
   ownReload: false,
   jump: function () {},
   paint: function (view) {
-    var st = uStateHtml(), all = uReady() ? hmDrivers() : [], act = all.filter(function (x) { return uScopeIn(x.co) && x.kind !== 'off' && x.kind !== 'dormant'; }), cnt = function (k) { return act.filter(function (x) { return k.indexOf(x.kind) >= 0; }).length; };
-    var g = uReady() ? hmGridHtml(all) : { html: '', n: 0, cur: 0, unreg: 0 }, today = tbToday();
-    view.innerHTML = '<div class="u-page" id="u-home"><div class="u-head"><div><h1>მთავარი</h1><p class="u-sub">ყველა მძღოლი ერთ ხედში · გაჩერებულები პირველ რიგში</p></div><span class="u-date">' + h(uDay(today)) + ', ' + h(uWeekday(today)) + '<br>სამუშაო დღე · ' + h(uDay(workToday_())) + '</span></div>' + st +
-      (uReady() ? '<div class="u-summary"><span class="u-s-idle"><i class="u-dot"></i>' + cnt(['idle']) + ' გაჩერებული</span><span><i class="u-dot"></i>' + cnt(['loaded', 'pickup']) + ' მუშაობს</span><span class="u-s-mute">' + cnt(['repair']) + ' შეკეთებაზე</span><span class="u-s-mute">' + cnt(['rest']) + ' ისვენებს</span></div>' +
+    var st = uStateHtml(), all = uReady() ? hmDrivers() : [], act = all.filter(function (x) { return uScopeIn(x.co) && x.kind !== 'off' && x.kind !== 'dormant'; });
+    var g = uReady() ? hmGridHtml(all) : { html: '', n: 0, cur: 0, unreg: 0 };
+    view.innerHTML = '<div class="u-page" id="u-home"><h1 class="h-sr">მთავარი</h1>' + st +
+      (uReady() ? hmSummaryHtml(act) +
         '<div class="u-toolbar"><label class="u-search" for="u-hm-q">' + ic('search') + '<input id="u-hm-q" type="search" value="' + h(HM.q) + '" placeholder="მოძებნე მძღოლი" aria-label="მოძებნე მძღოლი"></label>' + uScopeSelect('u-hm-co') +
-        '<span class="u-count" id="u-hm-count">' + hmCountText(g) + '</span></div>' + uScopeNote() + '<div id="u-hm-grid">' + g.html + '</div>' : '') +
+        '</div><div id="u-hm-grid">' + g.html + '</div>' : '') +
       hmShiftsHtml() + '<p class="u-note" style="margin-top:14px">სტატუსი ეფუძნება Super Dispatch-ის ტვირთებს და აპში ჩაწერილ დასვენება/შეკეთების პერიოდებს. „გაჩერებული“ — მძღოლი, რომელსაც ბოლო 30 დღეში ტვირთი ჰქონდა და ახლა არც აყვანილი, არც დაგეგმილი ტვირთი არ აქვს (იგივე ფარგლები, რაც ცოცხალ დაფაზე). გაჩერების დრო ითვლება ბოლო ჩაბარებიდან; თუ ჩაბარების დრო არ ჩანს, დრო არ გამოითვლება. ' +
       '<button type="button" class="u-btn u-link" data-u-route="mghome">ხვალინდელი გეგმა, ჩეკები და სხვა საკითხები →</button></p></div>';
   },
@@ -12694,7 +12812,7 @@ PAGES.overview = {
     if (el.closest('[data-u-hm-dorm]')) { HM.dorm = !HM.dorm; return render(); }
   },
   change: function (e, el) { if (el.hasAttribute('data-u-scope')) { SCOPE.co = el.value; HM.flip = null; render(); } },
-  input: function (e, el) { if (el.id === 'u-hm-q') { HM.q = el.value; HM.flip = null; var g = hmGridHtml(hmDrivers()); document.getElementById('u-hm-grid').innerHTML = g.html; document.getElementById('u-hm-count').textContent = hmCountText(g); } },
+  input: function (e, el) { if (el.id === 'u-hm-q') { HM.q = el.value; HM.flip = null; document.getElementById('u-hm-grid').innerHTML = hmGridHtml(hmDrivers()).html; } },
   key: function (e) { if (e.key === 'Escape' && HM.flip) { var id = HM.flip; hmFlip(null); var f = document.querySelector('#u-home [data-u-card="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"] .u-front'); if (f) f.focus(); } }
 };
 PAGES.shifts.jump = function (tab) { if (['closed', 'open', 'pending', 'history'].indexOf(tab) >= 0) { SH.tab = tab; SH.open = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; if (tab === 'closed') SH.day = tbToday(); } };
