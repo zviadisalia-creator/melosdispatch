@@ -11024,6 +11024,39 @@ body.uim #u-home .u-back .u-fin{margin-top:8px;row-gap:8px}
 @media(max-width:850px){body.uim #u-home .h-stat{padding:13px}body.uim #u-home .h-stat-l{font-size:16px}body.uim #u-home .h-stat.h-total{padding:15px 16px}}
 @media(max-width:600px){body.uim #u-home .h-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}body.uim #u-home .h-cos{padding-left:0}body.uim #u-home .h-stat-l{font-size:17px}}
 @media(max-width:400px){body.uim #u-home .h-clock{font-size:32px}body.uim #u-home .h-name{font-size:18px}}
+/* ---- DOS-HOME-COVERAGE-LIVE-005 · today's work coverage (owner-approved v4 direction, 2026-10-30): the coverage groups, the amber
+   "today's work is short" card, the need text and the back's today section. Scoped to #u-home; card size, grid and flip unchanged. ---- */
+body.uim #u-home{--h-a-bg:#f6efe0;--h-a-border:#e3d3b5;--h-a-top:#b8893f;--h-a-ink:#3f3119;--h-a-muted:#7a6340;--h-a-acc:#9a6f2c;--h-a-panel:#efe3c8;--h-a-line:#e3d3b5;--h-a-tag-bg:#eee0c6;--h-a-tag:#74511f;--h-a-need:#8a5a12}
+:root[data-theme="dark"] body.uim #u-home{--h-a-bg:#383223;--h-a-border:#5a4e33;--h-a-top:#d8a85a;--h-a-ink:#f6ead2;--h-a-muted:#d8c69e;--h-a-acc:#e8c27e;--h-a-panel:#463d2a;--h-a-line:#5c5038;--h-a-tag-bg:#4a3f29;--h-a-tag:#ecc88a;--h-a-need:#f2c477}
+body.uim #u-home .u-card.h-amber{--h-ink:var(--h-a-ink);--h-muted:var(--h-a-muted);--h-co:var(--h-a-muted);--h-acc:var(--h-a-acc);--h-pin:var(--h-a-acc);--h-loc:var(--h-a-ink);--h-panel:var(--h-a-panel);--h-line:var(--h-a-line);--h-tag-bg:var(--h-a-tag-bg);--h-tag:var(--h-a-tag)}
+body.uim #u-home .u-card.h-amber .u-front{background:var(--h-a-bg);border-color:var(--h-a-border);border-top-color:var(--h-a-top)}
+body.uim #u-home .h-needline{font-size:12px;line-height:16px;font-weight:650;color:var(--h-a-need);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+body.uim #u-home .h-need{display:flex;flex-direction:column;min-width:0;border-left:1px solid var(--h-i-hero-line);padding-left:10px}
+body.uim #u-home .h-need small{display:block;font-size:11px;line-height:15px;color:var(--h-i-hero-muted)}
+body.uim #u-home .h-need b{font-size:14px;line-height:17px;font-weight:650;color:var(--h-i-clock);overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+body.uim #u-home .h-ghead{display:flex;align-items:center;gap:10px;margin:26px 0 12px}
+body.uim #u-home .h-ghead h2{margin:0;font-size:16px;font-weight:600;display:flex;align-items:center;gap:9px}
+body.uim #u-home .h-gdot{width:10px;height:10px;border-radius:50%;flex:none}
+body.uim #u-home .h-g-red .h-gdot{background:var(--h-i-top)}
+body.uim #u-home .h-g-amber .h-gdot{background:var(--h-a-top)}
+body.uim #u-home .h-g-green .h-gdot{background:var(--u-work)}
+body.uim #u-home .h-g-rr .h-gdot{background:var(--h-s-top)}
+body.uim #u-home .h-gn{font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px;background:var(--u-count);color:var(--u-count-text)}
+body.uim #u-home .u-back{overflow-y:auto}
+body.uim #u-home .u-back>*{flex:none}
+body.uim #u-home .h-btitle{display:block;font-size:11px;color:var(--u-muted);padding-right:36px}
+body.uim #u-home .h-kv{font-size:11px;line-height:1.5;margin:0 0 8px}
+body.uim #u-home .h-kv div{margin:0 0 2px}
+body.uim #u-home .h-kv dt{display:inline;color:var(--u-muted)}
+body.uim #u-home .h-kv dt::after{content:": "}
+body.uim #u-home .h-kv dd{display:inline;margin:0}
+body.uim #u-home .h-bnote{font-size:11px;line-height:1.45;background:var(--u-note-bg);border:1px solid var(--u-note-line);color:var(--u-note-text);border-radius:7px;padding:5px 8px;margin:0 0 8px;overflow-wrap:anywhere}
+body.uim #u-home .h-bloads{display:grid;gap:5px;margin-bottom:8px}
+body.uim #u-home .h-bld{font-size:11px;line-height:1.45;background:var(--u-panel);border:1px solid var(--u-line);border-radius:7px;padding:5px 8px;overflow-wrap:anywhere}
+body.uim #u-home .h-bld b{font-family:ui-monospace,Consolas,monospace;font-weight:600}
+body.uim #u-home .h-bld span{display:block;color:var(--u-muted)}
+body.uim #u-home .h-bempty{font-size:11px;color:var(--u-muted);margin:0 0 8px}
+body.uim #u-home .h-bsep{border-top:1px solid var(--u-sep);margin:2px 0 10px}
 body.uim .u-idlecap{font-size:10px;color:var(--u-bad);display:block;margin-top:5px}
 body.uim .u-fin{display:grid;grid-template-columns:1fr 1fr;gap:16px 10px;margin-top:15px;font-size:11px}
 body.uim .u-fin small{color:var(--u-muted);display:block;line-height:1.5}
@@ -12683,7 +12716,7 @@ PAGES.shifts = {
    Switched-off rows of drivers with no current company are folded into one group, one entry per name. */
 var HM = { q: '', flip: null, off: false, dorm: false };
 function hmDrivers() {
-  var today = workToday_(), mon = mondayOf(today) || today, sun = addDays_(mon, 6), d30 = addDays_(today, -30), out = [], now = Date.now(), gone = {};
+  var today = workToday_(), mon = mondayOf(today) || today, sun = addDays_(mon, 6), d30 = addDays_(today, -30), out = [], now = Date.now(), gone = {}, pc = {};
   (U.cos || []).forEach(function (c) {
     var B = U.by[c.company_id], by = {};
     B.loads.forEach(function (l) { if (l.is_canceled || !l.driver_name) return; (by[l.driver_name] = by[l.driver_name] || []).push(l); });
@@ -12700,6 +12733,7 @@ function hmDrivers() {
       var x = { id: c.company_id + '|' + n, co: c.company_id, code: c.code, codes: [c.code], name: n, d: d, kind: kind, off: off, picked: picked, next: next, lastDel: lastDel, lastPu: lastPu, idleMs: kind === 'idle' && lastDel ? now - lastDel.t : null,
         owner: uOwner(c.company_id, n, today) || d.dispatcher_name || '', wkGross: wk.reduce(function (s, l) { return s + grossOf_(l); }, 0), wkN: wk.length, wkCars: wk.reduce(function (s, l) { return s + cars_(l); }, 0), g30: m30.reduce(function (s, l) { return s + grossOf_(l); }, 0), n30: m30.length };
       if (!act) gone[uNameKey(n)] = x;
+      if (kind === 'idle' || kind === 'loaded' || kind === 'pickup') x.cov = hmCoverSafe(B, n, d, x, today, pc, ls);
       out.push(x);
     });
   });
@@ -12707,12 +12741,163 @@ function hmDrivers() {
   return out.sort(function (a, b) { return rank[a.kind] - rank[b.kind] || (a.kind === 'idle' ? ((b.idleMs == null ? -1 : b.idleMs) - (a.idleMs == null ? -1 : a.idleMs)) : 0) || a.name.localeCompare(b.name, 'ka'); });
 }
 /* DOS-HOME-VISUAL-20261029-01 (owner-approved design): the "stops in the last 30 days" field is a placeholder until the agreed
-   statistic exists - it never shows a count or a zero */
-function hmFreqHtml() { return '<span class="h-freq" aria-label="ტვირთის არქონით გაჩერებების რაოდენობის მომავალი ველი; სტატისტიკა ჯერ არ ითვლება"><small>გაჩერება<br>ბოლო 30 დღე</small> <b>—</b> <small>არ ითვლება</small></span>'; }
+   statistic exists - it never shows a count or a zero. Since DOS-HOME-COVERAGE-LIVE-005 it is on the back of every card. */
 function hmFreqBackHtml() { return '<div class="h-backfreq"><small>გაჩერება · ბოლო 30 დღე</small> <strong>—</strong> <small>არ ითვლება</small></div>'; }
-function hmNextHtml(label, main, meta, arrow) { return '<span class="h-next"><small class="h-label">' + h(label) + '</small><span class="h-main">' + (arrow ? ic('arrow-right') : '') + '<span>' + h(main || '—') + '</span></span>' + (meta ? '<small class="h-meta">' + h(meta) + '</small>' : '') + '</span>'; }
+/* ---- DOS-HOME-COVERAGE-LIVE-005 (owner-approved v4 direction, 2026-10-30): today's work coverage on the driver cards. An
+   assistance view only: shift-close gates, waivers, the server standard and every saved record are untouched; nothing here
+   writes or reads anything new. The day is the homepage's own Chicago work day (workToday_). A load counts for today when
+     1. it was picked up today (the America/Chicago work day of the stored pickup time, anchored like workToday_; the page's
+        pickedDay_ when no time is stored), delivered or not;
+     2. it is not picked up and is on today's plan of the driver's dispatcher (uPlan = the server's plan_orders_co: a manual add
+        wins, a manual remove takes it out, otherwise the SD pickup date; a driver with no dispatcher: the SD pickup date).
+   A load picked up earlier that is still on the road after today (freeDay_, as inTransit_) covers today only when nothing counts
+   today; on its delivery day it does not. An assigned load whose planned day is missing or already passed (and that is on no
+   later plan), or a picked-up load whose free day is unknown, is "to be clarified": not counted, and never a definite deficit.
+   Enough = as many cars as the trailer (1-car trailer: 2 loads) OR the daily target (weekly target / 6 x market factor) - the
+   owner's assistance rule; the closing gate's one-short-run allowance stays in Shift Close only. A missing trailer size or
+   target never counts as enough. Canceled loads are not counted; a reassigned load counts for its current SD driver only. ---- */
+var HM_CHI = null;
+function hmPickDay(l, today) {
+  var v = l.pickup_completed, s = String(v == null ? '' : v).slice(0, 10), a = sett_('shift_anchor_hour', 0), t;
+  if (!s) return pickedDay_(l);
+  /* a stored day, or a time whose UTC day is far from today, needs no zone arithmetic (the Chicago work day is never later) */
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(v)) || (a >= 0 && (s < today || s > addDays_(today, 2))) || !isFinite(t = uMs(v))) return s;
+  HM_CHI = HM_CHI || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' });
+  return HM_CHI.format(new Date(t - a * 36e5));
+}
+function hmEnough(cap, tgt, list) {
+  var r = { n: list.length, cars: 0, gross: 0, ok: false, unknown: '' };
+  list.forEach(function (l) { r.cars += cars_(l); r.gross += grossOf_(l); });
+  if (!r.n) return r;
+  var hit = tgt != null && r.gross >= tgt;
+  if (cap == null) { if (hit) r.ok = true; else r.unknown = 'მისაბმელის ზომა'; return r; }
+  if ((cap >= 2 ? r.cars >= cap : r.n >= 2) || hit) r.ok = true;
+  else if (tgt == null) r.unknown = 'კვირის სამიზნე';
+  return r;
+}
+/* the approved standard explanation for this driver's day (shown only; it never adds work) - from the inbox already loaded */
+function hmExpl(co, n, day) {
+  if (!mgiReady_()) return null;
+  return (MGI.waivers || []).filter(function (w) { return w.kind === 'standard' && w.status === 'approved' && w.company_id === co && w.work_day === day && w.order_number === n; })[0] || null;
+}
+function hmCover(B, n, d, x, today, pc, ls) {
+  var own = x.owner || '', pk = x.co + '|' + own, cap = d.cap != null && Number(d.cap) > 0 ? Number(d.cap) : null;
+  var tgt = d.target_gross != null ? Number(d.target_gross) / 6 * marketFactor_() : null;
+  if (!(tgt > 0)) tgt = null;
+  if (!(pk in pc)) pc[pk] = own ? uPlan(x.co, own, today) : null;
+  var on = {}, have = {}, later = {}, cand = ls.slice();
+  ls.forEach(function (l) { have[l.order_number] = 1; });
+  (pc[pk] || []).forEach(function (r) { if (r.driver !== n) return; on[r.l.order_number] = 1; if (!have[r.l.order_number] && !r.l.is_canceled) { have[r.l.order_number] = 1; cand.push(r.l); } });
+  /* the dispatcher's own decision for a load: taken out of today's plan, or planned for a later day */
+  if (own) B.plans.forEach(function (p) { if (p.dispatcher_name === own && (p.work_day === today ? p.action === 'remove' : p.work_day > today && p.action !== 'remove')) later[p.order_number] = 1; });
+  var c = { day: today, cap: cap, tgt: tgt, ls: [], tr: null, dd: [], unc: [] };
+  cand.forEach(function (l) {
+    var p = hmPickDay(l, today), fd, pu;
+    if (p) {
+      if (p === today) c.ls.push(l);
+      else if (p > today) c.unc.push({ l: l, pu: true, picked: true });
+      else if (l.status === 'picked_up' && !l.delivery_completed) {
+        fd = freeDay_(l);
+        if (!fd) c.unc.push({ l: l, pu: false });
+        else if (fd > today) { if (!c.tr || fd > c.tr.fd) c.tr = { l: l, fd: fd }; }
+        else c.dd.push({ l: l, fd: fd });
+      }
+      return;
+    }
+    if (own ? on[l.order_number] : puDay_(l) === today) { c.ls.push(l); return; }
+    pu = puDay_(l);
+    if ((pu && pu > today) || later[l.order_number] || (l.status || '') === 'delivered') return;
+    c.unc.push({ l: l, pu: true });
+  });
+  c.done = c.ls.filter(function (l) { return !!l.delivery_completed || l.status === 'delivered'; });
+  c.pend = c.ls.filter(function (l) { return c.done.indexOf(l) < 0; });
+  c.all = hmEnough(cap, tgt, c.ls); c.dn = hmEnough(cap, tgt, c.done);
+  c.ok = c.all.ok || (!c.ls.length && !!c.tr);
+  c.unsure = c.ok ? [] : c.unc.filter(function (u) { return u.pu || !c.ls.length; });
+  c.expl = hmExpl(x.co, n, today);
+  return c;
+}
+/* a failure never becomes a deficit or an assurance: the card says "to be clarified" */
+function hmCoverSafe(B, n, d, x, today, pc, ls) {
+  try { return hmCover(B, n, d, x, today, pc, ls); }
+  catch (e) { console.error('HOME coverage', e); return { err: true, ok: false, day: today, cap: null, tgt: null, ls: [], done: [], pend: [], tr: null, dd: [], unc: [], unsure: [], all: hmEnough(null, null, []), dn: hmEnough(null, null, []), expl: null }; }
+}
+/* the need text: one place for the idle hero, the amber line and the back */
+function hmNeed(c) {
+  if (!c || c.err) return 'დასაზუსტებელია';
+  if (c.ok) return 'შემდეგი ტვირთი';
+  if (c.all.unknown) return 'დასაზუსტებელია: ' + c.all.unknown;
+  if (c.unsure.length) return 'დასაზუსტებელია: ' + (c.unsure[0].pu ? 'აღების დღე' : 'ჩაბარების დღე');
+  var a = c.all, cap = c.cap, alt = c.tgt != null ? ' ან ' + money(Math.max(0, c.tgt - a.gross)) : '';
+  if (cap == null) return 'ტვირთი';
+  if (cap >= 2) return (a.cars ? 'კიდევ ' + (cap - a.cars) : cap) + ' მანქანა' + alt;
+  return (a.n ? 'კიდევ 1' : '2') + ' ტვირთი' + alt;
+}
+/* group: red = stopped (the idle tile), amber / green = working (the working tile) by today's coverage, rr = repair + rest */
+function hmCovView(x) {
+  if (x._cv) return x._cv;
+  var k = x.kind, c = x.cov, v = { group: k, amber: false, need: '' };
+  if (k === 'repair' || k === 'rest') v.group = 'rr';
+  else if (k === 'idle' || k === 'loaded' || k === 'pickup') { v.need = hmNeed(c); v.group = k === 'idle' ? 'red' : c && c.ok ? 'green' : 'amber'; v.amber = v.group === 'amber'; }
+  return (x._cv = v);
+}
+/* the stopped card's hero column is narrow (~100px at four cards a row): "to be clarified" is said in one short word there; the
+   full need is in the tooltip and on the back */
+function hmNeedHtml(need) { var s = String(need || ''), t = s.indexOf('დასაზუსტებელია') === 0 ? 'დაზუსტება' : s; return '<span class="h-need"' + (t !== s ? ' title="' + h(s) + '"' : '') + '><small>საჭიროა</small><b>' + h(t) + '</b></span>'; }
+function hmHow(c, r) {
+  if (c.cap >= 2 && r.cars >= c.cap) return r.cars + ' მანქანა · ' + money(r.gross);
+  if (c.cap === 1 && r.n >= 2) return r.n + ' ტვირთი · ' + money(r.gross);
+  return money(r.gross) + (c.tgt != null ? ' (სამიზნე ' + money(c.tgt) + ')' : '');
+}
+/* completed achievement first, then today's covered work, then transit, then what is short or to be clarified */
+function hmStdText(c) {
+  if (c.err) return 'დასაზუსტებელია — დათვლა ვერ მოხერხდა';
+  if (c.dn.ok) return 'შესრულდა — ' + hmHow(c, c.dn);
+  if (c.all.ok) return 'შევსებულია — ' + hmHow(c, c.all);
+  if (c.ok) return 'გზაშია, თავისუფლდება ' + uDayShort(c.tr.fd) + ' — დღეს ტვირთი არ სჭირდება';
+  var nd = hmNeed(c);
+  return nd.indexOf('დასაზუსტებელია') === 0 ? nd.replace(': ', ' — ') : 'აკლია — ' + nd;
+}
+function hmAmount(list, cap) { return list.length ? money(list.reduce(function (s, l) { return s + grossOf_(l); }, 0)) + ' · ' + (cap === 1 ? list.length + ' ტვირთი' : list.reduce(function (s, l) { return s + cars_(l); }, 0) + ' მანქ.') : '—'; }
+function hmRuleText(c) { return (c.cap == null ? 'მისაბმელის ზომა მითითებული არ არის' : c.cap >= 2 ? c.cap + ' მანქანა' : '2 ტვირთი') + (c.tgt != null ? ' ან ' + money(c.tgt) : ' · კვირის სამიზნე მითითებული არ არის'); }
+function hmWhen(v) { var d = uTzDay(v); return d ? uDayShort(d) + ' ' + uTzTime(v) : ''; }
+function hmLoadLine(l, st) {
+  var mi = loadMiles_(l);
+  return '<div class="h-bld"><b>' + h(l.order_number) + '</b> · ' + cars_(l) + ' მანქ. · ' + h(money(grossOf_(l))) + ' — ' + h(st) + '<span>' + h(l.vehicle || 'ტვირთი') + ' · ' + h(locShort(l.pickup_location) || '—') + ' → ' + h(locShort(l.delivery_location) || '—') + (mi ? ' · ' + Math.round(mi) + ' მილი' : '') + '</span></div>';
+}
+function hmTodaySt(l, c) {
+  if (l.delivery_completed || l.status === 'delivered') return 'ჩაბარდა' + (l.delivery_completed ? ' ' + hmWhen(l.delivery_completed) : '');
+  if (hmPickDay(l, c.day)) return 'გზაშია · აიღო ' + (l.pickup_completed ? hmWhen(l.pickup_completed) : 'დღეს');
+  var pu = puDay_(l);
+  return 'დაგეგმილია დღეს' + (pu !== c.day ? ' · SD-ის თარიღი ' + (pu ? uDayShort(pu) : 'არ არის') : '');
+}
+/* the back's today section: the standard line, completed vs current / booked, the rule, notes, and the loads behind them */
+function hmTodayHtml(x) {
+  var c = x.cov, o = '<small class="h-btitle">დღევანდელი სამუშაო · ' + h(uDayShort(c.day)) + '</small><span class="u-cardname">' + h(x.name) + '</span>';
+  if (c.err) return o + '<p class="h-bnote">დღევანდელი სამუშაო ვერ დაითვალა — ბარათზე „დასაზუსტებელია“ წერია; გადაამოწმე მძღოლების დაფაზე.</p><div class="h-bsep"></div>';
+  o += '<dl class="h-kv"><div><dt>დღის სტანდარტი</dt><dd><b>' + h(hmStdText(c)) + '</b></dd></div><div><dt>შესრულებული</dt><dd>' + h(hmAmount(c.done, c.cap)) + '</dd></div>' +
+    '<div><dt>მიმდინარე და დაჯავშნილი</dt><dd>' + h(hmAmount(c.pend, c.cap)) + '</dd></div><div><dt>საჭიროა</dt><dd>' + h(hmRuleText(c)) + '</dd></div></dl>';
+  var SM = shortMi_(), m0 = c.ls.length === 1 ? loadMiles_(c.ls[0]) : 0;
+  if (c.cap === 1 && c.all.n === 1 && !c.all.ok && m0 > 0 && m0 <= SM) o += '<p class="h-bnote">ცვლის დახურვისას ერთი მოკლე რეისი (≤' + SM + ' მილი) საკმარისად ითვლება — იმ ვარაუდით, რომ მეორე ტვირთი დღის განმავლობაში დაემატება. ამიტომ აქ მეორე ტვირთი საჭიროდ ჩანს; დახურვის წესი არ იცვლება.</p>';
+  if (!c.ok && !c.ls.length && c.dd.length) o += '<p class="h-bnote">ადრე აყვანილი ტვირთი დღეს ბარდება (ან ჩაბარების სავარაუდო დღე გავიდა) — ჩაბარების დღეს გზაში ყოფნა დღის სამუშაოდ არ ითვლება.</p>';
+  if (c.unsure.length) o += '<p class="h-bnote">ქვემოთ მონიშნული ტვირთის დღე დასაზუსტებელია: დღის სამუშაოდ არ ითვლება, მაგრამ დანაკლისიც დადგენილად არ ითვლება.</p>';
+  if (c.expl) o += '<p class="h-bnote">დღის სტანდარტზე დადასტურებულია ახსნა: „' + h(c.expl.reason || '') + '“. ახსნამ ცვლის დახურვა დაუშვა, მაგრამ სამუშაოს არ ამატებს.</p>';
+  var rows = c.ls.map(function (l) { return hmLoadLine(l, hmTodaySt(l, c)); });
+  if (c.tr) rows.push(hmLoadLine(c.tr.l, 'გზაშია · თავისუფლდება ' + uDayShort(c.tr.fd)));
+  c.dd.forEach(function (u) { rows.push(hmLoadLine(u.l, u.fd === c.day ? 'გზაშია · დღეს ბარდება' : 'გზაშია · ჩაბარების სავარაუდო დღე გავიდა (' + uDayShort(u.fd) + ')')); });
+  c.unc.forEach(function (u) { var pu = puDay_(u.l); rows.push(hmLoadLine(u.l, !u.pu ? 'გზაშია · ჩაბარების დღე უცნობია' : (u.picked ? 'აყვანილია · ' : '') + 'აღების დღე დასაზუსტებელია · SD-ის თარიღი ' + (pu ? uDayShort(pu) : 'არ არის'))); });
+  return o + (rows.length ? '<div class="h-bloads">' + rows.join('') + '</div>' : '<p class="h-bempty">დღის ტვირთი არ არის.</p>') + '<div class="h-bsep"></div>';
+}
+var HM_GROUPS = [['red', 'გაჩერებულია'], ['amber', 'დღევანდელი სამუშაო აკლია'], ['green', 'სამუშაო უზრუნველყოფილია'], ['rr', 'მანქანას აკეთებს და ისვენებს']];
+function hmGroupsHtml(on) {
+  return HM_GROUPS.map(function (g) {
+    var list = on.filter(function (x) { return hmCovView(x).group === g[0]; });
+    return list.length ? '<section class="h-grp h-g-' + g[0] + '" data-u-group="' + g[0] + '"><div class="h-ghead"><h2><span class="h-gdot" aria-hidden="true"></span>' + h(g[1]) + '<span class="h-gn">' + list.length + '</span></h2></div><div class="u-cards">' + list.map(hmCard).join('') + '</div></section>' : '';
+  }).join('');
+}
+function hmNextHtml(label, main, meta, arrow, need) { return '<span class="h-next"><small class="h-label">' + h(label) + '</small><span class="h-main">' + (arrow ? ic('arrow-right') : '') + '<span>' + h(main || '—') + '</span></span>' + (need ? '<small class="h-needline">საჭიროა: ' + h(need) + '</small>' : meta ? '<small class="h-meta">' + h(meta) + '</small>' : '') + '</span>'; }
 function hmCard(x) {
-  var d = x.d, cap = d.cap != null && Number(d.cap) > 0 ? Number(d.cap) : (x.d._unreg ? null : 1), capTxt = cap ? cap + '-მანქ.' : 'ზომა უცნობია';
+  var d = x.d, cap = d.cap != null && Number(d.cap) > 0 ? Number(d.cap) : null, capTxt = cap ? cap + '-მანქ.' : 'ზომა უცნობია', cv = hmCovView(x);
   /* front: company and status, the driver, the place with the truck size (or the load), the status block, the dispatcher. The place is
      the last one the loads show (the planned pickup for a driver going to one) - never live GPS. */
   var badge, info, loc = x.lastDel ? locShort(x.lastDel.l.delivery_location) : 'მდებარეობა უცნობია', where = 'ბოლო ცნობილი მდებარეობა; არა პირდაპირი GPS',
@@ -12721,18 +12906,18 @@ function hmCard(x) {
     var el = x.idleMs != null ? uElapsed(x.idleMs) : null, days = !!el && el[0][1] !== 'სთ';
     badge = '<span class="h-badge"><i class="h-dot"></i>გაჩერებულია</span>';
     info = '<span class="h-hero">' + (el ? '<span class="h-now" aria-label="გაჩერებულია ' + el[0][0] + (days ? ' დღე და ' : ' საათი და ') + el[1][0] + (days ? ' საათი' : ' წუთი') + '"><b class="h-clock">' + el[0][0] + ':' + ('0' + el[1][0]).slice(-2) + '</b><small>' + (days ? 'დღე : საათი' : 'საათი : წუთი') + '</small></span>'
-      : '<span class="h-now" title="ბოლო ჩაბარების დრო აპში არ ჩანს"><b class="h-clock">—</b><small>დრო უცნობია</small></span>') + hmFreqHtml() + '</span>';
+      : '<span class="h-now" title="ბოლო ჩაბარების დრო აპში არ ჩანს"><b class="h-clock">—</b><small>დრო უცნობია</small></span>') + hmNeedHtml(cv.need) + '</span>';
   } else if (x.kind === 'loaded') {
     var l = x.picked[0], k = x.picked.reduce(function (s, y) { return s + cars_(y); }, 0);
     badge = '<span class="h-badge">' + ic('truck') + 'გზაში</span>';
     loc = locShort(l.pickup_location);
     side = '<span class="h-fill">' + ic('truck') + '<span><strong>' + k + (cap ? ' / ' + cap : '') + '</strong><small>დატვირთულია</small></span></span>';
-    info = hmNextHtml('შემდეგი ჩაბარება', locShort(l.delivery_location), (l.vehicle || 'ტვირთი') + (x.picked.length > 1 ? ' + ' + (x.picked.length - 1) : '') + ' · ' + money(x.picked.reduce(function (s, y) { return s + grossOf_(y); }, 0)), true);
+    info = hmNextHtml('შემდეგი ჩაბარება', locShort(l.delivery_location), (l.vehicle || 'ტვირთი') + (x.picked.length > 1 ? ' + ' + (x.picked.length - 1) : '') + ' · ' + money(x.picked.reduce(function (s, y) { return s + grossOf_(y); }, 0)), true, cv.amber ? cv.need : '');
   } else if (x.kind === 'pickup') {
     var nl = x.next.slice().sort(function (a, b) { return puDay_(a) < puDay_(b) ? -1 : 1; })[0];
     badge = '<span class="h-badge">' + ic('truck') + 'აღებაზე მიდის</span>';
     loc = locShort(nl.pickup_location); where = 'დაგეგმილი აღების ადგილი';
-    info = hmNextHtml('დაგეგმილი ტვირთი', nl.vehicle || 'ტვირთი', money(grossOf_(nl)) + (puDay_(nl) ? ' · ' + uDayShort(puDay_(nl)) : '') + (x.next.length > 1 ? ' · კიდევ ' + (x.next.length - 1) : ''), false);
+    info = hmNextHtml('დაგეგმილი ტვირთი', nl.vehicle || 'ტვირთი', money(grossOf_(nl)) + (puDay_(nl) ? ' · ' + uDayShort(puDay_(nl)) : '') + (x.next.length > 1 ? ' · კიდევ ' + (x.next.length - 1) : ''), false, cv.amber ? cv.need : '');
   } else if (x.kind === 'repair' || x.kind === 'rest') {
     var rep = x.kind === 'repair';
     badge = '<span class="h-badge">' + ic(rep ? 'wrench' : 'moon') + (rep ? 'მანქანას აკეთებს' : 'ისვენებს') + '</span>';
@@ -12747,16 +12932,16 @@ function hmCard(x) {
     info = hmNextHtml('მიმდინარე კომპანია არ აქვს', x.lastPu ? 'ბოლო ტვირთი · ' + uDayShort(x.lastPu) : 'ტვირთი აპში არ ჩანს', 'დასაბრუნებლად — მძღოლების დაფა, „არააქტიური და ადრინდელი წევრობები“', false);
   }
   var flipped = HM.flip === x.id;
-  return '<article class="u-card u-k-' + x.kind + (flipped ? ' u-flipped' : '') + '" data-u-card="' + h(x.id) + '"><div class="u-turn">' +
+  return '<article class="u-card u-k-' + x.kind + (cv.amber ? ' h-amber' : '') + (flipped ? ' u-flipped' : '') + '" data-u-card="' + h(x.id) + '" data-u-cov="' + cv.group + '"><div class="u-turn">' +
     '<button type="button" class="u-front h-front" data-u-flip="' + h(x.id) + '" aria-expanded="' + flipped + '"' + (flipped ? ' inert' : '') + '>' +
     '<span class="h-top"><span class="h-co"><span>' + h(x.code) + '</span>' + (x.d._unreg ? '<small>რეესტრში არ არის</small>' : '') + '</span>' + badge + '</span>' +
     '<span class="h-name">' + ic('steering-wheel', 'h-ic28') + '<span>' + h(x.name) + '</span></span>' +
     '<span class="h-locrow"><span class="h-loc"' + (where ? ' title="' + h(where) + '"' : '') + '>' + ic('map-pin', 'h-ic28 h-pin') + '<span>' + h(loc || '—') + '</span></span>' + side + '</span>' +
     info + '<span class="h-disp">' + ic('headset') + '<span>' + h(x.owner || 'დისპეჩერი მიუნიჭებელია') + '</span></span></button>' +
-    '<div class="u-back"' + (flipped ? '' : ' inert') + '><button type="button" class="u-iconbtn u-backclose" data-u-unflip="' + h(x.id) + '" aria-label="ბარათის წინა მხარე">' + ic('rotate-ccw') + '</button><small class="u-muted">კვირის მაჩვენებლები · აღების გეგმის თარიღით</small><span class="u-cardname" style="margin-top:5px">' + h(x.name) + '</span>' +
+    '<div class="u-back"' + (flipped ? '' : ' inert') + '><button type="button" class="u-iconbtn u-backclose" data-u-unflip="' + h(x.id) + '" aria-label="ბარათის წინა მხარე">' + ic('rotate-ccw') + '</button>' + (x.cov ? hmTodayHtml(x) + '<small class="u-muted">კვირის მაჩვენებლები · აღების გეგმის თარიღით</small>' : '<small class="u-muted">კვირის მაჩვენებლები · აღების გეგმის თარიღით</small><span class="u-cardname" style="margin-top:5px">' + h(x.name) + '</span>') +
     '<div class="u-fin"><div><small>GROSS · ეს კვირა</small><strong>' + h(money(x.wkGross)) + '</strong></div><div><small>კვირის მიზანი</small>' + (d.target_gross != null ? '<strong>' + h(money(Number(d.target_gross))) + '</strong>' : '<strong class="u-na">მითითებული არ არის</strong>') + '</div>' +
     '<div><small>ტვირთი · ეს კვირა</small><strong>' + x.wkN + (x.wkCars !== x.wkN ? ' <small style="display:inline">· ' + x.wkCars + ' მანქ.</small>' : '') + '</strong></div><div><small>GROSS · ბოლო 30 დღე</small><strong>' + h(money(x.g30)) + '</strong></div></div>' +
-    (x.kind !== 'idle' ? hmFreqBackHtml() : '') +
+    hmFreqBackHtml() +
     '<div class="u-backfoot">' + h(x.owner || 'დისპეჩერი მიუნიჭებელია') + ' · ' + h(x.code) + '<br>GROSS = ტვირთის ღირებულება SD-დან; არ არის ანაზღაურება ან მიღებული თანხა.</div></div></div></article>';
 }
 /* the summary: the eligible drivers (the status tiles' own population, as before) in total and by company, then the status tiles */
@@ -12772,7 +12957,7 @@ function hmGridHtml(all) {
   var q = HM.q.trim().toLocaleLowerCase();
   var list = all.filter(function (x) { return uScopeIn(x.co) && (!q || (x.name + ' ' + x.owner).toLocaleLowerCase().indexOf(q) >= 0); });
   var on = list.filter(function (x) { return x.kind !== 'off' && x.kind !== 'dormant'; }), off = list.filter(function (x) { return x.kind === 'off'; }), dorm = list.filter(function (x) { return x.kind === 'dormant'; });
-  var html = on.length ? '<div class="u-cards">' + on.map(hmCard).join('') + '</div>' : shEmpty('მძღოლი ვერ მოიძებნა', dorm.length || off.length ? 'ამ ფილტრში ბოლო 30 დღეში მომუშავე მძღოლი არ არის — იხილე ქვემოთ ჩაკეცილი ჯგუფები.' : 'შეცვალე ძიება ან კომპანია.');
+  var html = on.length ? hmGroupsHtml(on) : shEmpty('მძღოლი ვერ მოიძებნა', dorm.length || off.length ? 'ამ ფილტრში ბოლო 30 დღეში მომუშავე მძღოლი არ არის — იხილე ქვემოთ ჩაკეცილი ჯგუფები.' : 'შეცვალე ძიება ან კომპანია.');
   if (dorm.length) html += '<div class="u-section-t"><button type="button" class="u-btn" data-u-hm-dorm aria-expanded="' + HM.dorm + '">' + ic(HM.dorm ? 'chevron-up' : 'chevron-down') + 'ბოლო 30 დღეში ტვირთის გარეშე · ' + dorm.length + '</button><span>რეესტრში აქტიურია, მაგრამ ბოლო 30 დღეში ტვირთი არ ჰქონია — გაჩერებულებში არ ითვლება</span></div>' + (HM.dorm ? '<div class="u-cards">' + dorm.map(hmCard).join('') + '</div>' : '');
   if (off.length) html += '<div class="u-section-t"><button type="button" class="u-btn" data-u-hm-off aria-expanded="' + HM.off + '">' + ic(HM.off ? 'chevron-up' : 'chevron-down') + 'მიმდინარე კომპანიის გარეშე · ' + off.length + '</button><span>რეესტრში გამორთულია და არცერთ კომპანიაში არ მუშაობს. სხვა კომპანიაში გადასული მძღოლის ძველი ჩანაწერი აქ არ ჩანს — ის მძღოლების დაფის ისტორიაშია.</span></div>' + (HM.off ? '<div class="u-cards">' + off.map(hmCard).join('') + '</div>' : '');
   return { html: html, n: on.length, cur: on.length + dorm.length, unreg: on.concat(dorm).filter(function (x) { return x.d._unreg; }).length };
@@ -14756,7 +14941,7 @@ window.addEventListener('resize', place);
 window.addEventListener('scroll', place, { passive: true });
 try { if (typeof ResizeObserver === 'function') { var uBar = document.querySelector('.topbar'); if (uBar) new ResizeObserver(place).observe(uBar); } } catch (e) {}
 /* the pure view models are exposed to the local regression harness only (config mode "test"), never as an application hook */
-if (window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test') window.UIM_TEST = { U: U, SH: SH, PAGES: PAGES, TM: TM, TMH: TMH, tmModel: tmModel, tmSorted: tmSorted, TMP: TMP, TME: TME, tmTenure: tmTenure, tmTenureText: tmTenureText, tmShares: tmShares, tmCalc: tmCalc, tmCap: tmCap, tmTeamSum: tmTeamSum, tmWhy: tmWhy, tmComp: tmComp, tmFormInts: tmFormInts, tmCreateErr: tmCreateErr, tmSquares: tmSquares, uPlan: uPlan, uLoad: uLoad, shOpenRows: shOpenRows, shFailed: shFailed, pure: { uPlanSelect: uPlanSelect, uPrepLoads: uPrepLoads, uDayRange: uDayRange, uTzDay: uTzDay, uTzTime: uTzTime, uElapsed: uElapsed, uGrossRows: uGrossRows, uGroup: uGroup } };
+if (window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test') window.UIM_TEST = { U: U, SH: SH, PAGES: PAGES, TM: TM, TMH: TMH, tmModel: tmModel, tmSorted: tmSorted, TMP: TMP, TME: TME, tmTenure: tmTenure, tmTenureText: tmTenureText, tmShares: tmShares, tmCalc: tmCalc, tmCap: tmCap, tmTeamSum: tmTeamSum, tmWhy: tmWhy, tmComp: tmComp, tmFormInts: tmFormInts, tmCreateErr: tmCreateErr, tmSquares: tmSquares, uPlan: uPlan, uLoad: uLoad, hmDrivers: hmDrivers, shOpenRows: shOpenRows, shFailed: shFailed, pure: { uPlanSelect: uPlanSelect, uPrepLoads: uPrepLoads, uDayRange: uDayRange, uTzDay: uTzDay, uTzTime: uTzTime, uElapsed: uElapsed, uGrossRows: uGrossRows, uGroup: uGroup } };
 try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', e); }
 })();
 </script>
