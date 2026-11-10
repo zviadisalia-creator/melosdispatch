@@ -1894,7 +1894,7 @@ function stdLevel_(ratio){
 }
 /* ---- დღის სტანდარტი მძღოლის ტიპის მიხედვით ----
    1-მანქანიანი: დღეში საშუალოდ 2 რეისი. 1 ტვირთიც საკმარისია, თუ ის მოკლეა
-     (≤ short_miles, ნაგულისხმევი 350 მილი) — მძღოლს მეორის მოსწრება შეუძლია.
+     (≤ short_miles; პარამეტრის გარეშე — სერვერის მნიშვნელობა: 250 მილი RPM-1-ით, მანამდე 350) — მძღოლს მეორის მოსწრება შეუძლია.
      თუ გრძელია, მაშინ თანხა დღიურ გეგმას მაინც უნდა ავსებდეს.
    2+ მანქანიანი: მარშრუტი სრულად უნდა იყოს დაგეგმილი (cap მანქანა).
      გამონაკლისი — თუ ერთი მანქანაც ავსებს დღიურ გეგმას, ჩაითვლება. */
@@ -1906,7 +1906,7 @@ function stdLevel_(ratio){
    CHK_FROM — ჩეკის ატვირთვა · DOC_FROM — BOL და ინვოისის გაგზავნა */
 var CHK_FROM='2026-08-10';
 var DOC_FROM='2026-08-03';
-function shortMi_(){ return sett_('short_miles',350); }
+function shortMi_(){ return sett_('short_miles', rateShortMi_()); }   /* DOS-RPM-SHORT-LOAD-001 r2: the server's value (250 with RPM-1; 350 without it) */
 function loadMiles_(l){ var m=Number(l&&l.miles); return (m>0)?m:0; }
 /* მძღოლი, რომელსაც მანქანა უკვე აყვანილი აქვს და ხვალ ჯერ კიდევ გზაშია */
 function transitMi_(){ return sett_('transit_miles_per_day',1000); }
@@ -2049,7 +2049,8 @@ async function waivSend(kind, encSubj){
   try{
     var ex=waivOf_(kind,subj,day);
     // WAIVER-RESUBMIT-20260921: require an actual saved row; RLS may silently affect zero rows.
-    var res = ex ? await sb.from('load_waivers').update({reason:row.reason,status:'pending',requested_at:row.requested_at,requested_by:row.requested_by,decided_at:null,decided_by:null,decision_note:null}).eq('id',ex.id).eq('company_id',row.company_id).eq('dispatcher_name',row.dispatcher_name).eq('status',ex.status).select('id,status').single()
+    var res = (kind==='rate') ? await rateSend_(row, subj)   /* DOS-RPM-SHORT-LOAD-001 r3: routed by the server's row, not the local list */
+            : ex ? await sb.from('load_waivers').update({reason:row.reason,status:'pending',requested_at:row.requested_at,requested_by:row.requested_by,decided_at:null,decided_by:null,decision_note:null}).eq('id',ex.id).eq('company_id',row.company_id).eq('dispatcher_name',row.dispatcher_name).eq('status',ex.status).select('id,status').single()
                  : await sb.from('load_waivers').insert(row).select('id,status').single();
     if(res.error) throw res.error;
     if(!res.data || !res.data.id || res.data.status!=='pending') throw new Error('Waiver was not saved');
@@ -2222,7 +2223,7 @@ function rBoard(){
     /* ტვირთი რომ არ არის, ზემოთ უკვე წერია — ქვემოთ იმავეს გამეორება ზედმეტია */
     var reason=(day.length||st.transit)?st.reason:'';
     var ll=day.slice(0,3).map(function(l){
-      var pm=(Number(l.miles)>0)? (' · $'+(grossOf_(l)/Number(l.miles)).toFixed(2)+'/მი') : '';
+      var pm=(Number(l.miles)>0)? (' · GROSS $'+(grossOf_(l)/Number(l.miles)).toFixed(2)+'/მი') : '';   /* DOS-RPM-SHORT-LOAD-001: after the broker fee; the rate rule uses the price */
       var dd=delDay_(l);
       var man=dd?(" · ჩაბარება "+gd(dd)):"";
       var off=sdDayWarn_(l,tday);
@@ -2461,7 +2462,8 @@ function rBoard(){
   var gCall=callOkAll; /* waiver already inside callOkAll; a call still being checked blocks the close */
   var wrOk=wrConfirmed_() && !scHas('roster');
   if(scHas('standard')) stdOk=false;
-  var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1)+
+  var RT=rateState_(tday), gRate=(RT.st==='ok'||RT.st==='absent')&&!scHas('rate');   /* DOS-RPM-SHORT-LOAD-001 */
+  var rem=(wrOk?0:1)+(stdOk?0:1)+(gCall?0:1)+(gInv?0:1)+(gChk?0:1)+(gRate?0:1)+
           (apptAll.length&&!gAppt?1:0)+(gpAll.length&&!gGate?1:0)+
           ((scHas('plan_mismatch')||scHas('unknown')||scHas('work_day_mismatch'))?1:0);
   var closed=SCLOSE&&SCLOSE.work_day===tday;
@@ -2488,6 +2490,7 @@ function rBoard(){
       rows_(invP,'bol')+
       gate_('ჩეკის ატვირთვა', chkP.length, chkP.length+' ტვირთს ჩეკი ეკუთვნის და ჯერ არ არის ატვირთული', 'check','')+
       rows_(chkP,'chk')+
+      rateLegacyHtml_(RT, gRate, tday)+
       scPanel_(tday)+
       "<div class='closebar'>"+
         "<span class='close-company' id='closeCompany'>"+esc(CO&&(CO.legal_name||CO.code)||'კომპანია ვერ დადგინდა')+"</span>"+
@@ -2499,7 +2502,7 @@ function rBoard(){
       "<b>ათვლა სუფთა ფურცლიდან:</b> ჩეკი ითვლება <b>"+gdFull(CHK_FROM)+"დან</b>, BOL და ინვოისი — <b>"+gdFull(DOC_FROM)+"დან</b>. ამ თარიღებამდე დარჩენილი ძველი ვალი აქ აღარ ჩანს და ცვლას არ კეტავს. "+
       "<b>ხვალინდელ სიას თვითონ ავსებ</b> — მოძებნე Order ID-ით და დაამატე; ცვლის დახურვისას სია იყინება და მეორე დღეს რეალობას ედარება. "+
       "<b>თუ მძღოლს მანქანა უკვე აყვანილი აქვს და იმ დღეს ჯერ კიდევ გზაშია</b> — ტვირთი არ მოეთხოვება. თავისუფლდება იმ დღეს, როცა აბარებს: SD-ის ჩაბარების თარიღით, ან თუ არ წერია — აღების დღეს + "+transitMi_()+" მილი დღეში (მაგ. 1 400 მილი 4 რიცხვში აღებული → 6 რიცხვში აბარებს, ე.ი. იმ დღეს ტვირთი <b>სჭირდება</b>). "+
-      "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. "+
+      "<b>ტვირთის სტანდარტი:</b> 1-მანქანიანს ერთი ტვირთიც ჰყოფნის, თუ ის მოკლეა (≤"+shortMi_()+" მილი) — მეორის მოსწრებას ასწრებს; თუ გრძელია, თანხამ დღიური გეგმა უნდა დაფაროს. 2+ მანქანიანზე მარშრუტი სრულად უნდა იყოს დაგეგმილი, თუ ერთი ტვირთი დღიურ გეგმას არ ავსებს. <b>ტვირთის განაკვეთი:</b> "+esc(RATE_RULE_KA)+" "+
       "<b>თუ სტანდარტი ობიექტური მიზეზით ვერ სრულდება</b> — დააჭირე „ახსნის გაგზავნა“, დაწერე მიზეზი და მენეჯმენტი დაადასტურებს ან დაგიბრუნებს. დადასტურების შემდეგ ველი მწვანდება და ცვლა იხურება. "+
       "<b>სად არ მოეთხოვება ზარი:</b> თუ shipper იგივეა, რაც ფიქაფის ან დელივერის ბიზნესი — იმ მხარეს დარეკვა აღარ არის საჭირო (ტვირთი სწორედ იმან მოგვცა, ვისთანაც მანქანა დგას). აუქციონის გამო ზარის გამონაკლისი მოქმედებს <b>Copart-ისა და IAA/IAAI-ის ფიქაფზე</b>. <b>Manheim-ისა და ADESA-ს ფიქაფზე ზარი არ მოეთხოვება; Gate Pass კვლავ საჭიროა</b>. <b>თუ shipper არის 74 Auto და შესაბამისი მხარის მისამართია Sikeston, MO 63801, იმ მხარეს ზარი და გადამოწმება არ მოეთხოვება</b>. ფიქაფი და დელივერი დამოუკიდებლად მოწმდება. სამაგიეროდ: <b>Copart-ის ფიქაფზე appointment-ის დრო უნდა ჩაწერო</b>, <b>Manheim-ისა და ADESA-ს ფიქაფზე კი Gate Pass ატვირთო</b> — ამის გარეშე ცვლა არ იხურება. "+
       "<span class='muted'>ფეხი ჩაითვლება, როცა საჭირო ფაქტები (მზადყოფნა, საათები, თანხა) დადასტურებულია საუბრით — ზარით ან SMS მიმოწერით. მხოლოდ SMS-ის მიღება ან ზარის ხანგრძლივობა არ ითვლება. სისტემა ხედავს პასუხგაუცემელ ცდებსაც — თუ დარეკე და არ გიპასუხეს, ეს ჩანს.</span></div></div>";
@@ -2544,7 +2547,7 @@ async function loadClose(){
 var SC_REF=null, CLOSE_INFLIGHT=null;
 var SC_GATE_LBL={roster:'კვირის როსტერი', standard:'ტვირთების სტანდარტი', calls:'ზარები', invoice:'ინვოისი და BOL',
   check:'ჩეკი', appt:'Copart appointment', gatepass:'Gate Pass', plan_mismatch:'ხვალინდელი სია',
-  work_day_mismatch:'სამუშაო დღე', unknown:'სერვერის შემოწმება'};
+  work_day_mismatch:'სამუშაო დღე', unknown:'სერვერის შემოწმება', rate:'ტვირთის განაკვეთი'};
 function scOrders_(v){
   var out=[];
   (Array.isArray(v)?v:[]).forEach(function(x){
@@ -2602,6 +2605,10 @@ function scItems_(r){
       var sd0=((g.standard||{}).detail), sbad=(Array.isArray(sd0)?sd0:[]).filter(function(x){ return x && x.ok===false; })
         .map(function(x){ return String(x.driver==null?'':x.driver).trim(); }).filter(function(n,i,a){ return n && a.indexOf(n)===i; });
       add('standard','', 'მძღოლის დღიური სტანდარტი არ სრულდება'+(sbad.length?(' — '+sbad.join(', ')):'')); return; }
+    if(base==='rate'){   /* DOS-RPM-SHORT-LOAD-001: the server's own rows */
+      var rd=((g.rate||{}).detail), rbad=(Array.isArray(rd)?rd:[]).filter(function(x){ return x && x.ok!==true; });
+      if(!rbad.length) add('rate','', 'ტვირთის განაკვეთი მინიმუმზე დაბლაა');
+      rbad.forEach(function(x){ add('rate', String(x.order_number||''), rateText_(x)); }); return; }
     if(base==='roster'){ add('roster','', 'კვირის როსტერი დასადასტურებელია'); return; }
     add('unknown','', k);
   });
@@ -2626,6 +2633,8 @@ function scFp_(gate, order, day){
     if(gate==='standard') return JSON.stringify([planLoads_(day).map(function(x){ return [x.order_number, drvName_(x)]; }).sort(),
       Object.keys(WAIV).filter(function(k){ return k.indexOf('|'+day+'|standard|')>=0; }).map(function(k){ return k+'='+WAIV[k].status; }).sort(),
       DASG.length]);
+    if(gate==='rate'){ var rr=(RATEF&&!RATEF.err&&Array.isArray(RATEF.rows))?RATEF.rows.filter(function(x){ return x.order_number===order; }).map(function(x){ return [x.status,x.ok,x.waiver_state,x.price,x.miles,x.vehicles,x.capacity]; }):null;   /* DOS-RPM-SHORT-LOAD-001 */
+      return JSON.stringify([L, l?[l.price,l.miles,l.vehicle_count]:null, rr, scWaivFp_('rate',order,day)]); }
     if(gate==='roster') return JSON.stringify(WROS[MYD()]||null);
     if(gate==='work_day_mismatch') return day;
     return 'server';
@@ -5008,7 +5017,7 @@ function rCloses(){
   var W=Object.keys(WAIV).map(function(k){ return WAIV[k]; });
   var pend=W.filter(function(w){ return w.status==='pending'; }).sort(function(a,b){ return String(b.requested_at).localeCompare(String(a.requested_at)); });
   var done=W.filter(function(w){ return w.status!=='pending'; }).sort(function(a,b){ return String(b.decided_at||'').localeCompare(String(a.decided_at||'')); });
-  var KIND={standard:'ტვირთის სტანდარტი', calls:'ზარი', calls_all:'ზარები (ყველა)', bol:'BOL', invoice:'ინვოისი', check:'ჩეკი'};
+  var KIND={standard:'ტვირთის სტანდარტი', calls:'ზარი', calls_all:'ზარები (ყველა)', bol:'BOL', invoice:'ინვოისი', check:'ჩეკი', rate:'ტვირთის განაკვეთი'};
   var closedToday=SCLOSES.filter(function(c){ return c.work_day===tday; });
   var closedBy={}; closedToday.forEach(function(c){ closedBy[c.dispatcher_name]=c; });
   var disps={};
@@ -5609,6 +5618,172 @@ loadPlanContacts = async function(){
     }).catch(function(){ SMS_CHK_.busy=false; });
   }catch(e){ SMS_CHK_.busy=false; console.error('sms check', e); }
 };
+/* DOS-RPM-SHORT-LOAD-001 r2 · rule RPM-1 (owner 2026-11-07; D-RPM-2 / D-RPM-4 owner 2026-11-08) — the per-load rate floor.
+   Every selected load of tomorrow's plan must reach, on its own, the minimum rate per loaded mile: the base rate of its driver's
+   trailer size (1 -> $1.50, 2 -> $0.85, 3 -> $0.80 per vehicle) x the vehicles of that load. No average: no other load, day total,
+   short trip or full trailer compensates. The ONE calculation is the server's rate_floor_co (close_gates_co enforces the same rows
+   as gate `rate`). This screen trusts only the server's evaluated row.ok: the local explanation list only names the request's
+   state on the chip. A response is used only when its scope, plan and rows are complete and consistent and every order of this
+   screen's plan has a row; anything else is "unavailable" (red), never green. Function not installed = no gate (the server does
+   not enforce one either) and the 350-mile short-load fallback of the code before RPM-1. Read after every contacts refresh and
+   after every explanation change. Approvals: rate_waiver_decide (management, bound to the terms shown); asking again after the
+   terms changed: rate_waiver_rerequest. */
+var RATEF = null, RATEF_GEN = 0, RATE_SHOWN = {}, RATE_CTX_GEN = 0;
+var RATE_WSTATES = ['none', 'pending', 'rejected', 'approved', 'approved_stale'];
+var RATE_MISS_KA = { load: 'ტვირთის ჩანაწერი', driver: 'მძღოლი', capacity: 'მძღოლის ტრეილერის ზომა (მძღოლის ჩანაწერში)', vehicle_count: 'მანქანების რაოდენობა',
+  price: 'ტვირთის ფასი', miles: 'მილები' };
+var RATE_RULE_KA = 'თითო ტვირთზე ცალკე: მინიმუმი მილზე = მძღოლის ტრეილერის ზომის ტარიფი × ამ ტვირთის მანქანები (1-მანქანიანი $1.50, 2-მანქანიანი $0.85, 3-მანქანიანი $0.80 — თითო მანქანაზე), ტვირთის სრული ფასით. სხვა ტვირთი, დღის ჯამი, მოკლე რეისი ან სავსე ტრეილერი ამას არ ანაზღაურებს; ხსნის მხოლოდ მენეჯმენტის მიერ ამ პირობებზე დადასტურებული ახსნა — თუ ფასი, მილები, მანქანები ან მძღოლი შეიცვლება, საჭიროა ახალი დადასტურება.';
+function rateKey_(day){ return planLoads_(day).map(function(l){ return l.order_number; }).filter(Boolean).sort().join('|'); }
+function rateMissing_(e){ var s = String((e && e.code) || '') + ' ' + String((e && e.message) || ''); return /PGRST202|42883|Could not find the function/i.test(s); }
+/* the response contract: scope echo, plan = rows (unique, same orders), n, a numeric threshold, boolean ok consistent with the row */
+function rateValid_(d, co, me, day){
+  if(!d || d.rule !== 'RPM-1' || !Array.isArray(d.rows) || !Array.isArray(d.plan)) return false;
+  if(String(d.work_day) !== String(day) || String(d.company_id) !== String(co) || String(d.dispatcher_name) !== String(me)) return false;
+  if(d.n !== d.rows.length || d.plan.length !== d.rows.length || typeof d.short_miles !== 'number' || !(d.short_miles > 0)) return false;
+  var inPlan = {}, seen = {};
+  for(var i = 0; i < d.plan.length; i++){ if(typeof d.plan[i] !== 'string' || inPlan[d.plan[i]]) return false; inPlan[d.plan[i]] = 1; }
+  for(var j = 0; j < d.rows.length; j++){
+    var x = d.rows[j];
+    if(!x || typeof x.order_number !== 'string' || seen[x.order_number] || !inPlan[x.order_number]) return false;
+    seen[x.order_number] = 1;
+    if(typeof x.ok !== 'boolean' || ['pass', 'below', 'unknown'].indexOf(x.status) < 0 || RATE_WSTATES.indexOf(x.waiver_state) < 0) return false;
+    if(x.ok !== (x.status === 'pass' || x.waiver_state === 'approved')) return false;
+    if(x.status !== 'unknown' && (typeof x.actual_cents !== 'number' || typeof x.required_rpm !== 'number')) return false;
+  }
+  return true;
+}
+async function rateLoad_(){
+  var gen = ++RATEF_GEN, co = COID(), me = MYD(), day = ymd_(nextWorkDay_()), plan = '';
+  /* only the newest read for the same company / dispatcher commits (an older reply never replaces a newer one) */
+  var put = function(o){ if(gen === RATEF_GEN && co === COID() && me === MYD()) RATEF = o; };
+  try{
+    plan = rateKey_(day);
+    if(!co || !me){ put(null); return; }
+    var r = await sb.rpc('rate_floor_co', { p_disp: me, p_work_day: day, p_company_id: co });
+    var o = { co: co, me: me, day: day, plan: plan, at: Date.now(), err: null };
+    if(!r || r.error){ o.err = (r && rateMissing_(r.error)) ? 'absent' : 'error'; put(o); return; }
+    if(!rateValid_(r.data, co, me, day)){ o.err = 'invalid'; put(o); return; }
+    o.rows = r.data.rows; o.splan = r.data.plan; o.short = r.data.short_miles; put(o);
+  }catch(e){ console.error('rate floor', e); put({ co: co, me: me, day: day, plan: plan, at: Date.now(), err: 'error' }); }
+}
+var __contactsWithRate = loadPlanContacts;
+loadPlanContacts = async function(){ var out = await __contactsWithRate.apply(this, arguments); await rateLoad_(); return out; };
+/* an explanation request / decision changes the server's row: read the rows again with the explanations */
+var __waiversWithRate = loadWaivers;
+loadWaivers = async function(){ var out = await __waiversWithRate.apply(this, arguments); try { await rateLoad_(); } catch(e){} return out; };
+/* the one-car short-load threshold the server applies (no setting: 250 with RPM-1, 350 without it); not read yet / failed: 250,
+   the stricter value, while the rate gate itself is red and the close button closed */
+function rateShortMi_(){
+  var R = RATEF;
+  if(R && R.co === COID() && !R.err && typeof R.short === 'number') return R.short;
+  if(R && R.co === COID() && R.err === 'absent') return 350;
+  return 250;
+}
+/* st: absent (no gate) · unavail (not read / failed / invalid / plan orders without a row) · stale (plan changed since the read) · ok · no */
+function rateState_(tday){
+  var R = RATEF, none = { st: 'unavail', rows: [], bad: [], miss: [] };
+  if(!R || R.co !== COID() || R.me !== MYD() || R.day !== tday) return none;
+  if(R.err === 'absent') return { st: 'absent', rows: [], bad: [], miss: [] };
+  if(R.err) return { st: 'unavail', rows: [], bad: [], miss: [], err: R.err };
+  var key = rateKey_(tday);
+  if(R.plan !== key) return { st: 'stale', rows: [], bad: [], miss: [] };
+  var have = {}; R.rows.forEach(function(x){ have[x.order_number] = 1; });
+  var miss = key ? key.split('|').filter(function(o){ return !have[o]; }) : [];
+  var bad = R.rows.filter(function(x){ return x.ok !== true; });
+  if(miss.length) return { st: 'unavail', rows: R.rows, bad: bad, miss: miss };
+  return { st: bad.length ? 'no' : 'ok', rows: R.rows, bad: bad, miss: [] };
+}
+/* r3 (review R2-04): the displayed rate is the server's actual_cents = floor(price * 100 / miles) / 100, computed exactly in the
+   database - a load below its minimum never displays the minimum itself; the screen does no arithmetic of its own */
+function rateCents_(v){ return '$' + Number(v).toFixed(2); }
+function rateReq_(v){ return '$' + Number(v).toFixed(2); }
+function rateText_(x){
+  if(!x || x.status === 'unknown'){
+    var m = (x && Array.isArray(x.missing) ? x.missing : []).map(function(k){ return RATE_MISS_KA[k] || k; });
+    return 'განაკვეთი ვერ დაითვალა — აკლია: ' + (m.join(', ') || 'მონაცემი') + '. ეს დადასტურება არ არის.';
+  }
+  return 'ამ ტვირთზე ' + rateCents_(x.actual_cents) + '/მილია; საჭიროა მინიმუმ ' + rateReq_(x.required_rpm);
+}
+/* r4 (review RPM-R3-04): the reviewed terms are shown exactly as the server holds them (up to 6 decimals), not through the site's
+   rounding money() - an approval binds to these very values. Only RPM's own lines use it. */
+function rateNum_(v){ return Number(v).toLocaleString('en-US', { maximumFractionDigits: 6 }); }
+function rateUsd_(v){ return '$' + rateNum_(v); }
+/* r3 (review R2-03): every term of the server row, each unknown one labelled - the same snapshot an approval binds to */
+function rateTerms_(x){
+  var u = 'უცნობია', v = function(z){ return z == null || z === '' ? u : z; };
+  return 'მძღოლი: ' + v(x.driver) + ' · ტრეილერის ზომა: ' + (x.capacity == null ? u : (x.capacity + '-მანქანიანი')) + ' · მანქანები: ' + (x.vehicles == null || !(Number(x.vehicles) > 0) ? u : x.vehicles) +
+    ' · ფასი: ' + (x.price == null || !(Number(x.price) > 0) ? u : rateUsd_(x.price)) + ' · მილები: ' + (x.miles == null || !(Number(x.miles) > 0) ? u : rateNum_(x.miles));
+}
+function rateBasis_(x){
+  if(!x) return '';
+  if(x.status === 'unknown') return rateTerms_(x);
+  return x.capacity + '-მანქანიანი მძღოლი · ' + x.vehicles + ' მანქ. × ' + rateReq_(x.base_rpm) + ' · ფასი ' + rateUsd_(x.price) + ' / ' + rateNum_(x.miles) + ' მილი';
+}
+function rateWaivLbl_(x){ return 'განაკვეთი — ' + x.order_number + ' — ' + (x.status === 'unknown' ? 'ვერ დაითვალა' : (rateCents_(x.actual_cents) + '/მილი, საჭიროა ' + rateReq_(x.required_rpm))); }
+/* r3 (review R2-02): the chip and its action come only from the server row's waiver_state. The local explanation list may add the
+   manager's note only when it agrees (rejected); it never decides approval, rejection or the route of a new request. */
+function rateChip_(x, tday){
+  var ask = function(label){ return "<button class='fixbtn' style='margin-left:6px' onclick=\"waivAsk('rate','" + encodeURIComponent(x.order_number) + "','" + esc(rateWaivLbl_(x)).replace(/'/g, '') + "')\">" + label + "</button>"; };
+  var ws = x.waiver_state;
+  if(ws === 'approved') return "<span class='chip g' data-rate-wstate='approved'><span class='dot'></span>დადასტურებული</span>";
+  if(ws === 'pending') return "<span class='chip y' data-rate-wstate='pending'><span class='dot'></span>გაგზავნილია — პასუხს ელოდება</span>";
+  if(ws === 'approved_stale') return "<span class='chip r' data-rate-wstate='approved_stale'><span class='dot'></span>დადასტურება აღარ მოქმედებს — პირობები შეიცვალა</span>" + ask('ხელახლა გაგზავნა');
+  if(ws === 'rejected'){ var c = waivOf_('rate', x.order_number, tday), note = (c && c.status === 'rejected') ? (c.decision_note || '') : '';
+    return "<span class='chip r' data-rate-wstate='rejected' title='" + esc(note) + "'><span class='dot'></span>დაბრუნებული</span>" + ask('ხელახლა'); }
+  return ask('ახსნის გაგზავნა').replace("style='margin-left:6px' ", '');
+}
+/* r3 (review R2-02): a new or repeated request is routed by the request row as the server has it NOW (a fresh read), never by the
+   local list: none -> insert; pending / rejected -> back to pending (the update policy's own path); approved -> the server function,
+   which accepts it only while the approval is stale (rate_waiver_rerequest). */
+async function rateSend_(row, subj){
+  var f = await sb.from('load_waivers').select('id,status').eq('company_id', row.company_id).eq('dispatcher_name', row.dispatcher_name)
+    .eq('work_day', row.work_day).eq('kind', 'rate').eq('order_number', subj).maybeSingle();
+  if(f.error) return { data: null, error: f.error };
+  if(!f.data) return await sb.from('load_waivers').insert(row).select('id,status').single();
+  if(f.data.status === 'pending' || f.data.status === 'rejected')
+    return await sb.from('load_waivers').update({ reason: row.reason, status: 'pending', requested_at: row.requested_at, requested_by: row.requested_by, decided_at: null, decided_by: null, decision_note: null })
+      .eq('id', f.data.id).eq('company_id', row.company_id).eq('dispatcher_name', row.dispatcher_name).eq('status', f.data.status).select('id,status').single();
+  var r = await sb.rpc('rate_waiver_rerequest', { p_company_id: row.company_id, p_disp: row.dispatcher_name, p_work_day: row.work_day, p_order: subj, p_reason: row.reason });
+  if(r.error) return { data: null, error: r.error };
+  if(!r.data || r.data.ok !== true) return { data: null, error: new Error('rate re-request refused: ' + ((r.data && r.data.reason) || 'unknown')) };
+  return { data: { id: r.data.id, status: 'pending' }, error: null };
+}/* management decision on a rate request: only through rate_waiver_decide, bound to the terms the case view showed (RATE_SHOWN) */
+async function rateDecide_(w, status){
+  var note = '';
+  if(status === 'rejected'){ note = prompt('რატომ არ დასტურდება? (დისპეჩერი ამას დაინახავს)') || ''; if(!note.trim()){ toast('მიზეზი საჭიროა'); return; } }
+  var exp = status === 'approved' ? (RATE_SHOWN[w.id] || null) : null;
+  if(status === 'approved' && !exp){ toast('განაკვეთის ახსნის დასადასტურებლად გახსენი ის „ცვლების“ გვერდზე — იქ ჩანს მიმდინარე ფასი, მილები და მინიმუმი.'); return; }
+  try{
+    var res = await sb.rpc('rate_waiver_decide', { p_company_id: w.company_id, p_waiver_id: w.id, p_decision: status, p_note: note || null, p_expected: exp });
+    if(res.error) throw res.error;
+    var r = res.data || {};
+    if(r.ok !== true) toast(r.reason === 'stale' ? 'ტვირთის პირობები შეიცვალა — გადახედე ახალ ციფრებს და ხელახლა დაადასტურე' : r.reason === 'not_pending' ? 'ეს მოთხოვნა უკვე განხილულია'
+      : r.reason === 'not_in_plan' ? 'ეს ტვირთი იმ დღის გეგმაში აღარ არის' : 'ვერ შეინახა');
+    else toast(status === 'approved' ? 'დადასტურდა ✓' : 'დაბრუნდა');
+  }catch(e){ console.error(e); toast('ვერ შეინახა'); }
+  delete RATE_SHOWN[w.id]; RATE_CTX_GEN++;
+  try{ await mgiLoad_(true); }catch(e){}
+  if(w.company_id === COID()){ try{ await loadWaivers(); }catch(e){ console.error(e); } }
+  render();
+}
+/* the older board (view-as) */
+function rateLegacyHtml_(RT, gRate, tday){
+  if(!RT || RT.st === 'absent') return '';
+  var bad = RT.st === 'no' ? RT.bad : [];
+  var sub = RT.st === 'unavail' ? (RT.miss && RT.miss.length ? ('სერვერმა ' + RT.miss.length + ' ტვირთზე განაკვეთი არ დააბრუნა (' + RT.miss.slice(0, 3).join(', ') + ') — ეს არ ნიშნავს, რომ რიგზეა. განაახლე გვერდი.')
+                                        : 'ტვირთის განაკვეთი ვერ შემოწმდა — ეს არ ნიშნავს, რომ რიგზეა. განაახლე გვერდი.')
+          : RT.st === 'stale' ? 'ხვალინდელი სია შეიცვალა — განაკვეთი ხელახლა მოწმდება.'
+          : bad.length ? (bad.length + ' ტვირთი მინიმალურ განაკვეთს ვერ აკმაყოფილებს')
+          : !gRate ? 'სერვერი: ტვირთის განაკვეთი მინიმუმზე დაბლაა'
+          : (RT.rows.length ? 'ყველა ტვირთი მინიმალურ განაკვეთს აკმაყოფილებს' : 'ხვალინდელ სიაში ტვირთი არ არის');
+  return "<div class='gate " + (gRate ? 'ok' : 'no') + "' data-rate-gate='" + RT.st + "'><div class='ic'>" + (gRate ? '✓' : '!') + "</div><div class='t'><b>ტვირთის განაკვეთი · მილზე</b><span>" + esc(sub) + "</span></div></div>" +
+    (bad.length ? ("<div class='muted' style='padding:4px 15px 6px 49px;font-size:12px'>" + esc(RATE_RULE_KA) + "</div>") : '') +
+    bad.map(function(x){
+      return "<div class='gate' style='padding-left:34px'><div class='ic' style='visibility:hidden'>·</div><div class='t'><b>" + esc(x.order_number) + "</b><span" + (x.status === 'unknown' ? '' : " style='color:var(--crit)'") + " data-rate='" + esc(x.status) + "'>" +
+        esc(rateText_(x)) + (rateBasis_(x) ? (' · ' + esc(rateBasis_(x))) : '') + "</span></div>" + rateChip_(x, tday) + "</div>";
+    }).join('');
+}
+
 /* DOS-GATE-RELIABILITY-20261028-04 · owner 2026-10-28 (rules r11): an SD delivery date that differs from the day agreed with the
    receiver is a NONBLOCKING correction warning — the gate already uses the agreed day. Read-only RPC lv5_date_warnings_v1 (the
    evaluator's own warning, current evidence only); never a gate input. The pickup side keeps sdDayWarn_ (plan day vs SD date). */
@@ -8677,7 +8852,7 @@ function sdDelWarn_(l){
   var W=Object.keys(WAIV).map(function(k){ return WAIV[k]; });
   var pend=W.filter(function(w){ return w.status==='pending'; }).sort(function(a,b){ return String(b.requested_at).localeCompare(String(a.requested_at)); });
   var done=W.filter(function(w){ return w.status!=='pending'; }).sort(function(a,b){ return String(b.decided_at||'').localeCompare(String(a.decided_at||'')); });
-  var KIND={standard:'ტვირთის სტანდარტი', calls:'ზარი', calls_all:'ზარები (ყველა)', bol:'BOL', invoice:'ინვოისი', check:'ჩეკი'};
+  var KIND={standard:'ტვირთის სტანდარტი', calls:'ზარი', calls_all:'ზარები (ყველა)', bol:'BOL', invoice:'ინვოისი', check:'ჩეკი', rate:'ტვირთის განაკვეთი'};
   var dn=names_();
   var closedToday=SCLOSES.filter(function(c){ return c.work_day===tday && dn.indexOf(c.dispatcher_name)>=0; });
   var closedBy={}; closedToday.forEach(function(c){ closedBy[c.dispatcher_name]=c; });
@@ -9263,7 +9438,8 @@ function scpModel_() {
   var gCall = callOkAll;
   var wrOk = wrConfirmed_() && !scHas('roster');
   if (scHas('standard')) stdOk = false;
-  var rem = (wrOk ? 0 : 1) + (stdOk ? 0 : 1) + (gCall ? 0 : 1) + (gInv ? 0 : 1) + (gChk ? 0 : 1) +
+  var RT = rateState_(tday), gRate = (RT.st === 'ok' || RT.st === 'absent') && !scHas('rate');   /* DOS-RPM-SHORT-LOAD-001 */
+  var rem = (wrOk ? 0 : 1) + (stdOk ? 0 : 1) + (gCall ? 0 : 1) + (gInv ? 0 : 1) + (gChk ? 0 : 1) + (gRate ? 0 : 1) +
             (apptAll.length && !gAppt ? 1 : 0) + (gpAll.length && !gGate ? 1 : 0) +
             ((scHas('plan_mismatch') || scHas('unknown') || scHas('work_day_mismatch')) ? 1 : 0);
   var closed = SCLOSE && SCLOSE.work_day === tday;
@@ -9271,7 +9447,7 @@ function scpModel_() {
     CC: CC, callList: callList, callP: callP, waitN: waitN, unknownOns: unknownOns, exemptAll: exemptAll, contactN: contactN,
     puOk_: puOk_, delOk_: delOk_, puWait_: puWait_, delWait_: delWait_, PLAN2: PLAN2, plDrv_: plDrv_, stdAllOff: stdAllOff,
     stdOk: stdOk, callOkAll: callOkAll, apptAll: apptAll, apptP: apptP, gpAll: gpAll, gpP: gpP, gAppt: gAppt, gGate: gGate,
-    gInv: gInv, gChk: gChk, gCall: gCall, wrOk: wrOk, rem: rem, closed: !!closed };
+    gInv: gInv, gChk: gChk, gCall: gCall, wrOk: wrOk, rem: rem, closed: !!closed, RT: RT, gRate: gRate };
 }
 
 /* ---- small pieces ----------------------------------------------------- */
@@ -9410,7 +9586,7 @@ function scpDriver_(d, M) {
           (dd ? ("<span class='scp-date'>ჩაბარება · " + esc(gd(dd)) + "</span>") : '') + sdDayWarn_(l, tday) + sdDelWarn_(l) +
         "</div><div class='scp-fig'><strong>" + money(gross) + "</strong><span class='scp-nums'>" +
           (mi > 0 ? ("<span>" + Math.round(mi).toLocaleString('en-US') + " მილი</span>") : "<span>მილი უცნობია</span>") +
-          (rate ? ("<span class='scp-rate' title='$" + rate + " თითო მილზე' aria-label='" + rate + " დოლარი თითო მილზე'>$" + rate + "</span>") : '') +
+          (rate ? ("<span class='scp-rate' title='GROSS (ბროკერის საკომისიოს შემდეგ): $" + rate + " თითო მილზე. ტვირთის განაკვეთის წესი ტვირთის სრულ ფასს ითვლის.' aria-label='GROSS " + rate + " დოლარი თითო მილზე'>$" + rate + " <small>GROSS</small></span>") : '') +
           (cars_(l) > 1 ? ("<span>" + cars_(l) + " მანქ.</span>") : '') + "</span></div>" + scpIc_('chev', 'scp-chev') + "</div></div>" +
       "<div class='scp-ldet'>" +
         "<p>" + esc(l.customer || '—') + (l._manual ? " · <span class='scp-tag'>ხელით დამატებული</span>" : '') + "</p>" +
@@ -9479,6 +9655,7 @@ function scpGates_(M) {
     : M.list.length + ' მძღოლი რიგზეა';
   out += scpGate_('standard', { title: 'მძღოლის დღიური სტანდარტი · ' + gd(tday), icon: 'users', state: M.stdOk ? 'ok' : 'no',
     status: M.stdOk ? 'რიგზეა' : 'აკლია', reason: esc(sReason), rows: sRows });
+  out += scpRate_(M);   /* DOS-RPM-SHORT-LOAD-001 · per-load rate floor, independent of the standard above */
 
   /* calls: missing / processing / unavailable are three different states.
      SHIFT-CLOSE-UI-002 (3): one order = identification line, then a pickup and a delivery
@@ -9605,6 +9782,34 @@ function scpGates_(M) {
     group: (M.chkP.length || waivOf_('check', '', tday)) ? { label: M.chkP.length >= 2 ? ('ერთი ახსნა ყველა ' + M.chkP.length + ' ჩეკზე ერთად:') : 'ახსნა ჩეკზე:',
                                                            chip: waivChip_('check', '', 'ჩეკის ატვირთვა — ' + M.chkP.length, tday) } : null, rows: kRows });
   return out;
+}
+
+/* DOS-RPM-SHORT-LOAD-001 r2 · the rate gate of the Shift Close page (rows from rate_floor_co, see RATEF) */
+function scpRate_(M) {
+  var RT = M.RT, tday = M.tday;
+  if (!RT || RT.st === 'absent') return '';
+  var rows = [], st, status, reason;
+  if (RT.st === 'unavail') { st = 'unavail'; status = 'ვერ ჩაიტვირთა';
+    reason = RT.miss && RT.miss.length ? ('სერვერმა ' + RT.miss.length + ' ტვირთზე განაკვეთი არ დააბრუნა (' + RT.miss.slice(0, 3).join(', ') + (RT.miss.length > 3 ? ' …' : '') + ') — ეს არ ნიშნავს, რომ რიგზეა. დააჭირე ზედა ⟳-ს.')
+                                       : 'ტვირთის განაკვეთი ვერ შემოწმდა — ეს არ ნიშნავს, რომ რიგზეა. დააჭირე ზედა ⟳-ს.'; }
+  else if (RT.st === 'stale') { st = 'wait'; status = 'მოწმდება'; reason = 'ხვალინდელი სია შეიცვალა — განაკვეთი ხელახლა მოწმდება.'; }
+  else if (RT.st === 'no' || M.scHas('rate')) {
+    var f = RT.bad[0], below = RT.bad.some(function (x) { return x.status !== 'unknown'; });
+    st = 'no'; status = below ? 'დაბლაა' : 'ვერ დაითვალა';
+    reason = f ? ('Order ID ' + f.order_number + (RT.bad.length > 1 ? (' და კიდევ ' + (RT.bad.length - 1)) : '') + ' · ' + (f.status === 'unknown' ? 'განაკვეთი ვერ დაითვალა' : 'განაკვეთი მინიმუმზე დაბლაა'))
+               : 'სერვერი: ტვირთის განაკვეთი მინიმუმზე დაბლაა';
+    if (RT.bad.length) rows.push("<div class='gate' style='padding-left:34px'><div class='t'><span class='scp-note'>" + esc(RATE_RULE_KA) + "</span></div></div>");
+    RT.bad.forEach(function (x) {
+      rows.push(scpRow_(x.order_number, "<span class='scp-c " + (x.status === 'unknown' ? 'un' : 'no') + "' data-rate='" + scpAttr_(x.status) + "'>" + esc(rateText_(x)) + "</span>" +
+        (rateBasis_(x) ? (" · " + esc(rateBasis_(x))) : ''), rateChip_(x, tday)));
+    });
+  }
+  else {
+    st = 'ok'; status = 'რიგზეა';
+    var nW = RT.rows.filter(function (x) { return x.status !== 'pass'; }).length;
+    reason = RT.rows.length ? (RT.rows.length + ' ტვირთი მინიმალურ განაკვეთს აკმაყოფილებს' + (nW ? (' (' + nW + ' — დადასტურებული ახსნით)') : '')) : 'ხვალინდელ სიაში ტვირთი არ არის';
+  }
+  return scpGate_('rate', { title: 'ტვირთის განაკვეთი · მილზე', icon: 'car', state: st, status: status, reason: esc(reason), rows: rows });
 }
 
 /* ---- the page --------------------------------------------------------- */
@@ -10005,7 +10210,7 @@ loadPlanContacts = async function () {
 /* ---------------------------------------------------------------- M · one management inbox for all permitted companies */
 var MGI = { user: null, gen: 0, loading: null, loadedAt: 0, error: '', cos: null, waivers: [], closes: [], plans: {}, loads: {},
             roster: [], activity: {}, scope: 'ALL', tab: 'pending' };
-var MGI_KIND = { standard: 'ტვირთის სტანდარტი', calls: 'ზარი', calls_all: 'ზარები (ყველა)', bol: 'BOL', invoice: 'ინვოისი', check: 'ჩეკი' };
+var MGI_KIND = { standard: 'ტვირთის სტანდარტი', calls: 'ზარი', calls_all: 'ზარები (ყველა)', bol: 'BOL', invoice: 'ინვოისი', check: 'ჩეკი', rate: 'ტვირთის განაკვეთი' };
 function mgiActive_() { return !!(typeof USER !== 'undefined' && USER && USER.role === 'mgmt' && ROLE === 'mgmt' && !VIEWAS); }
 function mgiReset_() {
   MGI.gen++; MGI.user = USER ? USER.email : null; MGI.loading = null; MGI.loadedAt = 0; MGI.error = ''; MGI.cos = null;
@@ -10139,6 +10344,7 @@ async function mgiDecide_(id, co, status) {
   var w = MGI.waivers.filter(function (x) { return x.id === id && x.company_id === co; })[0];
   if (!w) { toast('მოთხოვნა ვერ მოიძებნა — სია განახლდა'); await mgiLoad_(true); render(); return; }
   if (w.status !== 'pending') { toast('ეს მოთხოვნა უკვე განხილულია'); return; }
+  if (w.kind === 'rate') return rateDecide_(w, status);   /* DOS-RPM-SHORT-LOAD-001 r2: bound to the reviewed terms (D-RPM-4) */
   var note = '';
   if (status === 'rejected') {
     note = prompt('რატომ არ დასტურდება? (დისპეჩერი ამას დაინახავს)') || '';
@@ -12221,7 +12427,7 @@ function selectOpen() { var a = document.activeElement, v = document.getElementB
    mgmt_close_gates_read_v1. Writers: mgiDecide_ (existing, unchanged) and RPC shift_close_submit. Nothing else.            */
 var SH = { tab: 'closed', co: 'ALL', day: null, q: '', open: null, hfrom: null, hto: null, hres: 'all', caseOpen: null, review: null, close: null,
   closed: {}, ev: { day: null, at: 0, map: {}, error: '', loading: null }, hist: { key: '', at: 0, rows: null, error: '', loading: null }, legs: {}, prev: {}, acts: {}, rpcMissing: false, probe: {} };
-var SH_KIND = { standard: 'ტვირთის სტანდარტი', calls: 'ზარი', calls_all: 'ზარები (ყველა)', bol: 'BOL', invoice: 'ინვოისი და BOL', check: 'ჩეკი', appt: 'Copart appointment', appt_all: 'Copart appointment (ყველა)', gatepass: 'Gate Pass', gatepass_all: 'Gate Pass (ყველა)' };
+var SH_KIND = { standard: 'ტვირთის სტანდარტი', calls: 'ზარი', calls_all: 'ზარები (ყველა)', bol: 'BOL', invoice: 'ინვოისი და BOL', check: 'ჩეკი', appt: 'Copart appointment', appt_all: 'Copart appointment (ყველა)', gatepass: 'Gate Pass', gatepass_all: 'Gate Pass (ყველა)', rate: 'ტვირთის განაკვეთი' };
 function shKey(co, disp, day) { return co + '|' + disp + '|' + day; }
 function shTday() { return ymd_(nextWorkDay_()); }
 function shInCo(x) { return SH.co === 'ALL' || x.company_id === SH.co; }
@@ -12326,6 +12532,7 @@ function shFailed(g) {
   var G = (g && g.gates) || {}, f = [];
   ['roster', 'standard', 'calls', 'invoice', 'check'].forEach(function (k) { if (!(G[k] && G[k].ok === true)) f.push(k + (G[k] ? '' : ':unknown')); });
   ['appt', 'gatepass'].forEach(function (k) { if (!G[k] || G[k].n == null) f.push(k + ':unknown'); else if (Number(G[k].n) > 0 && G[k].ok !== true) f.push(k); });
+  if (G.rate && G.rate.ok !== true) f.push('rate');   /* DOS-RPM-SHORT-LOAD-001: an evaluation made before the rule has no rate gate */
   if (Number(G.calls && G.calls.detail && G.calls.detail.wait_n) > 0) f.push('calls:pending');
   return f;
 }
@@ -12412,10 +12619,13 @@ function shGroups(items) {
 }
 function shGate(key, G, mode) {
   var lbl = (typeof SC_GATE_LBL !== 'undefined' && SC_GATE_LBL[key]) || key, x = G && G[key];
+  if (!x && key === 'rate') return '<div class="u-gate u-g-na">' + ic('circle-dash') + '<div><b>' + h(lbl) + '</b><small>' + (mode === 'rec' ? 'ამ დახურვისას ეს წესი ჯერ არ მოწმდებოდა' : 'ამ შეფასებაში არ არის') + '</small></div></div>';   /* DOS-RPM-SHORT-LOAD-001 */
   if (!x) return '<div class="u-gate u-g-na">' + ic('circle-dash') + '<div><b>' + h(lbl) + '</b><small>არ არის დაფიქსირებული</small></div></div>';
   var opt = (key === 'appt' || key === 'gatepass'), n = Number(x.n) || 0;
   if (opt && !n) return '<div class="u-gate u-g-na">' + ic('circle-dash') + '<div><b>' + h(lbl) + '</b><small>ამ გეგმას არ ეხება</small></div></div>';
   var ok = x.ok === true, notes = [];
+  if (key === 'rate' && Array.isArray(x.detail)) { var rb = x.detail.filter(function (r) { return r && r.ok !== true; });   /* DOS-RPM-SHORT-LOAD-001 */
+    notes.push(rb.length ? rb.map(function (r) { return r.order_number + ' — ' + rateText_(r) + (r.waiver_state === 'approved_stale' ? ' (დადასტურება აღარ მოქმედებს)' : ''); }).join(' · ') : (x.detail.length + ' ტვირთი შეფასდა')); }
   if (key === 'standard') { if (x.all_off) notes.push('ყველა მძღოლი ისვენებს — სტანდარტი არ მოითხოვება'); else if (Array.isArray(x.detail)) notes.push(x.detail.length + ' მძღოლი შეფასდა'); }
   if (key === 'calls' && x.detail) { var d = x.detail; if (d.waiver_id) notes.push('საერთო ახსნით'); if (d.exempt_all) notes.push('ყველა კონტაქტი გამონაკლისია'); if (Number(d.wait_n) > 0) notes.push(d.wait_n + ' მუშავდება');
     var p = scOrders_(d.pending), u = scOrders_(d.unknown_unwaived); if (p.length) notes.push('დაუდასტურებელი: ' + p.join(', ')); if (u.length) notes.push('მონაცემი არ არის: ' + u.join(', ')); }
@@ -12425,7 +12635,7 @@ function shGate(key, G, mode) {
   return '<div class="u-gate' + (ok ? '' : ' u-g-bad') + '">' + ic(ok ? 'circle-check' : 'circle-alert') + '<div><b>' + h(lbl) + '</b><small>' + h(notes.join(' · ')) + '</small></div></div>';
 }
 function shGatesBlock(G, title, sub, mode) {
-  return '<div class="u-gates"><h3>' + h(title) + (sub ? '<small>' + h(sub) + '</small>' : '') + '</h3><div class="u-gatelist">' + ['roster', 'standard', 'calls', 'invoice', 'check', 'appt', 'gatepass'].map(function (k) { return shGate(k, G, mode); }).join('') + '</div></div>';
+  return '<div class="u-gates"><h3>' + h(title) + (sub ? '<small>' + h(sub) + '</small>' : '') + '</h3><div class="u-gatelist">' + ['roster', 'standard', 'calls', 'invoice', 'check', 'appt', 'gatepass', 'rate'].map(function (k) { return shGate(k, G, mode); }).join('') + '</div></div>';
 }
 
 /* ---------- closed detail: the recorded closure snapshot; current load data only under its own label ---------- */
@@ -12564,6 +12774,7 @@ function shCaseDetail(w, hist) {
   if (l) right += '<p style="font-size:13px;line-height:1.8">' + h(locShort(l.pickup_location)) + ' → ' + h(locShort(l.delivery_location)) + '<br>მძღოლი: ' + h(l.driver_name || '—') + ' · ' + h(money(grossOf_(l))) + ' GROSS · სტატუსი: ' + h({ 'new': 'ახალი', picked_up: 'აღებულია', delivered: 'ჩაბარებულია' }[l.status] || l.status || '—') + '</p>';
   else if (w.order_number && w.kind !== 'standard') right += '<p class="u-muted" style="font-size:13px">ტვირთის ჩანაწერი ვერ მოიძებნა.</p>';
   right += '<p class="u-muted" style="font-size:12px;line-height:1.8">მოთხოვნასთან ერთად ზარის ან SMS-ის ასლი და სისტემის მიზეზი არ ინახება — არ არის დაფიქსირებული.</p>';
+  if (w.kind === 'rate' && w.order_number) right += shRateCtx_(w);   /* DOS-RPM-SHORT-LOAD-001 */
   if (l && w.status === 'pending' && /^(calls|appt|gatepass)$/.test(w.kind)) {
     var L = shLegs(w.company_id, [w.order_number]);
     if (L && L.data && L.data[w.order_number]) right += '<div class="u-callout"><small>მიმდინარე შემოწმება სერვერზე · ' + h(uTzTime(L.at)) + '</small>' + shLegHtml('pu', L.data[w.order_number].pu) + shLegHtml('del', L.data[w.order_number].del) + '</div>';
@@ -12572,7 +12783,7 @@ function shCaseDetail(w, hist) {
   var html = '<div class="u-case-detail">' + ctx + '<div class="u-case-grid"><div><h3>' + ic('message-square-text') + 'დისპეჩერის ახსნა</h3><p>' + h(w.reason || 'ტექსტი არ არის') + '</p></div><div>' + right + '</div></div>';
   if (w.status === 'pending') {
     var R = SH.review && SH.review.id === w.id ? SH.review : null;
-    html += '<div class="u-case-actions"><button type="button" class="u-btn u-primary" data-u-review="approve"' + (R && R.busy ? ' disabled' : '') + '>' + ic('check') + 'დადასტურება</button><button type="button" class="u-btn" data-u-review="return"' + (R && R.busy ? ' disabled' : '') + '>' + ic('corner-up-left') + 'დაბრუნება</button><small>გადაწყვეტილება ეხება მხოლოდ ამ ახსნის საკითხს — ცვლას არ ხურავს</small></div>';
+    html += '<div class="u-case-actions"><button type="button" class="u-btn u-primary" data-u-review="approve"' + ((R && R.busy) || (w.kind === 'rate' && !RATE_SHOWN[w.id]) ? ' disabled' : '') + '>' + ic('check') + 'დადასტურება</button><button type="button" class="u-btn" data-u-review="return"' + (R && R.busy ? ' disabled' : '') + '>' + ic('corner-up-left') + 'დაბრუნება</button><small>გადაწყვეტილება ეხება მხოლოდ ამ ახსნის საკითხს — ცვლას არ ხურავს</small></div>';
     if (R) {
       var ctxLine = (SH_KIND[w.kind] || w.kind) + (w.order_number ? ' · ' + w.order_number : '') + ' · ' + uCoCode(w.company_id) + ' · ' + uDay(w.work_day);
       html += '<div class="u-confirm" id="u-review-panel" role="group" tabindex="-1"><h3>' + (R.action === 'approve' ? 'დავადასტუროთ ეს ახსნა?' : 'რა არის დასაზუსტებელი?') + '</h3><p class="u-muted">' + h(ctxLine) + '</p>' +
@@ -12581,6 +12792,32 @@ function shCaseDetail(w, hist) {
     }
   } else html += '<div class="u-record"><strong>' + h(uNameOfEmail(w.decided_by)) + ' · ' + (w.status === 'approved' ? 'დაადასტურა' : 'დააბრუნა') + '</strong><span class="u-muted"> · ' + h(uWhen(w.decided_at)) + '</span><p>' + h(w.decision_note || 'შენიშვნის გარეშე') + '</p></div>';
   return html + '</div>';
+}
+/* DOS-RPM-SHORT-LOAD-001 r2 · a rate explanation is decided with the server's current numbers for that load (rate_floor_co, read-only;
+   management may evaluate any dispatcher of its companies). The numbers shown here are the terms an approval binds to
+   (RATE_SHOWN -> rate_waiver_decide p_expected); the approve button stays closed until they are shown. */
+var SH_RATE = {};
+function shRateCtx_(w) {
+  var k = w.company_id + '|' + w.dispatcher_name + '|' + w.work_day + '|' + RATE_CTX_GEN, R = SH_RATE[k];
+  if (!R || (!R.loading && Date.now() - R.at > 90000)) {
+    R = SH_RATE[k] = { loading: true, at: Date.now(), data: null, error: '' };
+    sb.rpc('rate_floor_co', { p_disp: w.dispatcher_name, p_work_day: w.work_day, p_company_id: w.company_id }).then(function (r) {
+      if (r.error) R.error = uMissing(r.error) ? 'absent' : uErr(r.error);
+      else if (!r.data || !Array.isArray(r.data.rows) || r.data.dispatcher_name !== w.dispatcher_name || String(r.data.work_day) !== String(w.work_day) || r.data.company_id !== w.company_id) R.error = 'სერვერის პასუხი არასრულია';
+      else R.data = r.data;
+    }, function (e) { R.error = uErr(e); }).then(function () { R.loading = false; R.at = Date.now(); try { shPaintBody(); } catch (e) {} });
+  }
+  delete RATE_SHOWN[w.id];
+  var head = '<div class="u-callout" data-rate-ctx="1"><small>ტვირთის განაკვეთი · მიმდინარე შეფასება სერვერზე' + (R.data ? ' · ' + h(uTzTime(R.at)) : '') + '</small>';
+  if (R.loading) return head + '<p>იტვირთება…</p></div>';
+  if (R.error === 'absent') return head + '<p class="u-muted">განაკვეთის წესი სერვერზე ჯერ არ არის დაყენებული.</p></div>';
+  if (R.error) return head + '<p>ვერ ჩაიტვირთა — ' + h(R.error) + '. ეს არ ნიშნავს, რომ ტვირთი რიგზეა.</p></div>';
+  var x = R.data.rows.filter(function (r) { return r.order_number === w.order_number; })[0];
+  if (!x) return head + '<p>ეს ტვირთი ამ დღის გეგმაში ახლა აღარ არის — დადასტურება შეუძლებელია.</p></div>';
+  if (w.status === 'pending') RATE_SHOWN[w.id] = { rule: 'RPM-1', price: x.price, miles: x.miles, vehicles: x.vehicles, capacity: x.capacity, driver: x.driver };
+  var st = { pass: 'მინიმუმს აკმაყოფილებს — დადასტურება არ სჭირდება', below: 'მინიმუმზე დაბლაა', unknown: 'ვერ დაითვალა' }[x.status] || x.status;
+  return head + '<p><b>' + h(rateText_(x)) + '</b><br>' + h(rateTerms_(x)) + (x.status !== 'unknown' ? '<br>' + h(rateBasis_(x)) : '') + '<br>' + h(st) + '</p>' +
+    '<p class="u-muted" style="font-size:12px">დადასტურება მოქმედებს მხოლოდ ზემოთ ნაჩვენებ პირობებზე. ' + h(RATE_RULE_KA) + '</p></div>';
 }
 async function shDecide() {
   var R = SH.review; if (!R || R.busy) return;
