@@ -501,7 +501,8 @@ function pcstItems_(on, side, why) {
   var a = pcstValid_() ? (PCST.rows[pcstKey_(on, side)] || []) : [];
   if (!a.length) items.push(['wait', 'შინაარსი ჯერ არ არის შემოწმებული']);
   pcstLines_(on, side).forEach(function (t, i) { var x = a[i]; items.push([(x && x.terminal) ? 'un' : 'wait', t]); });
-  if (a.length && a.every(function (x) { return x.terminal; })) items.push(['un', 'საჭიროა ახალი დადასტურება (ზარი ან SMS)']);
+  /* DOS-AQ-UI-001 r3 (F1): terminal rows are history of those calls; the leg is pending for a reason PCST does not show */
+  if (a.length && a.every(function (x) { return x.terminal; })) items.push(['wait', 'მონაკვეთი ჯერ მოწმდება']);
   try { scpCriteria_(why).forEach(function (c) { items.push(['un', c.raw]); }); } catch (e) {}
   return items;
 }
@@ -509,12 +510,13 @@ function pcstItems_(on, side, why) {
 function pcstGateReason_(waitN, rows, isWait) {
   var base = waitN + ' ტვირთზე ზარის შინაარსი ჯერ არ არის შემოწმებული';
   if (!pcstValid_()) return base;
-  var n = { act: 0, rec: 0, retry: 0, stall: 0, term: 0 }, next = null, lastRef = null;
+  var n = { act: 0, rec: 0, retry: 0, stall: 0, term: 0, short: 0 }, next = null, lastRef = null;
   (rows || []).forEach(function (r) {
     ['pu', 'del'].forEach(function (side) {
       if (!isWait(r, side)) return;
       (PCST.rows[pcstKey_(r.order_number, side)] || []).forEach(function (x) {
-        if (x.terminal) n.term++;
+        if (x.terminal && x.state === 'short_call') n.short++;   /* DOS-AQ-UI-001 r3 */
+        else if (x.terminal) n.term++;
         else if (x.state === 'retry_scheduled' || x.state === 'analysis_retry') {
           n.retry++; var t = x.next_retry_at ? new Date(x.next_retry_at).getTime() : 0;
           if (t > Date.now() && (!next || t < next)) next = t;
@@ -530,7 +532,8 @@ function pcstGateReason_(waitN, rows, isWait) {
   if (n.rec) p.push(n.rec + ' ზარის ჩანაწერი ჯერ არ მოსულა');
   if (n.retry) p.push(n.retry + ' ზარზე ტექნიკური შეფერხებაა' + (next ? (' — ხელახალი ცდა ' + pcstHm_(next)) : ''));
   if (n.stall) p.push('დამუშავება შეფერხებულია' + (lastRef ? (' (ბოლო დამუშავება ' + pcstHm_(lastRef) + ')') : ''));
-  if (n.term) p.push(n.term + ' ზარი ვერ დამუშავდა — საჭიროა ახალი დადასტურება');
+  if (n.term) p.push(n.term + ' ზარი ვერ დამუშავდა');   /* DOS-AQ-UI-001 r3 (F1): history, not a whole-gate instruction */
+  if (n.short) p.push(n.short + ' ზარი 10 წამზე მოკლე იყო და არ ითვლება');
   return p.length ? (base + ' · ' + p.join(' · ')) : base;
 }
 /* the calls gate status word: "checking" only while something is actually in progress or scheduled */
@@ -540,8 +543,8 @@ function pcstGateStatus_(rows, isWait) {
   (rows || []).forEach(function (r) { ['pu', 'del'].forEach(function (side) {
     if (!isWait(r, side)) return;
     var a = PCST.rows[pcstKey_(r.order_number, side)] || [];
-    if (!a.length) live = true;                       /* pending for another reason (e.g. an SMS): keep "checking" */
-    a.forEach(function (x) { any = true; if (!x.terminal && !pcstStalled_(x)) live = true; });
+    if (!a.length || a.every(function (x) { return x.terminal; })) live = true;   /* pending for another reason (an SMS, a due reading): keep "checking" (r3 F1) */
+    a.forEach(function (x) { if (x.terminal) return; any = true; if (!pcstStalled_(x)) live = true; });
   }); });
   return (any && !live) ? 'შეფერხებულია' : 'მოწმდება';
 }
@@ -9020,6 +9023,7 @@ function sdDelWarn_(l){
 :root[data-theme="dark"] .scp .gate.scp-sub{background:#1f2521}
 .scp .gate.scp-sub .t{flex:1 1 260px;min-width:0}
 .scp-ract{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.scp-hold{display:block;max-width:340px;font-size:12px;line-height:1.45;color:var(--p-blue)}.scp-hold.h-stall,.scp-hold.h-retry{color:var(--p-amber)}
 .scp-c{font-weight:500} .scp-c.ok{color:var(--p-ok)} .scp-c.no{color:var(--p-err)} .scp-c.wait{color:var(--p-blue)} .scp-c.un{color:#7a5010}
 .scp .scp-note{color:var(--p-blue)!important;font-size:12px!important}
 .scp .fixbtn{border-color:var(--p-line);background:var(--p-paper);color:var(--p-accent);min-height:36px}
@@ -9428,6 +9432,33 @@ function scpDriver_(d, M) {
     "<div class='scp-loads'>" + loads + why + "</div></div>";
 }
 
+/* DOS-AQ-UI-001 · D-UI-1 (r3): why a load's explanation button is not offered while one of its legs is still pending. The button rule
+   is unchanged (the server's calls gate does not pass a pending leg even with an approved explanation). The leg itself is only known to
+   be pending: the reason (a call or SMS being read, a reading that is due or running) does not reach the browser, so the leg is described
+   neutrally. A call that is still in the pipeline adds a delay detail; a call that ended without a usable result (PCST terminal) is history
+   of that call only and says nothing about the leg. */
+function scpHoldNote_(on, side) {
+  var a = pcstValid_() ? (PCST.rows[pcstKey_(on, side)] || []) : [];
+  var retry = a.filter(function (x) { return !x.terminal && (x.state === 'retry_scheduled' || x.state === 'analysis_retry'); });
+  if (retry.length) return { k: 'retry', t: 'ზარი ' + pcstHm_(retry[0].started_at) + ' — ტექნიკური შეფერხება, სისტემა ავტომატურად ხელახლა ცდის' };
+  var stall = a.filter(function (x) { return !x.terminal && pcstStalled_(x); });
+  if (stall.length) return { k: 'stall', t: 'ზარი ' + pcstHm_(stall[0].started_at) + ' — დამუშავება შეფერხებულია (ტექნიკური მიზეზი)' };
+  return { k: 'proc', t: '' };
+}
+function scpHold_(r, M) {
+  var parts = [], worst = 'proc', rank = { proc: 0, retry: 1, stall: 2 };
+  [['pu', 'ფიქაფი'], ['del', 'დელივერი']].forEach(function (s) {
+    if (!(s[0] === 'pu' ? M.puWait_(r) : M.delWait_(r))) return;
+    var n = scpHoldNote_(r.order_number, s[0]); if (rank[n.k] > rank[worst]) worst = n.k;
+    parts.push(s[1] + ': ჯერ მოწმდება' + (n.t ? (' (' + n.t + ')') : ''));
+  });
+  var red = [['pu', 'ფიქაფი'], ['del', 'დელივერი']].filter(function (s) {
+    return s[0] === 'pu' ? (!M.puOk_(r) && !M.puWait_(r)) : (!M.delOk_(r) && !M.delWait_(r)); }).map(function (s) { return s[1]; });
+  var tail = (red.length ? (' ' + red.join(', ') + ' უკვე დასაზუსტებელია.') : '') +
+             ' თუ შემოწმების შემდეგ საკითხი დარჩება და ამ ტვირთზე ახსნა დაშვებულია, ახსნის გაგზავნა აქ გამოჩნდება.';
+  return "<span class='scp-hold h-" + worst + "' role='status' data-hold='" + worst + "'>" + esc(parts.join(' · ') + '.' + tail) + "</span>";
+}
+
 /* ---- the gates --------------------------------------------------------- */
 function scpGates_(M) {
   var tday = M.tday, out = '';
@@ -9490,7 +9521,8 @@ function scpGates_(M) {
     return "<div class='gate scp-orow' style='padding-left:34px'><div class='t'><strong class='scp-rt'>" + esc(r.order_number) + "</strong>" +
       "<span class='scp-ident'>" + esc(rDrv_(r)) + "</span>" +
       "<div class='scp-legs'>" + legHtml(r, 'pu') + legHtml(r, 'del') + "</div></div>" +
-      ((!okR && !waitR) ? ("<div class='scp-ract'>" + waivChip_('calls', r.order_number, 'ზარი — ' + r.order_number, tday) + "</div>") : '') + "</div>";
+      ((!okR && !waitR) ? ("<div class='scp-ract'>" + waivChip_('calls', r.order_number, 'ზარი — ' + r.order_number, tday) + "</div>")
+        : (!okR && waitR) ? ("<div class='scp-ract'>" + scpHold_(r, M) + "</div>") : '') + "</div>";   /* DOS-AQ-UI-001 D-UI-1 */
   });
   M.unknownOns.forEach(function (on) {
     cRows.push(scpRow_(on, "<span class='scp-c un'>ზარების მონაცემი ვერ ჩაიტვირთა — დააჭირე ზედა ⟳-ს. ეს დადასტურება არ არის.</span>", ''));
