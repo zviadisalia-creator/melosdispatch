@@ -5779,7 +5779,8 @@ function rateLegacyHtml_(RT, gRate, tday){
   var sub = RT.st === 'unavail' ? (RT.miss && RT.miss.length ? ('სერვერმა ' + RT.miss.length + ' ტვირთზე განაკვეთი არ დააბრუნა (' + RT.miss.slice(0, 3).join(', ') + ') — ეს არ ნიშნავს, რომ რიგზეა. განაახლე გვერდი.')
                                         : 'ტვირთის განაკვეთი ვერ შემოწმდა — ეს არ ნიშნავს, რომ რიგზეა. განაახლე გვერდი.')
           : RT.st === 'stale' ? 'ხვალინდელი სია შეიცვალა — განაკვეთი ხელახლა მოწმდება.'
-          : bad.length ? (bad.length + ' ტვირთი მინიმალურ განაკვეთს ვერ აკმაყოფილებს')
+          : bad.length ? (function(){ var u = bad.filter(function(x){ return x.status === 'unknown'; }).length, b = bad.length - u;   /* DOS-RPM-WORDING-002: below the floor vs not calculable */
+              return (b ? (b + ' ტვირთი მინიმალურ განაკვეთს ვერ აკმაყოფილებს') : '') + (b && u ? '; ' : '') + (u ? (u + ' ტვირთზე განაკვეთი ვერ დაითვალა') : ''); })()
           : !gRate ? 'სერვერი: ტვირთის განაკვეთი მინიმუმზე დაბლაა'
           : (RT.rows.length ? 'ყველა ტვირთი მინიმალურ განაკვეთს აკმაყოფილებს' : 'ხვალინდელ სიაში ტვირთი არ არის');
   return "<div class='gate " + (gRate ? 'ok' : 'no') + "' data-rate-gate='" + RT.st + "'><div class='ic'>" + (gRate ? '✓' : '!') + "</div><div class='t'><b>ტვირთის განაკვეთი · მილზე</b><span>" + esc(sub) + "</span></div></div>" +
@@ -9801,8 +9802,9 @@ function scpRate_(M) {
   else if (RT.st === 'stale') { st = 'wait'; status = 'მოწმდება'; reason = 'ხვალინდელი სია შეიცვალა — განაკვეთი ხელახლა მოწმდება.'; }
   else if (RT.st === 'no' || M.scHas('rate')) {
     var f = RT.bad[0], below = RT.bad.some(function (x) { return x.status !== 'unknown'; });
-    st = 'no'; status = below ? 'დაბლაა' : 'ვერ დაითვალა';
-    reason = f ? ('Order ID ' + f.order_number + (RT.bad.length > 1 ? (' და კიდევ ' + (RT.bad.length - 1)) : '') + ' · ' + (f.status === 'unknown' ? 'განაკვეთი ვერ დაითვალა' : 'განაკვეთი მინიმუმზე დაბლაა'))
+    var nU = RT.bad.filter(function (x) { return x.status === 'unknown'; }).length, nB = RT.bad.length - nU;   /* DOS-RPM-WORDING-002: below the floor vs not calculable */
+    st = 'no'; status = (nB && nU) ? 'დაბლაა · ვერ დაითვალა' : below ? 'დაბლაა' : 'ვერ დაითვალა';
+    reason = f ? ('Order ID ' + f.order_number + (RT.bad.length > 1 ? (' და კიდევ ' + (RT.bad.length - 1)) : '') + ' · ' + ((nB && nU) ? (nB + ' მინიმუმზე დაბლაა, ' + nU + ' ვერ დაითვალა') : (f.status === 'unknown' ? 'განაკვეთი ვერ დაითვალა' : 'განაკვეთი მინიმუმზე დაბლაა')))
                : 'სერვერი: ტვირთის განაკვეთი მინიმუმზე დაბლაა';
     if (RT.bad.length) rows.push("<div class='gate' style='padding-left:34px'><div class='t'><span class='scp-note'>" + esc(RATE_RULE_KA) + "</span></div></div>");
     RT.bad.forEach(function (x) {
