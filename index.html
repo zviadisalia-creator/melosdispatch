@@ -5699,7 +5699,13 @@ function rateCents_(v){ return '$' + Number(v).toFixed(2); }
 function rateReq_(v){ return '$' + Number(v).toFixed(2); }
 function rateText_(x){
   if(!x || x.status === 'unknown'){
-    var m = (x && Array.isArray(x.missing) ? x.missing : []).map(function(k){ return RATE_MISS_KA[k] || k; });
+    var mk = (x && Array.isArray(x.missing) ? x.missing : []);
+    if(mk.indexOf('capacity') >= 0){   /* DOS-RPM-WORDING-001 (owner 2026-11-10): the actual missing reason; capacity is management's to set */
+      var mo = mk.filter(function(k){ return k !== 'capacity'; }).map(function(k){ return RATE_MISS_KA[k] || k; });
+      return 'მძღოლის ტევადობა დაუზუსტებელია — მენეჯმენტმა უნდა გაასწოროს.' + (x.driver ? (' მძღოლი: ' + x.driver + '.') : '') + ' მენეჯმენტმა უნდა შეავსოს მძღოლის ჩანაწერი / ტევადობა (ტრეილერის ზომა).' +
+        (mo.length ? (' ასევე აკლია: ' + mo.join(', ') + '.') : '') + ' ეს დადასტურება არ არის.';
+    }
+    var m = mk.map(function(k){ return RATE_MISS_KA[k] || k; });
     return 'განაკვეთი ვერ დაითვალა — აკლია: ' + (m.join(', ') || 'მონაცემი') + '. ეს დადასტურება არ არის.';
   }
   return 'ამ ტვირთზე ' + rateCents_(x.actual_cents) + '/მილია; საჭიროა მინიმუმ ' + rateReq_(x.required_rpm);
