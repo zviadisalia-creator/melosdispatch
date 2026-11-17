@@ -11941,6 +11941,148 @@ body.uim #mg001-context .mg-mobile-subnav{display:none}
  body.uim .u-idletime{font-size:32px}
 }
 @media(prefers-reduced-motion:reduce){body.uim .u-turn{transition:none}}
+/* DOS-SHIFTS-UI-20261117 · Shifts page (owner-approved mockup geometry on the existing management palette) */
+body.uim .u-s2-titlerow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+body.uim .u-s2-titlerow h1{margin:0}
+body.uim .u-s2-hours{margin-left:auto;color:var(--u-muted);font-size:11px}
+body.uim .u-s2-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) .25fr repeat(2,minmax(0,1fr));gap:10px;margin-bottom:24px}
+body.uim .u-s2-tile{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:7px;min-height:104px;padding:14px 8px;border:1px solid var(--u-line);border-radius:10px;background:var(--u-panel);color:var(--u-text);font:inherit;font-size:12px;text-align:center;cursor:pointer}
+body.uim .u-s2-tile:nth-child(3){grid-column:4}
+body.uim .u-s2-tile:nth-child(4){grid-column:5}
+body.uim .u-s2-tile .u-ic{width:18px;height:18px}
+body.uim .u-s2-tlabel{font-weight:500;overflow-wrap:anywhere}
+body.uim .u-s2-tile small{font-size:11px;color:var(--u-muted)}
+body.uim .u-s2-tile[aria-selected=true]{background:var(--u-green);border-color:var(--u-green);color:var(--u-on)}
+body.uim .u-s2-tile[aria-selected=true] small{color:var(--u-on-soft)}
+:root[data-theme="dark"] body.uim .u-s2-tile[aria-selected=true] small{color:var(--u-on)}
+body.uim .u-s2-tile:not([aria-selected=true]):hover{background:var(--u-btn-hover)}
+body.uim .u-s2-tools{display:flex;align-items:center;gap:9px;margin-bottom:18px;flex-wrap:wrap}
+body.uim .u-s2-select,body.uim .u-s2-search{border:1px solid var(--u-line);border-radius:6px;background:var(--u-panel);color:var(--u-text);padding:8px 10px;min-height:37px;font:inherit;font-size:12px}
+body.uim .u-s2-search{margin-left:auto;max-width:200px;flex:1 1 155px;min-width:0}
+body.uim .u-s2-dlab{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--u-muted)}
+body.uim .u-s2-refresh{min-height:37px}
+body.uim .u-s2-filter{display:flex;align-items:stretch;border:1px solid var(--u-line);border-radius:6px;overflow:hidden;background:var(--u-panel)}
+body.uim .u-s2-filter button{border:0;border-right:1px solid var(--u-line);background:transparent;color:var(--u-text);padding:8px 12px;min-height:37px;font:inherit;font-size:12px;cursor:pointer}
+body.uim .u-s2-filter button:last-child{border-right:0}
+body.uim .u-s2-filter button[aria-pressed=true]{background:var(--u-hover);color:var(--u-green);font-weight:500}
+body.uim .u-s2-sechead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px}
+body.uim .u-s2-sechead h3{font-size:14px;font-weight:500;margin:0;display:flex;align-items:center;gap:8px}
+body.uim .u-s2-daynav{display:inline-flex;gap:2px}
+body.uim .u-s2-daynav .u-iconbtn{width:26px;height:26px;min-height:0;padding:0}
+body.uim .u-s2-count{margin:0;font-size:11px;color:var(--u-muted)}
+body.uim .u-s2-dayin{border:0;background:transparent;color:var(--u-muted);font:inherit;font-size:11px;padding:0 2px;width:22px;cursor:pointer}
+body.uim .u-s2-dayin::-webkit-datetime-edit{display:none}
+body.uim .u-s2-sheet{background:var(--u-panel);border:1px solid var(--u-line);border-radius:8px;overflow:hidden}
+body.uim .u-s2-grid{display:grid;grid-template-columns:minmax(0,2.3fr) .7fr minmax(105px,1fr) minmax(85px,.8fr) 16px;gap:10px;align-items:center}
+body.uim .u-s2-thead{padding:10px 15px;font-size:11px;background:var(--u-header);color:var(--u-muted)}
+body.uim .u-s2-wrap+.u-s2-wrap{border-top:1px solid var(--u-line)}
+body.uim .u-s2-disp{border:0;background:transparent;color:var(--u-text);width:100%;text-align:left;padding:14px 15px;min-height:58px;font:inherit;font-size:13px;cursor:pointer}
+body.uim .u-s2-disp:hover{background:var(--u-hover)}
+body.uim .u-s2-disp[aria-expanded=true]{background:var(--u-hover)}
+body.uim .u-s2-disp:focus-visible,body.uim .u-s2-drv:focus-visible{outline-offset:-3px}
+body.uim .u-s2-name{font-weight:500;overflow-wrap:anywhere}
+body.uim .u-s2-co{width:max-content;border-radius:4px;padding:2px 6px;font-size:11px;color:var(--u-chip-text);background:var(--u-chip)}
+body.uim .u-s2-state{font-size:12px;white-space:nowrap}
+body.uim .u-s2-state.u-s2-open,body.uim .u-s2-amber{color:var(--u-warm)}
+body.uim .u-s2-state.u-s2-closed,body.uim .u-s2-ok{color:var(--u-green)}
+body.uim .u-s2-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:2px}
+body.uim .u-s2-time{font-variant-numeric:tabular-nums;font-size:12px;color:var(--u-muted)}
+body.uim .u-s2-time.u-s2-amber{color:var(--u-warm)}
+body.uim .u-s2-time.u-s2-ok{color:var(--u-green)}
+body.uim .u-s2-disp .u-chev .u-ic,body.uim .u-s2-drv .u-chev .u-ic{width:15px;height:15px;color:var(--u-muted)}
+body.uim .u-s2-detail{padding:14px 15px 17px;border-top:1px solid var(--u-line);background:var(--u-detail)}
+body.uim .u-s2-remaining{border:1px solid var(--u-line);border-radius:7px;background:var(--u-panel);overflow:hidden}
+body.uim .u-s2-trow{display:grid;grid-template-columns:minmax(145px,.8fr) minmax(0,1.6fr);gap:16px;align-items:start;padding:13px 14px}
+body.uim .u-s2-trow+.u-s2-trow{border-top:1px solid var(--u-line)}
+body.uim .u-s2-trow.u-s2-needs{background:var(--u-warm-bg)}
+body.uim .u-s2-tdrv{font-weight:500;font-size:12px;overflow-wrap:anywhere}
+body.uim .u-s2-task+.u-s2-task{margin-top:8px}
+body.uim .u-s2-act{display:block;color:var(--u-warm);font-size:12px;font-weight:500}
+body.uim .u-s2-act small{font-weight:400}
+body.uim .u-s2-wait .u-s2-act,body.uim .u-s2-tech .u-s2-act{color:var(--u-muted)}
+body.uim .u-s2-pend .u-s2-act{color:var(--u-pend-text)}
+body.uim .u-s2-sub{display:block;margin-top:4px;color:var(--u-muted);font-size:11px;overflow-wrap:anywhere}
+body.uim .u-s2-done{font-size:12px;color:var(--u-green)}
+body.uim .u-s2-ltoggle{display:block;margin-top:4px;padding:0;border:0;background:none;color:var(--u-green);font:inherit;font-size:11px;font-weight:400;cursor:pointer}
+body.uim .u-s2-oloads{grid-column:1 / -1;margin:6px -14px -13px;border-top:1px solid var(--u-line)}
+body.uim .u-s2-unk{font-size:12px;color:var(--u-muted)}
+body.uim .u-s2-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:10px}
+body.uim .u-s2-btns{display:flex;gap:8px;flex-wrap:wrap}
+body.uim .u-s2-prov{font-size:11px;color:var(--u-muted);margin:10px 0 0}
+body.uim .u-s2-foot .u-s2-prov{margin:0}
+body.uim .u-s2-dtable{background:var(--u-panel);border:1px solid var(--u-line);border-radius:6px;overflow:hidden}
+body.uim .u-s2-dgrid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(70px,.45fr) minmax(110px,.65fr) minmax(128px,.95fr) 14px;gap:10px;align-items:center}
+body.uim .u-s2-dhead{background:var(--u-header);color:var(--u-muted);font-size:11px;padding:8px 12px}
+body.uim .u-s2-drv{width:100%;border:0;background:var(--u-panel);color:var(--u-text);text-align:left;padding:11px 12px;min-height:55px;font:inherit;font-size:13px}
+body.uim .u-s2-drv+.u-s2-drv,body.uim .u-s2-drv+.u-s2-loads,body.uim .u-s2-loads+.u-s2-drv{border-top:1px solid var(--u-line)}
+body.uim button.u-s2-drv{cursor:pointer}
+body.uim button.u-s2-drv:hover,body.uim button.u-s2-drv[aria-expanded=true]{background:var(--u-hover)}
+body.uim .u-s2-dname{font-weight:500;overflow-wrap:anywhere}
+body.uim .u-s2-dsub{display:block;font-size:11px;color:var(--u-muted);font-weight:400;margin-top:2px}
+body.uim .u-s2-apprs{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+body.uim .u-s2-appr{color:var(--u-pend-text);font-size:11px;display:inline-block;background:var(--u-pend-bg);padding:4px 7px;border-radius:5px}
+body.uim .u-s2-link{font-size:11px;color:var(--u-green)}
+body.uim .u-s2-loads{padding:11px 12px 9px;background:var(--u-panel)}
+body.uim .u-s2-ltop{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-bottom:8px;color:var(--u-muted);font-size:11px}
+body.uim .u-s2-src summary{list-style:none;cursor:pointer;color:var(--u-muted);font-size:11px;padding:2px 0}
+body.uim .u-s2-src summary::-webkit-details-marker{display:none}
+body.uim .u-s2-src[open]{flex-basis:100%}
+body.uim .u-s2-src p{font-size:12px;padding:8px 10px;background:var(--u-detail);border:1px solid var(--u-line);border-radius:5px;margin:5px 0 8px}
+body.uim .u-s2-ltable{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px}
+body.uim .u-s2-ltable th{text-align:left;font-size:11px;color:var(--u-muted);font-weight:400;padding:5px 5px 7px;border-bottom:1px solid var(--u-line)}
+body.uim .u-s2-ltable td{padding:9px 5px;vertical-align:top;border-bottom:1px solid var(--u-line);overflow-wrap:anywhere}
+body.uim .u-s2-ltable tbody tr:last-child td{border-bottom:0}
+body.uim .u-s2-ltable th:first-child,body.uim .u-s2-ltable td:first-child{padding-left:0;width:29%}
+body.uim .u-s2-ltable th:nth-child(2){width:30%}
+body.uim .u-s2-ltable th:nth-child(3){width:25%}
+body.uim .u-s2-ltable th:last-child,body.uim .u-s2-ltable td:last-child{text-align:right;padding-right:0;width:16%}
+body.uim .u-s2-veh{font-size:12px;font-weight:500;display:block}
+body.uim .u-s2-lid{font-size:11px;color:var(--u-muted)}
+body.uim .u-s2-rt{display:block}
+body.uim .u-s2-rt.u-s2-dst{color:var(--u-muted)}
+body.uim .u-s2-money{font-weight:500;font-size:12px;display:block}
+body.uim .u-s2-inop{color:var(--u-warm);font-size:11px;font-weight:500;margin-left:5px}
+body.uim .u-s2-pay{display:block;font-size:11px;color:var(--u-muted);margin-top:3px}
+body.uim .u-s2-empty{font-size:12px;color:var(--u-muted);padding:18px 16px;background:var(--u-panel);border:1px solid var(--u-line);border-radius:6px}
+body.uim .u-s2-mgrid{display:grid;grid-template-columns:minmax(0,2fr) .7fr minmax(100px,1fr);gap:14px;align-items:center}
+body.uim .u-s2-mrow{padding:15px;border-top:1px solid var(--u-line);font-size:13px}
+body.uim .u-s2-mgrid.u-s2-thead{padding:10px 15px}
+body.uim .u-s2-mdate{font-size:12px;color:var(--u-warm)}
+body.uim .u-s2-late{display:block;font-size:11px;color:var(--u-muted);margin-top:2px}
+@media(max-width:1050px){body.uim .u-s2-tile{font-size:11px}body.uim .u-s2-filter button{padding:8px 9px;font-size:11px}body.uim .u-s2-search{max-width:none;flex:1 1 150px}body.uim .u-s2-dgrid{grid-template-columns:minmax(140px,1.4fr) 44px 86px minmax(120px,1fr) 12px;gap:8px}}
+@media(max-width:620px){
+body.uim .u-s2-titlerow{gap:8px;margin-bottom:17px}body.uim .u-s2-hours{flex-basis:100%;margin-left:0}
+body.uim .u-s2-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:18px}body.uim .u-s2-tile:nth-child(3),body.uim .u-s2-tile:nth-child(4){grid-column:auto}body.uim .u-s2-tile{min-height:90px}
+body.uim .u-s2-filter{order:3;flex:1 1 100%}body.uim .u-s2-filter button{flex:1;padding:10px 5px;font-size:12px;min-height:42px}
+body.uim .u-s2-tools>.u-s2-select{flex:1 1 125px;min-width:0}body.uim .u-s2-tools>.u-s2-search{flex:1 1 130px;margin-left:0}
+body.uim .u-s2-grid{grid-template-columns:minmax(0,1fr) 100px 12px;gap:6px}
+body.uim .u-s2-thead .u-s2-cocol,body.uim .u-s2-thead .u-s2-tcol{display:none}
+body.uim .u-s2-disp{padding:12px 10px;min-height:65px}
+body.uim .u-s2-disp .u-s2-name{grid-column:1;grid-row:1;font-size:12px}body.uim .u-s2-disp .u-s2-co{grid-column:1;grid-row:2}
+body.uim .u-s2-disp .u-s2-state{grid-column:2;grid-row:1;font-size:11px}body.uim .u-s2-disp .u-s2-time{grid-column:2;grid-row:2;font-size:11px}
+body.uim .u-s2-disp .u-chev{grid-column:3;grid-row:1 / span 2}
+body.uim .u-s2-detail{padding:10px 8px}
+body.uim .u-s2-trow{grid-template-columns:minmax(0,1fr);gap:5px;padding:12px}
+body.uim .u-s2-dhead{display:none}
+body.uim .u-s2-dgrid{grid-template-columns:minmax(0,1fr) auto 10px;gap:4px 7px}
+body.uim .u-s2-drv{padding:11px 9px}
+body.uim .u-s2-drv .u-s2-dname{grid-column:1;grid-row:1;font-size:12px}
+body.uim .u-s2-drv>.u-num:nth-child(2){grid-column:1;grid-row:2;font-size:11px;color:var(--u-muted)}
+body.uim .u-s2-drv>.u-num:nth-child(3){grid-column:2;grid-row:1;text-align:right;font-size:12px}
+body.uim .u-s2-drv .u-s2-apprs{grid-column:1 / span 2;grid-row:3}
+body.uim .u-s2-drv>.u-chev{grid-column:3;grid-row:1 / span 3}
+body.uim .u-s2-loads{padding:10px 9px}
+body.uim .u-s2-ltable thead{display:none}body.uim .u-s2-ltable tbody{display:block}
+body.uim .u-s2-ltable tr{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:10px 0;gap:5px 8px;border-bottom:1px solid var(--u-line)}
+body.uim .u-s2-ltable tr:last-child{border-bottom:0}
+body.uim .u-s2-ltable td{display:block;width:auto!important;border:0;padding:0!important}
+body.uim .u-s2-ltable td:first-child{grid-column:1;grid-row:1}body.uim .u-s2-ltable td:nth-child(2){grid-column:1;grid-row:2}
+body.uim .u-s2-ltable td:nth-child(3){grid-column:1 / span 2;grid-row:3;display:flex;gap:8px;flex-wrap:wrap;color:var(--u-muted)}
+body.uim .u-s2-ltable td:last-child{grid-column:2;grid-row:1 / span 2;max-width:82px}
+body.uim .u-s2-mgrid{grid-template-columns:minmax(0,1fr) 95px;gap:7px}body.uim .u-s2-mgrid.u-s2-thead .u-s2-cocol{display:none}
+body.uim .u-s2-mrow .u-s2-name{grid-column:1;grid-row:1;font-size:12px}body.uim .u-s2-mrow .u-s2-co{grid-column:1;grid-row:2}body.uim .u-s2-mdate{grid-column:2;grid-row:1 / span 2;font-size:11px}
+}
+@media(pointer:coarse){body.uim .u-s2-select,body.uim .u-s2-search{font-size:16px;min-height:44px}}
 </style>
 <script id="uimgmt-001">
 (function () {
@@ -12429,48 +12571,88 @@ try { if (typeof MutationObserver === 'function') { var uViewEl = document.getEl
 function busyEditing() { var P = PAGES[MTAB]; return !!(P && P.editing && P.editing()); }
 function selectOpen() { var a = document.activeElement, v = document.getElementById('view'); return !!(a && v && a.tagName === 'SELECT' && v.contains(a)); }
 
-/* ---- SHIFTS: closed (recorded snapshot) · to close (plan + server verdicts + manager close) · awaiting answer · history ----
-   Readers: shift_close, close_event, the existing all-company inbox MGI (roster via mgiShifts_, requests), the all-company
-   store, RPC contact_check_orders / contact_content_orders / leg_skip_co, table load_actions, optional RPC
-   mgmt_close_gates_read_v1. Writers: mgiDecide_ (existing, unchanged) and RPC shift_close_submit. Nothing else.            */
-var SH = { tab: 'closed', co: 'ALL', day: null, q: '', open: null, hfrom: null, hto: null, hres: 'all', caseOpen: null, review: null, close: null,
-  closed: {}, ev: { day: null, at: 0, map: {}, error: '', loading: null }, hist: { key: '', at: 0, rows: null, error: '', loading: null }, legs: {}, prev: {}, acts: {}, rpcMissing: false, probe: {} };
+/* ---- SHIFTS · DOS-SHIFTS-UI-20261117 (owner-approved design, 2026-11-17): Today (open + closed shifts of the current reporting
+   workday) · awaiting answer · history / reviewed explanations · history / unclosed shifts.
+   Reporting workday D = [D 08:00, D+1 08:00) Asia/Tbilisi - a fixed rule of this view, independent of the browser's zone. A shift
+   keeps its stored identity (company, dispatcher, work_day). The plan day of D is P(D) = D+1 (D+2 when D+1 is a Sunday): the day
+   next_work_day() gives during D (measured on every closure of the 30 days before 2026-11-17; the first one-two hours after 08:00,
+   before Chicago midnight, the server still has the previous plan day - shown as "not evaluable yet", never as green).
+   The 08:00 rollover only changes what is shown: nothing is closed, approved or rewritten.
+   Readers: shift_close, close_event, load_waivers, day_plan, the inbox MGI (today's roster via mgiShifts_, requests), the
+   all-company store U, RPC contact_check_orders / contact_content_orders / leg_skip_co, table load_actions, optional RPC
+   mgmt_close_gates_read_v1 (management read of close_gates_co, the evaluation shift_close_submit itself runs).
+   Writers: mgiDecide_ (existing, unchanged) and RPC shift_close_submit (owner account only, unchanged). Nothing else.       */
+ICONS['calendar-x'] = '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m14 14-4 4"/><path d="m10 14 4 4"/>';
+ICONS['message-square'] = '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>';
+var SH = { view: 'today', st: 'all', co: 'ALL', q: '', rd: null, open: null, drv: null, hfrom: null, hto: null, hres: 'all', caseOpen: null, review: null, close: null,
+  cw: {}, wv: {}, ev: {}, hist: { key: '', at: 0, rows: null, error: '', loading: null }, miss: { key: '', at: 0, rows: null, error: '', loading: null },
+  legs: {}, prev: {}, rpcMissing: false, qflight: null, qgen: 0, rdSeen: null, email: null };
 var SH_KIND = { standard: 'ტვირთის სტანდარტი', calls: 'ზარი', calls_all: 'ზარები (ყველა)', bol: 'BOL', invoice: 'ინვოისი და BOL', check: 'ჩეკი', appt: 'Copart appointment', appt_all: 'Copart appointment (ყველა)', gatepass: 'Gate Pass', gatepass_all: 'Gate Pass (ყველა)', rate: 'ტვირთის განაკვეთი' };
+var SH_TZ = 'Asia/Tbilisi', SH_MISS_DAYS = 30, SH_FRESH_MS = 15 * 60000, SH_REOPEN_MS = 3 * 60000;
 function shKey(co, disp, day) { return co + '|' + disp + '|' + day; }
-function shTday() { return ymd_(nextWorkDay_()); }
+/* reporting workday of an instant: the Tbilisi calendar date of (instant - 8 h). Tbilisi keeps one offset all year. */
+function shRptDay(ms) { var p = uTzParts((ms == null ? Date.now() : ms) - 8 * 36e5, SH_TZ); return p.year + '-' + p.month + '-' + p.day; }
+function shPlanDay(rd) { var d = uAddDays(rd, 1); return new Date(d + 'T12:00:00Z').getUTCDay() === 0 ? uAddDays(d, 1) : d; }
+/* the reporting workdays whose plan day is wd (a Monday has two: Saturday and Sunday) */
+function shRptDaysOf(wd) { var out = []; for (var k = 3; k >= 1; k--) { var r = uAddDays(wd, -k); if (shPlanDay(r) === wd) out.push(r); } return out; }
+function shWdLabel(wd) {
+  var r = shRptDaysOf(wd); if (!r.length) return uDay(uAddDays(wd, -1)); if (r.length === 1) return uDay(r[0]);
+  var a = r[0], b = r[r.length - 1]; return (a.slice(0, 7) === b.slice(0, 7) ? String(Number(a.slice(8))) : uDay(a)) + '–' + uDay(b);
+}
+/* closing deadline of a shift (owner decision 2026-11-17): the end of its last reporting workday = plan day P at 08:00 Asia/Tbilisi
+   (Tbilisi keeps UTC+4 all year). A shift_close.closed_at after it is a late close; the record itself is never changed. */
+function shDeadline(wd) { return Date.parse(wd + 'T04:00:00Z'); }
+function shLate(r) { return !!(r && r.closed_at && uMs(r.closed_at) > shDeadline(r.work_day)); }
+function shCurRd() { return shRptDay(); }
+function shRd() { var c = shCurRd(); return SH.rd && SH.rd < c ? SH.rd : c; }
+function shWd() { return shPlanDay(shRd()); }
+function shIsToday() { return shRd() === shCurRd(); }
+function shTday() { return shPlanDay(shCurRd()); }
+function shMinRd() { return uAddDays(shCurRd(), -SH_MISS_DAYS); }
 function shInCo(x) { return SH.co === 'ALL' || x.company_id === SH.co; }
 function shEmailOf(name) { var m = (U.people || []).filter(function (a) { return a.dispatcher_name === name && a.role === 'dispatcher'; })[0]; return m ? String(m.email || '').toLowerCase() : ''; }
 function shMatch(text) { var q = SH.q.trim().toLocaleLowerCase(); return !q || String(text || '').toLocaleLowerCase().indexOf(q) >= 0; }
+/* 08:00 rollover while the page is open: only the screen state moves on; caches are keyed by work day */
+function shRoll() {
+  var c = shCurRd();
+  if (SH.rdSeen && SH.rdSeen !== c) { SH.open = null; SH.drv = null; if (!(SH.close && SH.close.phase === 'busy')) SH.close = null; SH.miss.at = 0; SH.qgen++; }
+  SH.rdSeen = c;
+}
 
-/* ---------- readers ---------- */
-function shClosedLoad(day, force) {
-  var c = SH.closed[day] || (SH.closed[day] = { at: 0, rows: null, error: '', loading: null });
+/* ---------- readers (each keyed by its own day; a failed read is an error state, never an empty list) ---------- */
+function shDayLoad(store, wd, force, read) {
+  var c = store[wd] || (store[wd] = { at: 0, rows: null, error: '', loading: null });
   if (c.loading) return c.loading;
   if (!force && c.at && Date.now() - c.at < 60000) return Promise.resolve();
-  var rng = uDayRange(day), a = new Date(rng[0]).toISOString(), b = new Date(rng[1]).toISOString();
   c.loading = (async function () {
-    try {
-      var rows = await selAll_(function () { return sb.from('shift_close').select('company_id,dispatcher_name,work_day,closed_at,closed_by,gates').gte('closed_at', a).lt('closed_at', b); }, ['closed_at', 'company_id', 'dispatcher_name', 'work_day']);
-      c.rows = rows.filter(function (r) { return U.ids.indexOf(r.company_id) >= 0; }).sort(function (x, y) { return uMs(y.closed_at) - uMs(x.closed_at); });
-      c.at = Date.now(); c.error = '';
-    } catch (e) { console.error(e); c.error = uErr(e); } finally { c.loading = null; }
+    try { shNeedIds(); var rows = await read(); c.rows = rows; c.at = Date.now(); c.error = ''; }
+    catch (e) { console.error(e); c.error = uErr(e); c.at = Date.now(); } finally { c.loading = null; }   /* at is set on failure too: no immediate retry loop; the auto refresh or the retry button reads again */
   })();
   return c.loading;
 }
-function shEventsLoad(force) {
-  var day = shTday(), E = SH.ev;
-  if (E.loading) return E.loading;
-  if (!force && E.day === day && E.at && Date.now() - E.at < 60000) return Promise.resolve();
-  E.loading = (async function () {
-    try {
-      var rows = await selAll_(function () { return sb.from('close_event').select('id,event_type,dispatcher_name,work_day,occurred_at,actor,allowed,reasons,gates').eq('work_day', day).eq('event_type', 'close_attempt'); }, ['id']);
-      var map = {};
-      rows.forEach(function (r) { var co = r.gates && r.gates._company_id; if (!co) return; var k = shKey(co, r.dispatcher_name, r.work_day); if (!map[k] || Number(map[k].id) < Number(r.id)) map[k] = r; });
-      E.map = map; E.day = day; E.at = Date.now(); E.error = '';
-    } catch (e) { console.error(e); E.error = uErr(e); } finally { E.loading = null; }
-  })();
-  return E.loading;
+/* every reader needs the permitted company list; before it exists a read would cache an empty answer as a success */
+function shNeedIds() { if (!uReady() || !Array.isArray(U.ids) || !U.ids.length) throw new Error('კომპანიების სია ჯერ არ ჩატვირთულა'); }
+function shCwLoad(wd, force) {
+  return shDayLoad(SH.cw, wd, force, async function () {
+    var rows = await selAll_(function () { return sb.from('shift_close').select('company_id,dispatcher_name,work_day,closed_at,closed_by,gates').eq('work_day', wd); }, ['company_id', 'dispatcher_name', 'work_day']);
+    return rows.filter(function (r) { return U.ids.indexOf(r.company_id) >= 0; });
+  });
 }
+function shWvLoad(wd, force) {
+  return shDayLoad(SH.wv, wd, force, async function () {
+    var rows = await selAll_(function () { return sb.from('load_waivers').select('*').eq('work_day', wd).in('company_id', U.ids); }, ['id']);
+    return rows.filter(function (r) { return U.ids.indexOf(r.company_id) >= 0; });
+  });
+}
+function shEvLoad(wd, force) {
+  return shDayLoad(SH.ev, wd, force, async function () {
+    var rows = await selAll_(function () { return sb.from('close_event').select('id,event_type,dispatcher_name,work_day,occurred_at,actor,allowed,reasons,gates').eq('work_day', wd).eq('event_type', 'close_attempt'); }, ['id']);
+    var map = {};
+    rows.forEach(function (r) { var co = r.gates && r.gates._company_id; if (!co || U.ids.indexOf(co) < 0) return; var k = shKey(co, r.dispatcher_name, r.work_day); if (!map[k] || Number(map[k].id) < Number(r.id)) map[k] = r; });
+    return map;
+  });
+}
+function shEvOf(row) { var E = SH.ev[row.work_day]; return E && E.rows ? E.rows[row.key] || null : null; }
 function shHistKey() { return [SH.hfrom, SH.hto].join('|'); }
 function shHistLoad(force) {
   var H = SH.hist, key = shHistKey();
@@ -12486,6 +12668,43 @@ function shHistLoad(force) {
     } catch (e) { console.error(e); if (shHistKey() === key) { H.error = uErr(e); H.key = key; H.rows = null; } } finally { H.loading = null; }
   })();
   return H.loading;
+}
+/* Unclosed past shifts. Positive evidence only: for that exact company, dispatcher and work day there is a plan entry, an
+   explanation request or a close attempt - and no shift_close row. Today's roster is never crossed with past dates; a day
+   with no recorded action of the dispatcher is not listed (an OFF day or leave cannot be told apart from it). */
+function shMissKey() { var to = shTday(); return uAddDays(to, -SH_MISS_DAYS) + '|' + to + '|' + (U.ids || []).join(','); }
+function shMissLoad(force) {
+  var M = SH.miss, to = shTday(), from = uAddDays(to, -SH_MISS_DAYS), key = shMissKey();
+  if (M.loading && M.loadingKey === key) return M.loading;
+  if (!force && M.key === key && M.at && Date.now() - M.at < 600000) return Promise.resolve();   /* 10 min: longer than the app's auto refresh, so only a manual refresh re-reads the 30 days */
+  M.loadingKey = key;
+  M.loading = (async function () {
+    try {
+      shNeedIds();
+      var ids = U.ids.slice();
+      var got = await Promise.all([
+        selAll_(function () { return sb.from('shift_close').select('company_id,dispatcher_name,work_day,closed_at').in('company_id', ids).gte('work_day', from).lt('work_day', to); }, ['company_id', 'dispatcher_name', 'work_day']),
+        selAll_(function () { return sb.from('day_plan').select('id,company_id,dispatcher_name,work_day').in('company_id', ids).gte('work_day', from).lt('work_day', to); }, ['id']),
+        selAll_(function () { return sb.from('load_waivers').select('id,company_id,dispatcher_name,work_day').in('company_id', ids).gte('work_day', from).lt('work_day', to); }, ['id']),
+        selAll_(function () { return sb.from('close_event').select('id,dispatcher_name,work_day,gates').eq('event_type', 'close_attempt').gte('work_day', from).lt('work_day', to); }, ['id'])]);
+      if (M.loadingKey !== key) return;
+      var closed = {}, ev = {};
+      /* a shift closed after its 08:00 deadline stays in this history, marked as a late close with its real closing time */
+      got[0].forEach(function (r) { var k = shKey(r.company_id, r.dispatcher_name, r.work_day); closed[k] = 1;
+        if (shLate(r) && ids.indexOf(r.company_id) >= 0) ev[k] = { key: k, company_id: r.company_id, dispatcher: r.dispatcher_name, work_day: r.work_day, src: {}, late: r.closed_at }; });
+      var add = function (co, d, wd, src) {
+        if (!co || !d || !wd || ids.indexOf(co) < 0 || wd < from || wd >= to) return;
+        var k = shKey(co, d, wd); if (closed[k]) return;
+        var e = ev[k] || (ev[k] = { key: k, company_id: co, dispatcher: d, work_day: wd, src: {} }); e.src[src] = 1;
+      };
+      got[1].forEach(function (r) { add(r.company_id, r.dispatcher_name, r.work_day, 'plan'); });
+      got[2].forEach(function (r) { add(r.company_id, r.dispatcher_name, r.work_day, 'request'); });
+      got[3].forEach(function (r) { add(r.gates && r.gates._company_id, r.dispatcher_name, r.work_day, 'attempt'); });
+      M.rows = Object.keys(ev).map(function (k) { return ev[k]; }).sort(function (a, b) { return a.work_day < b.work_day ? 1 : a.work_day > b.work_day ? -1 : a.dispatcher.localeCompare(b.dispatcher, 'ka'); });
+      M.key = key; M.at = Date.now(); M.error = ''; M.from = from; M.to = to;
+    } catch (e) { console.error(e); if (M.loadingKey === key) { M.error = uErr(e); M.rows = null; M.key = key; M.at = Date.now(); } } finally { if (M.loadingKey === key) M.loading = null; }
+  })();
+  return M.loading;
 }
 /* per-leg state of plan orders from the server's own evaluators (the functions the close gate itself reads) */
 function shLegsLoad(co, orders, force) {
@@ -12515,14 +12734,15 @@ function shLegsLoad(co, orders, force) {
         out[on] = { pu: leg('pu'), del: leg('del'), act: ac[on] || {}, skipKnown: skipKnown };
       });
       L.data = out; L.at = Date.now(); L.error = '';
-    } catch (e) { console.error(e); L.error = uErr(e); } finally { L.loading = null; }
+    } catch (e) { console.error(e); L.error = uErr(e); L.at = Date.now(); } finally { L.loading = null; }
   })();
   return L.loading;
 }
 function shLegs(co, orders) { return SH.legs[co + '|' + orders.slice().sort().join(',')] || null; }
-/* canonical gate result of an open shift. Exists only when the additive read function is installed; otherwise stays absent. */
+/* canonical gate result of an open shift (read only). Exists only when the additive read function is installed. A day the server
+   does not evaluate yet (the hour after 08:00 Tbilisi, before Chicago midnight) is marked notyet - never green. */
 function shPrevLoad(row, force) {
-  var P = SH.prev[row.key] || (SH.prev[row.key] = { at: 0, data: null, error: '', loading: null, from: '' });
+  var P = SH.prev[row.key] || (SH.prev[row.key] = { at: 0, data: null, error: '', loading: null, notyet: false });
   if (SH.rpcMissing) return Promise.resolve();
   if (P.loading) return P.loading;
   if (!force && P.at && Date.now() - P.at < 90000) return Promise.resolve();
@@ -12530,176 +12750,212 @@ function shPrevLoad(row, force) {
     try {
       var r = await sb.rpc('mgmt_close_gates_read_v1', { p_company_id: row.company_id, p_disp: row.dispatcher, p_work_day: row.work_day });
       if (r.error) { if (uMissing(r.error)) { SH.rpcMissing = true; return; } throw r.error; }
-      if (r.data && r.data.gates) { P.data = r.data; P.at = Date.now(); P.error = ''; P.from = 'read'; } else P.error = 'სერვერმა შეფასება არ დააბრუნა';
-    } catch (e) { console.error(e); P.error = uErr(e); } finally { P.loading = null; }
+      var d = r.data || null;
+      if (d && d.refused && Array.isArray(d.reasons) && d.reasons.indexOf('work_day_mismatch') >= 0) { P.notyet = true; P.data = null; P.at = Date.now(); P.error = ''; return; }
+      if (d && d.gates && typeof d.gates === 'object') { P.data = d; P.at = Date.now(); P.error = ''; P.notyet = false; } else { P.error = 'სერვერმა შეფასება არ დააბრუნა'; P.at = Date.now(); }
+    } catch (e) { console.error(e); P.error = uErr(e); P.at = Date.now(); } finally { P.loading = null; }
   })();
   return P.loading;
 }
-/* the same failure list shift_close_submit builds from an evaluation (without the plan comparison) */
+/* the remaining counts of the collapsed rows: strictly one evaluation at a time (SH.qflight is cleared only by the request
+   itself), only for today's open shifts of the selected company, never on a timer of its own (the app's normal repaint is the
+   trigger). An evaluation is repeated only when it is older than 15 minutes; a "not evaluable yet" or failed one after 10
+   minutes. The evaluation costs ~1 s of database time per shift. */
+var SH_RETRY_MS = 10 * 60000;
+function shDue(P) { if (!P) return true; if (P.loading) return false; if (!P.at) return true; var age = Date.now() - P.at; return P.data ? age > SH_FRESH_MS : age > SH_RETRY_MS; }
+function shQueue() {
+  if (SH.rpcMissing || SH.qflight || SH.view !== 'today' || !shIsToday() || MTAB !== 'shifts' || SH.st === 'closed') return;
+  var T = shTodayRows(); if (!T.rows) return;
+  var next = T.rows.filter(function (r) { return !r.closed && shInCo(r) && shDue(SH.prev[r.key]); })[0];
+  if (!next) return;
+  var gen = SH.qgen;
+  var pr = SH.qflight = shPrevLoad(next, true).then(function () { if (SH.qflight !== pr) return; SH.qflight = null; if (MTAB !== 'shifts' || !uiActive() || !document.getElementById('u-sh-content')) return; if (gen === SH.qgen) shPaintBody(); shQueue(); });
+}
 function shFailed(g) {
   var G = (g && g.gates) || {}, f = [];
   ['roster', 'standard', 'calls', 'invoice', 'check'].forEach(function (k) { if (!(G[k] && G[k].ok === true)) f.push(k + (G[k] ? '' : ':unknown')); });
   ['appt', 'gatepass'].forEach(function (k) { if (!G[k] || G[k].n == null) f.push(k + ':unknown'); else if (Number(G[k].n) > 0 && G[k].ok !== true) f.push(k); });
-  if (G.rate && G.rate.ok !== true) f.push('rate');   /* DOS-RPM-SHORT-LOAD-001: an evaluation made before the rule has no rate gate */
+  if (G.rate && G.rate.ok !== true) f.push('rate');
   if (Number(G.calls && G.calls.detail && G.calls.detail.wait_n) > 0) f.push('calls:pending');
   return f;
-}
-function shGateNames(reasons) {
-  var seen = {}, out = [];
-  (reasons || []).forEach(function (r) { var b = String(r).split(':')[0], lbl = (typeof SC_GATE_LBL !== 'undefined' && SC_GATE_LBL[b]) || b; if (String(r) === 'calls:pending') lbl = 'ზარები მუშავდება'; if (!seen[lbl]) { seen[lbl] = 1; out.push(lbl); } });
-  return out;
 }
 
 /* ---------- rows ---------- */
 function shOpenRows() {
   if (!mgiReady_()) return [];
-  var day = shTday();
-  return mgiShifts_(day).filter(function (s) { return !s.closed; }).map(function (s) { return { key: shKey(s.company_id, s.dispatcher, day), company_id: s.company_id, code: s.code, dispatcher: s.dispatcher, work_day: day }; });
+  var wd = shTday(), C = SH.cw[wd], closed = {};
+  (C && C.rows ? C.rows : []).forEach(function (r) { closed[shKey(r.company_id, r.dispatcher_name, r.work_day)] = 1; });
+  return mgiShifts_(wd).filter(function (s) { return !s.closed && !closed[shKey(s.company_id, s.dispatcher, wd)]; })
+    .map(function (s) { return { key: shKey(s.company_id, s.dispatcher, wd), company_id: s.company_id, code: s.code, dispatcher: s.dispatcher, work_day: wd, closed: null }; });
+}
+/* Today = every shift of the plan day of the shown reporting workday: the closed ones from shift_close, the open ones from the
+   existing roster definition (current day only). A past day lists its closures and its evidence-based unclosed shifts. */
+function shTodayRows() {
+  var wd = shWd(), today = shIsToday(), C = SH.cw[wd];
+  if (!C || (!C.rows && !C.error)) return { loading: true };
+  if (C.error && !C.rows) return { error: C.error };
+  var out = [], seen = {};
+  C.rows.forEach(function (r) { var k = shKey(r.company_id, r.dispatcher_name, r.work_day); if (seen[k]) return; seen[k] = 1; out.push({ key: k, company_id: r.company_id, code: uCoCode(r.company_id), dispatcher: r.dispatcher_name, work_day: wd, closed: r }); });
+  var limited = false;
+  if (today) {
+    if (!mgiReady_()) return MGI.error ? { error: MGI.error } : { loading: true };
+    /* a close the inbox already knows but this day list not yet (read moments apart): shown as closed, never dropped */
+    (MGI.closes || []).forEach(function (s) { if (s.work_day !== wd || U.ids.indexOf(s.company_id) < 0) return; var k = shKey(s.company_id, s.dispatcher_name, wd); if (seen[k]) return; seen[k] = 1;
+      out.push({ key: k, company_id: s.company_id, code: uCoCode(s.company_id), dispatcher: s.dispatcher_name, work_day: wd, closed: { company_id: s.company_id, dispatcher_name: s.dispatcher_name, work_day: wd, closed_at: s.closed_at, closed_by: s.closed_by, gates: null, _partial: true } }); });
+    shOpenRows().forEach(function (r) { if (seen[r.key]) return; seen[r.key] = 1; out.push(r); });
+  } else if (wd < uAddDays(shTday(), -SH_MISS_DAYS)) limited = true;
+  else {
+    var M = SH.miss;
+    if (M.error) return { error: M.error };
+    if (!M.rows) return { loading: true };
+    M.rows.filter(function (m) { return m.work_day === wd; }).forEach(function (m) { if (seen[m.key]) return; seen[m.key] = 1;
+      /* a late close the history read already saw but this day list not yet: shown as closed (late), never as unclosed */
+      if (m.late) out.push({ key: m.key, company_id: m.company_id, code: uCoCode(m.company_id), dispatcher: m.dispatcher, work_day: wd, closed: { company_id: m.company_id, dispatcher_name: m.dispatcher, work_day: wd, closed_at: m.late, closed_by: null, gates: null, _partial: true } });
+      else out.push({ key: m.key, company_id: m.company_id, code: uCoCode(m.company_id), dispatcher: m.dispatcher, work_day: wd, closed: null, past: true, src: m.src }); });
+  }
+  out.sort(function (a, b) { if (!a.closed !== !b.closed) return a.closed ? 1 : -1; if (a.closed) return uMs(b.closed.closed_at) - uMs(a.closed.closed_at); return a.dispatcher.localeCompare(b.dispatcher, 'ka') || String(a.code).localeCompare(String(b.code)); });
+  return { rows: out, limited: limited };
 }
 function shPlanOf(row) {
   var P = SH.prev[row.key], B = U.by[row.company_id] || { load: {} };
-  if (P && P.data && Array.isArray(P.data.orders) && P.from === 'read') {
+  if (P && P.data && Array.isArray(P.data.orders)) {
     var mine = {}; uPlan(row.company_id, row.dispatcher, row.work_day).forEach(function (x) { mine[x.l.order_number] = x; });
     return { canonical: true, at: P.at, items: P.data.orders.map(function (on) { var m = mine[on], l = B.load[on] || null; return { on: on, l: l, driver: m ? m.driver : (l && l.driver_name) || '', source: m ? m.source : '' }; }) };
   }
   return { canonical: false, at: U.loadedAt, items: uPlan(row.company_id, row.dispatcher, row.work_day).map(function (x) { return { on: x.l.order_number, l: x.l, driver: x.driver, source: x.source }; }) };
 }
-function shRemain(row) {
-  var P = SH.prev[row.key], E = SH.ev.map[row.key];
-  if (P && P.data) {
-    var f = shFailed(P.data), src = P.from === 'read' ? 'სერვერის შემოწმება ' : 'ბოლო მცდელობის შედეგი ';
-    if (!f.length) return { ready: true, text: 'ყველა საჭირო შემოწმება გავლილია', sub: src + uTzTime(P.at) };
-    return { ready: false, text: 'დარჩა: ' + shGateNames(f).join(' · '), sub: src + uTzTime(P.at) };
-  }
-  if (P && P.loading) return { ready: null, text: 'სერვერზე მოწმდება…', sub: '' };
-  if (E && E.allowed === false) return { ready: false, text: 'ბოლო მცდელობა ' + uTzTime(E.occurred_at) + ' — უარი: ' + shGateNames(E.reasons).join(' · '), sub: 'ჩანაწერი მცდელობიდან; მას შემდეგ შეიძლება შეიცვალა' };
-  return { ready: null, text: 'ჯერ არ შეფასებულა', sub: SH.rpcMissing ? 'სერვერი ყველა პირობას დახურვისას ამოწმებს' : 'გახსენი სტრიქონი — გეგმა და პირობების შემოწმება' };
-}
-/* The shift's driver roster by the registry: the dispatcher's CURRENT drivers in that company for the plan day (the same
-   membership Home, Drivers and Dispatchers show; the server's standard starts from the same registry rows), plus any driver
-   who is on the plan. A current driver with nothing planned is named - a new driver is in the roster before the first load. */
-function shRoster(row, plan) {
-  var B = U.by[row.company_id], seen = {}, out = [];
-  if (B) B.drivers.forEach(function (d) { if (d.active === false || uOwner(row.company_id, d.name, row.work_day) !== row.dispatcher) return; seen[d.name] = 1; out.push({ name: d.name, reg: true, off: uOff(row.company_id, d.name, row.work_day), n: 0 }); });
-  (plan ? plan.items : []).forEach(function (x) { if (!x.driver) return; if (!seen[x.driver]) { seen[x.driver] = 1; out.push({ name: x.driver, reg: false, off: null, n: 0 }); } out.filter(function (o) { return o.name === x.driver; })[0].n++; });
-  return out.sort(function (a, b) { return a.name.localeCompare(b.name, 'ka'); });
-}
 function shPendingFor(row) { return (MGI.waivers || []).filter(function (w) { return w.status === 'pending' && w.company_id === row.company_id && w.dispatcher_name === row.dispatcher && w.work_day === row.work_day; }); }
 
-/* ---------- pieces ---------- */
-function shEmpty(bold, hint) { return '<div class="u-empty">' + ic('inbox') + '<strong>' + h(bold) + '</strong><p>' + h(hint) + '</p></div>'; }
-function shLegHtml(side, leg, loading, err) {
-  var name = side === 'pu' ? 'აღება' : 'ჩაბარება';
-  if (!leg) return '<details class="u-leg u-unk"><summary>' + ic('circle-dash') + '<span>' + name + ' · ' + (err ? 'შემოწმება ვერ ჩაიტვირთა' : loading ? 'იტვირთება…' : 'ჯერ არ ჩატვირთულა') + '</span></summary></details>';
-  var st = { ok: ['გარკვეულია', 'circle-check', ''], skip: ['ზარი არ მოითხოვება', 'circle-check', ''], wait: ['მუშავდება', 'clock-3', ' u-wait'], no: ['დასაზუსტებელია', 'circle-alert', ' u-bad'], unk: ['ზარის მონაცემი სერვერზე არ არის', 'circle-alert', ' u-bad'] }[leg.st];
-  var body = [];
-  if (leg.st === 'skip') body.push(leg.flag ? 'ბროკერის წესი: კონტაქტი არ მოითხოვება.' : (typeof legSkipText_ === 'function' ? legSkipText_(leg.skip, side) : leg.skip));
-  if (leg.st === 'ok') body.push('საჭირო ფაქტები დადასტურებულია შინაარსით' + (leg.call ? ' · ზარი არის' : '') + (leg.sms ? ' · SMS არის' : '') + '.');
-  if (leg.st === 'wait') body.push('ზარის/SMS-ის შინაარსი ჯერ მუშავდება.');
-  if (leg.st === 'no') { if (leg.reason) body.push(leg.reason); else body.push('საჭირო ფაქტები დადასტურებული არ არის.'); if (leg.missing) body.push('კონტაქტის ნომერი არ არის მითითებული.'); body.push(leg.call ? 'ზარი ჩანს.' : 'ზარი არ ჩანს.'); }
-  if (leg.st === 'unk') body.push('ამ ტვირთზე შემოწმების შედეგი სერვერმა არ დააბრუნა.');
-  return '<details class="u-leg' + st[2] + '"><summary>' + ic(st[1]) + '<span>' + name + ' · ' + st[0] + '</span></summary><div class="u-legbody">' + body.map(h).join('<br>') + '</div></details>';
+/* ---------- what remains: ONE item list, used for the row count and the open detail alike ---------- */
+var SH_SIDE = { pu: 'Pickup', del: 'Delivery' };
+function shVehOf(l, on) { return (l && l.vehicle ? l.vehicle + ' · ' : '') + '#' + on; }
+function shItems(row) {
+  var P = SH.prev[row.key], E = shEvOf(row), plan = shPlanOf(row), B = U.by[row.company_id] || { load: {} };
+  var src = null, G = null, at = null;
+  if (P && P.data && P.data.gates) { src = 'read'; G = P.data.gates; at = P.at; }
+  else if (E && E.allowed === false && E.gates && E.gates.calls) { src = 'attempt'; G = E.gates; at = uMs(E.occurred_at); }
+  var drvOf = {}; plan.items.forEach(function (x) { if (x.driver) drvOf[x.on] = x.driver; });
+  var dOf = function (on) { return drvOf[on] || (B.load[on] && B.load[on].driver_name) || ''; };
+  var KIN = { invoice: ['invoice', 'bol'] };
+  var pend = shPendingFor(row), pendFor = function (kind, subj) { var ks = (KIN[kind] || [kind]).reduce(function (a, k) { return a.concat([k, k + '_all']); }, []); return pend.filter(function (w) { return ks.indexOf(w.kind) >= 0 && (!subj || !w.order_number || w.order_number === subj); })[0] || null; };
+  /* an approved calls explanation of this shift (used only on the preliminary path without the server's evaluation) */
+  var apprCalls = function (on) { return (MGI.waivers || []).some(function (w) { return w.status === 'approved' && w.company_id === row.company_id && w.dispatcher_name === row.dispatcher && w.work_day === row.work_day && (w.kind === 'calls_all' || (w.kind === 'calls' && w.order_number === on)); }); };
+  var used = {}, items = [];
+  /* u = the requirement unit (one per order and requirement), so the collapsed count does not change when the leg detail arrives */
+  var add = function (drv, act, sub, tone, w, u) { if (w) used[w.id] = 1; items.push({ drv: drv || '', act: act, sub: sub || '', tone: w ? 'pend' : tone, u: u || (act + '|' + sub) }); };
+  var ons = plan.items.map(function (x) { return x.on; }), L = ons.length ? shLegs(row.company_id, ons) : null, LD = L && L.data ? L.data : null;
+  /* prelim = no server evaluation: never the verb "call", never an order with an approved calls explanation */
+  var legItems = function (on, prelim) {
+    var lg = LD && LD[on], l = B.load[on], n = 0, w = pendFor('calls', on);
+    if (prelim && apprCalls(on)) return 0;
+    ['pu', 'del'].forEach(function (s) {
+      var x = lg && lg[s]; if (!x || x.st === 'ok' || x.st === 'skip') return; n++;
+      var why = x.reason ? ' · ' + String(x.reason).slice(0, 140) : '';
+      if (x.st === 'wait') add(dOf(on), SH_SIDE[s] + ' · ზარი/SMS მუშავდება', shVehOf(l, on), 'wait', w, 'calls|' + on);
+      else if (x.st === 'unk') add(dOf(on), SH_SIDE[s] + ' · შემოწმების მონაცემი არ არის', shVehOf(l, on) + ' · ტექნიკური', 'tech', w, 'calls|' + on);
+      else if (prelim) add(dOf(on), SH_SIDE[s] + ' · დადასტურება ჯერ არ ჩანს (წინასწარი)', shVehOf(l, on) + why, 'tech', w, 'calls|' + on);
+      else add(dOf(on), SH_SIDE[s] + '-ზე დარეკვა', shVehOf(l, on) + (x.missing ? ' · კონტაქტის ნომერი არ არის' : x.call ? ' · ზარი არის, საჭირო ფაქტი არ დადასტურდა' : x.sms ? ' · SMS არის, საჭირო ფაქტი არ დადასტურდა' : '') + why, 'need', w, 'calls|' + on);
+    });
+    return n;
+  };
+  if (G) {
+    var ord = function (v) { return scOrders_(v); };
+    if (!G.roster || G.roster.ok !== true) add('', G.roster ? 'მძღოლების კვირის სიის დადასტურება' : 'როსტერი · შეფასება არ არის', '', G.roster ? 'need' : 'tech');
+    var st = G.standard || null, sd = st && Array.isArray(st.detail) ? st.detail : [];
+    if (!st) add('', 'ტვირთის სტანდარტი · შეფასება არ არის', '', 'tech');
+    else if (st.ok !== true && !st.all_off) {
+      var bad = sd.filter(function (d) { return d && d.ok !== true; });
+      bad.forEach(function (d) { add(d.driver, 'ტვირთის სტანდარტი', (Number(d.n) || 0) + ' ტვირთი · ' + money(Number(d.gross) || 0) + (d.tgt != null ? ' / ' + money(Number(d.tgt)) : ''), 'need', pendFor('standard', d.driver), 'standard|' + d.driver); });
+      if (!bad.length) add('', 'ტვირთის სტანდარტი', '', 'need', pendFor('standard', ''));
+    }
+    var ca = G.calls || null, cd = ca && ca.detail && typeof ca.detail === 'object' ? ca.detail : {};
+    if (!ca) add('', 'ზარები/SMS · შეფასება არ არის', '', 'tech');
+    else if (ca.ok !== true || Number(cd.wait_n) > 0) {
+      var listed = 0;
+      ord(cd.pending).forEach(function (on) { var n = legItems(on); listed += n; if (!n) { listed++; add(dOf(on), LD ? 'ზარი/SMS · დასადასტურებელია' : 'ზარი/SMS · დასადასტურებელია (დეტალი იტვირთება…)', shVehOf(B.load[on], on), 'need', pendFor('calls', on), 'calls|' + on); } });
+      ord(cd.unknown_unwaived).forEach(function (on) { listed++; add(dOf(on), 'კონტაქტის მონაცემი არ არის', shVehOf(B.load[on], on) + ' · ტექნიკური', 'tech', pendFor('calls', on), 'calls|' + on); });
+      if (Number(cd.wait_n) > 0 && !items.some(function (i) { return i.tone === 'wait'; })) { listed++; add('', 'ზარები/SMS მუშავდება (' + cd.wait_n + ')', '', 'wait'); }
+      if (!listed) add('', 'ზარები/SMS', '', 'need', pendFor('calls_all', ''));
+    }
+    [['invoice', 'ინვოისის გაგზავნა SD-დან'], ['check', 'ჩეკის ფოტო'], ['appt', 'Copart appointment'], ['gatepass', 'Gate Pass-ის ატვირთვა']].forEach(function (kk) {
+      var k = kk[0], x = G[k] || null, opt = (k === 'appt' || k === 'gatepass');
+      if (!x || (opt && x.n == null)) { add('', kk[1] + ' · შეფასება არ არის', '', 'tech'); return; }
+      if (x.ok === true || (opt && !(Number(x.n) > 0))) return;
+      var p = ord(x.pending);
+      if (p.length) p.forEach(function (on) { add(dOf(on), kk[1], shVehOf(B.load[on], on), 'need', pendFor(k, on)); });
+      else add('', kk[1], '', 'need', pendFor(k, ''));
+    });
+    if (G.rate && G.rate.ok !== true) {
+      var rb = Array.isArray(G.rate.detail) ? G.rate.detail.filter(function (r) { return r && r.ok !== true; }) : [];
+      if (rb.length) rb.forEach(function (r) { add(r.driver || dOf(r.order_number), 'ტვირთის განაკვეთი', shVehOf(B.load[r.order_number], r.order_number) + ' · ' + (typeof rateText_ === 'function' ? rateText_(r) : r.status), 'need', pendFor('rate', r.order_number)); });
+      else add('', 'ტვირთის განაკვეთი', '', 'need', pendFor('rate', ''));
+    }
+  } else if (LD) ons.forEach(function (on) { legItems(on, true); });
+  pend.forEach(function (w) { if (!used[w.id]) add(w.kind === 'standard' ? w.order_number : (w.order_number ? dOf(w.order_number) : ''), SH_KIND[w.kind] || w.kind, w.order_number && w.kind !== 'standard' ? shVehOf(B.load[w.order_number], w.order_number) : '', 'pend', w, 'w|' + w.id); });
+  /* the drivers of the shift: the server's evaluated roster (standard detail) plus the drivers of the plan */
+  var drivers = {}, dl = [];
+  (G && G.standard && Array.isArray(G.standard.detail) ? G.standard.detail : []).forEach(function (d) { if (d && d.driver && !drivers[d.driver]) { drivers[d.driver] = 1; dl.push(d.driver); } });
+  plan.items.forEach(function (x) { if (x.driver && !drivers[x.driver]) { drivers[x.driver] = 1; dl.push(x.driver); } });
+  items.forEach(function (i) { if (i.drv && !drivers[i.drv]) { drivers[i.drv] = 1; dl.push(i.drv); } });
+  var state = src === 'read' ? (Date.now() - at <= SH_FRESH_MS ? 'read' : 'stale') : src === 'attempt' ? 'attempt' : (P && P.loading) ? 'loading' : (P && P.notyet) ? 'notyet' : (P && P.error) ? 'error' : SH.rpcMissing ? 'nocanon' : 'none';
+  return { state: state, at: at, items: items, drivers: dl.sort(function (a, b) { return a.localeCompare(b, 'ka'); }), legsLoading: !!(ons.length && (!L || (!L.data && !L.error))), legsError: L && L.error && !L.data ? L.error : '' };
 }
-function shLoadCard(it, o) {
-  var l = it.l, legs = o.legs && o.legs.data ? o.legs.data[it.on] : null, lerr = !!(o.legs && o.legs.error && !o.legs.data), loading = !lerr && !(o.legs && o.legs.data);
-  if (!l) return '<div class="u-load"><div><div class="u-load-order"><b>' + h(it.on) + '</b></div><div class="u-load-veh">ტვირთის ჩანაწერი ვერ მოიძებნა (წაშლილია ან ამ სიაში აღარ არის).</div></div></div>';
-  var pu = String(l.pickup_scheduled || '').length > 10 ? uDayShort(String(l.pickup_scheduled).slice(0, 10)) + ' · ' + String(l.pickup_scheduled).slice(11, 16) + ' UTC' : (puDay_(l) ? uDayShort(puDay_(l)) : 'SD-ში მითითებული არ არის');
-  var de = String(l.delivery_scheduled || '').length > 10 ? uDayShort(String(l.delivery_scheduled).slice(0, 10)) + ' · ' + String(l.delivery_scheduled).slice(11, 16) + ' UTC' : 'SD-ში მითითებული არ არის';
-  var extra = [];
-  if (it.source === 'manual') extra.push('<span>' + ic('pencil') + 'ხელით დამატებული გეგმაში</span>');
-  if (l.is_inoperable) extra.push('<span class="u-x-bad">' + ic('circle-alert') + 'INOP</span>');
-  if (o.open) {
-    var act = legs ? legs.act : null;
-    if (typeof apptNeeded_ === 'function' && apptNeeded_(l)) extra.push(act ? (act.appt_at ? '<span class="u-x-ok">' + ic('circle-check') + 'Copart appointment · ჩაწერილია</span>' : '<span class="u-x-bad">' + ic('circle-alert') + 'Copart appointment · არ არის ჩაწერილი</span>') : '<span>' + ic('circle-dash') + 'Copart appointment · მოითხოვება</span>');
-    if (typeof gatePassNeeded_ === 'function' && gatePassNeeded_(l)) extra.push(act ? (act.gate_pass_path ? '<span class="u-x-ok">' + ic('circle-check') + 'Gate Pass · ატვირთულია</span>' : '<span class="u-x-bad">' + ic('circle-alert') + 'Gate Pass · არ არის ატვირთული</span>') : '<span>' + ic('circle-dash') + 'Gate Pass · მოითხოვება</span>');
-    (o.waivers || []).filter(function (w) { return w.order_number === it.on; }).forEach(function (w) { extra.push('<span' + (w.status === 'approved' ? ' class="u-x-ok"' : '') + '>' + ic('message-square-text') + h((SH_KIND[w.kind] || w.kind) + ' — ახსნა: ' + ({ pending: 'პასუხის მოლოდინში', approved: 'დადასტურებულია', rejected: 'დაბრუნებულია' }[w.status] || w.status)) + '</span>'); });
-  }
-  extra.push('<span>' + ic('receipt') + h('გადახდა: ' + ((typeof PMLABEL !== 'undefined' && PMLABEL[l.payment_terms]) || l.payment_terms || 'მითითებული არ არის') + (l.payment_method ? ' · ' + l.payment_method : '')) + '</span>');
-  return '<div class="u-load"><div><div class="u-load-order"><b>' + h(it.on) + '</b>' + (o.statusNow && l.status ? '<span class="u-tag u-neutral">' + h({ 'new': 'ახალი', picked_up: 'აღებულია', delivered: 'ჩაბარებულია' }[l.status] || l.status) + '</span>' : '') + '</div><div class="u-load-veh">' + h(l.vehicle || 'მანქანა მითითებული არ არის') + (cars_(l) > 1 ? ' · ' + cars_(l) + ' მანქანა' : '') + '</div><div class="u-load-money">' + h(money(grossOf_(l))) + '<small>GROSS' + (o.grossNote ? ' · ' + h(o.grossNote) : '') + '</small></div></div>' +
-    '<div class="u-load-route"><span>' + ic('map-pin') + h(locShort(l.pickup_location) || '—') + '</span><span>' + ic('arrow-down') + h(locShort(l.delivery_location) || '—') + '</span><small>აღება · ' + h(pu) + '<br>ჩაბარება · ' + h(de) + '</small></div>' +
-    (o.open ? shLegHtml('pu', legs && legs.pu, loading, lerr) + shLegHtml('del', legs && legs.del, loading, lerr) : '<div></div><div></div>') +
-    '<div class="u-load-extra">' + extra.join('') + '</div></div>';
-}
-function shGroups(items) {
-  var g = {}, names = [];
-  items.forEach(function (it) { var n = it.driver || '—'; if (!g[n]) { g[n] = []; names.push(n); } g[n].push(it); });
-  return names.sort(function (a, b) { return a.localeCompare(b, 'ka'); }).map(function (n) { return { name: n, items: g[n] }; });
-}
-function shGate(key, G, mode) {
-  var lbl = (typeof SC_GATE_LBL !== 'undefined' && SC_GATE_LBL[key]) || key, x = G && G[key];
-  if (!x && key === 'rate') return '<div class="u-gate u-g-na">' + ic('circle-dash') + '<div><b>' + h(lbl) + '</b><small>' + (mode === 'rec' ? 'ამ დახურვისას ეს წესი ჯერ არ მოწმდებოდა' : 'ამ შეფასებაში არ არის') + '</small></div></div>';   /* DOS-RPM-SHORT-LOAD-001 */
-  if (!x) return '<div class="u-gate u-g-na">' + ic('circle-dash') + '<div><b>' + h(lbl) + '</b><small>არ არის დაფიქსირებული</small></div></div>';
-  var opt = (key === 'appt' || key === 'gatepass'), n = Number(x.n) || 0;
-  if (opt && !n) return '<div class="u-gate u-g-na">' + ic('circle-dash') + '<div><b>' + h(lbl) + '</b><small>ამ გეგმას არ ეხება</small></div></div>';
-  var ok = x.ok === true, notes = [];
-  if (key === 'rate' && Array.isArray(x.detail)) { var rb = x.detail.filter(function (r) { return r && r.ok !== true; });   /* DOS-RPM-SHORT-LOAD-001 */
-    notes.push(rb.length ? rb.map(function (r) { return r.order_number + ' — ' + rateText_(r) + (r.waiver_state === 'approved_stale' ? ' (დადასტურება აღარ მოქმედებს)' : ''); }).join(' · ') : (x.detail.length + ' ტვირთი შეფასდა')); }
-  if (key === 'standard') { if (x.all_off) notes.push('ყველა მძღოლი ისვენებს — სტანდარტი არ მოითხოვება'); else if (Array.isArray(x.detail)) notes.push(x.detail.length + ' მძღოლი შეფასდა'); }
-  if (key === 'calls' && x.detail) { var d = x.detail; if (d.waiver_id) notes.push('საერთო ახსნით'); if (d.exempt_all) notes.push('ყველა კონტაქტი გამონაკლისია'); if (Number(d.wait_n) > 0) notes.push(d.wait_n + ' მუშავდება');
-    var p = scOrders_(d.pending), u = scOrders_(d.unknown_unwaived); if (p.length) notes.push('დაუდასტურებელი: ' + p.join(', ')); if (u.length) notes.push('მონაცემი არ არის: ' + u.join(', ')); }
-  if ((key === 'invoice' || key === 'check' || opt) && scOrders_(x.pending).length) notes.push((key === 'invoice' ? 'SD-დან გაგზავნილად არ ჩანს: ' : key === 'check' ? 'ჩეკი არ არის: ' : 'აკლია: ') + scOrders_(x.pending).join(', '));
-  if (opt && ok) notes.push(n + ' ტვირთი');
-  if (!notes.length) notes.push(ok ? (mode === 'rec' ? 'გავლილია დახურვისას' : 'გავლილია') : 'არ არის გავლილი');
-  return '<div class="u-gate' + (ok ? '' : ' u-g-bad') + '">' + ic(ok ? 'circle-check' : 'circle-alert') + '<div><b>' + h(lbl) + '</b><small>' + h(notes.join(' · ')) + '</small></div></div>';
-}
-function shGatesBlock(G, title, sub, mode) {
-  return '<div class="u-gates"><h3>' + h(title) + (sub ? '<small>' + h(sub) + '</small>' : '') + '</h3><div class="u-gatelist">' + ['roster', 'standard', 'calls', 'invoice', 'check', 'appt', 'gatepass', 'rate'].map(function (k) { return shGate(k, G, mode); }).join('') + '</div></div>';
+/* the short text of a collapsed row */
+function shSumOf(row) {
+  if (row.closed) { var t = uTzTime(row.closed.closed_at), d = shRptDay(uMs(row.closed.closed_at)), lt = shLate(row.closed);
+    return { text: (lt ? 'დაგვიანებით · ' : '') + (d === shRd() ? t : uDayShort(d) + ' · ' + t), title: (lt ? 'დაგვიანებით დახურა · ' : '') + uWhen(row.closed.closed_at), cls: lt ? ' u-s2-amber' : '' }; }
+  if (row.past) return { text: 'არ დახურულა', title: '', cls: ' u-s2-amber' };
+  var I = shItems(row), uu = {}; I.items.forEach(function (i) { uu[i.u] = 1; }); var n = Object.keys(uu).length;
+  if (I.state === 'read') return { text: n ? n + ' საკითხი' : 'მზადაა დასახურად', title: 'შემოწმდა ' + uTzTime(I.at), cls: n ? ' u-s2-amber' : ' u-s2-ok' };
+  if (I.state === 'stale') return { text: n ? n + ' საკითხი' : 'შემოწმდა ' + uTzTime(I.at), title: 'შემოწმდა ' + uTzTime(I.at) + ' — მოძველებულია', cls: n ? ' u-s2-amber' : '' };   /* an old evaluation is never green */
+  if (I.state === 'attempt') return { text: n ? n + ' საკითხი' : 'მცდელობა უარყოფილია', title: 'ბოლო მცდელობიდან · ' + uTzTime(I.at), cls: ' u-s2-amber' };
+  if (I.state === 'loading') return { text: '…', title: 'სერვერზე მოწმდება', cls: '' };
+  if (I.state === 'notyet') return { text: 'ჯერ არ ფასდება', title: 'სერვერზე ეს გეგმის დღე ჩიკაგოს შუაღამისას იწყება', cls: '' };
+  if (I.state === 'error') return { text: 'შემოწმება ვერ ჩაიტვირთა', title: '', cls: '' };
+  return { text: '—', title: SH.rpcMissing ? 'სერვერი პირობებს დახურვისას ამოწმებს' : 'ჯერ არ შეფასებულა', cls: '' };
 }
 
-/* ---------- closed detail: the recorded closure snapshot; current load data only under its own label ---------- */
-function shClosedDetail(r) {
-  var g = r.gates || {}, sv = (g.server && typeof g.server === 'object') ? g.server : null, orders = scOrders_(g.orders), B = U.by[r.company_id] || { load: {}, drv: {} };
-  var det = sv && sv.gates && sv.gates.standard && Array.isArray(sv.gates.standard.detail) ? sv.gates.standard.detail : null, recBy = {};
-  (det || []).forEach(function (d) { recBy[d.driver] = d; });
-  var sum = det ? det.reduce(function (s, d) { return s + (Number(d.gross) || 0); }, 0) : (g.gross != null && isFinite(Number(g.gross)) ? Number(g.gross) : null);
-  var sumLbl = det ? 'დაგეგმილი GROSS · ' + money(sum) + ' (სერვერის გათვლა დახურვისას)' : sum != null ? 'დაგეგმილი GROSS · ' + money(sum) + ' (დისპეჩერის ეკრანის ჯამი დახურვისას)' : 'დაგეგმილი GROSS · არ არის დაფიქსირებული';
-  var own = shEmailOf(r.dispatcher_name), by = String(r.closed_by || '').toLowerCase(), self = !!own && own === by;
-  var html = '<div class="u-worksum"><strong>მძღოლების გეგმა</strong><span><span>' + orders.length + ' ტვირთი</span><span>' + h(sumLbl) + '</span></span></div>';
-  html += '<p class="u-snapnote">დახურვისას შენახული ჩანაწერი · სამუშაო დღე ' + h(uDay(r.work_day)) + (sv ? ' · წესები ' + h(sv.rule_version || '—') + ' · შეაფასა ' + h(uNameOfEmail(sv.evaluated_by)) : '') +
-    '.<br>ჩანაწერში ინახება: ტვირთების ნომრები' + (det ? ', მძღოლების ჯამები' : '') + (sv ? ' და პირობების შედეგი' : '') + '. მანქანა, მარშრუტი, დაგეგმილი დრო, თითო ტვირთის GROSS და თითო ზარის მტკიცებულება დახურვისას <b>არ არის დაფიქსირებული</b>.</p>';
-  if (det && det.length) html += '<div class="u-scroll" style="margin-bottom:16px"><table class="u-t"><thead><tr><th>მძღოლი · დახურვისას</th><th class="u-num">ტვირთი</th><th class="u-num">მანქანა</th><th class="u-num">დაგეგმილი GROSS</th><th class="u-num">დღის სამიზნე</th></tr></thead><tbody>' +
-    det.map(function (d) { return '<tr><td class="u-wrap">' + h(d.driver) + '</td><td class="u-num">' + h(d.n) + '</td><td class="u-num">' + h(d.cars) + '</td><td class="u-num">' + h(money(Number(d.gross) || 0)) + '</td><td class="u-num">' + (d.tgt != null ? h(money(Number(d.tgt))) : '—') + '</td></tr>'; }).join('') + '</tbody></table></div>';
-  if (!orders.length) html += '<div class="u-planempty">ამ დახურვაში ტვირთი არ იყო დაფიქსირებული.</div>';
-  else {
-    html += '<p class="u-snapnote"><b>ტვირთის მიმდინარე მონაცემი (არ არის დახურვის ჩანაწერი)</b> — ქვემოთ მოცემული მანქანა, მარშრუტი, დრო, GROSS და მძღოლი Super Dispatch-ის ამჟამინდელი მონაცემია დაფიქსირებული ნომრებისთვის.</p>';
-    var items = orders.map(function (on) { var l = B.load[on] || null; return { on: on, l: l, driver: l ? (l.driver_name || '') : '', source: '' }; });
-    html += shGroups(items).map(function (gr) { var d = B.drv[gr.name], rec = recBy[gr.name];
-      return '<div class="u-plandrv"><div class="u-plandrv-h">' + ic('truck') + '<strong>' + h(gr.name === '—' ? 'მძღოლი მითითებული არ არის' : gr.name) + '</strong>' + (d ? '<small>' + h(capLabel_(d)) + '</small>' : '') + (rec ? '<small>დახურვისას: ' + h(rec.n) + ' ტვირთი · ' + h(money(Number(rec.gross) || 0)) + '</small>' : '') + '</div><div class="u-loads">' +
-        gr.items.map(function (it) { return shLoadCard(it, { open: false, statusNow: true, grossNote: 'მიმდინარე' }); }).join('') + '</div></div>'; }).join('');
-  }
-  html += sv ? shGatesBlock(sv.gates, 'პირობები დახურვისას', 'ჩანაწერიდან', 'rec') : '<div class="u-gates"><h3>პირობები დახურვისას</h3><div class="u-planempty">არ არის დაფიქსირებული — ეს ჩანაწერი სერვერის შეფასების შენახვამდეა გაკეთებული.</div></div>';
-  html += '<div class="u-audit">' + ic('user-check') + (self ? 'დახურა თავად დისპეჩერმა · ' + h(r.closed_by) : by ? 'მენეჯერის მიერ დახურული · ' + h(uNameOfEmail(r.closed_by)) + ' · ' + h(r.closed_by) : 'ვინ დახურა — არ არის დაფიქსირებული') + (g.client && g.client.source === 'uimgmt-shifts' ? ' · მართვის გვერდიდან' : '') + '</div>';
-  return html;
-}
-
-/* ---------- open detail: plan, per-leg verdicts, gates, manager close ---------- */
-/* Closing a shift for a dispatcher from this page is offered only to the account that already has that access through
-   "view as": the site's own superadmin (the owner). Owner decision 2026-10-07: do not extend it to other managers.
-   They still see the shift, its plan and its conditions. The server function itself is unchanged.                     */
+/* ---------- open detail: remaining work by driver ---------- */
 function shMayClose() { try { return typeof isSuper === 'function' && isSuper() === true; } catch (e) { return false; } }
+function shTaskHtml(i) { return '<div class="u-s2-task u-s2-' + i.tone + '"><span class="u-s2-act">' + h(i.act) + (i.n > 1 ? ' (' + i.n + ')' : '') + (i.tone === 'pend' ? ' <small>· ახსნა პასუხის მოლოდინში</small>' : '') + '</span>' + (i.sub ? '<span class="u-s2-sub">' + h(i.sub) + '</span>' : '') + '</div>'; }
+/* the same requirement of one driver is shown once with its count and order numbers (keeps the expansion compact) */
+function shGroupTasks(list) {
+  var g = {}, out = [];
+  list.forEach(function (i) { var k = i.tone + '|' + i.act; if (!g[k]) { g[k] = { tone: i.tone, act: i.act, subs: [], n: 0 }; out.push(g[k]); } g[k].n++; if (i.sub) g[k].subs.push(i.sub); });
+  return out.map(function (x) { return { tone: x.tone, act: x.act, n: x.n, sub: x.n > 1 ? x.subs.map(function (s) { var m = /#([^ ·]+)/.exec(s); return m ? '#' + m[1] : s; }).join(', ') : x.subs[0] || '' }; });
+}
 function shOpenDetail(row) {
-  var plan = shPlanOf(row), items = plan.items, P = SH.prev[row.key], E = SH.ev.map[row.key], ons = items.map(function (x) { return x.on; });
-  var legs = shLegs(row.company_id, ons), pend = shPendingFor(row), allW = (MGI.waivers || []).filter(function (w) { return w.company_id === row.company_id && w.dispatcher_name === row.dispatcher && w.work_day === row.work_day; });
-  var sum = items.reduce(function (s, x) { return s + (x.l ? grossOf_(x.l) : 0); }, 0);
-  var html = '<div class="u-worksum"><strong>მძღოლების გეგმა</strong><span><span>' + items.length + ' ტვირთი</span><span>დაგეგმილი GROSS · ' + h(money(sum)) + '</span></span></div>';
-  html += '<p class="u-snapnote">' + (plan.canonical ? 'გეგმა სერვერის გათვლით · ' + h(uTzTime(plan.at)) : 'გეგმა ეკრანის გათვლით (' + h(uTzTime(plan.at)) + ') — დახურვისას სერვერი გეგმას თავიდან ითვლის.') + ' დაგეგმილი GROSS არ არის შესრულებული შემოსავალი ან ანაზღაურება.</p>';
-  if (legs && legs.error && !legs.data) html += '<div class="u-state u-err" style="margin-bottom:12px">ზარების/SMS-ის შემოწმება ვერ ჩაიტვირთა (' + h(legs.error) + '). <button type="button" class="u-btn" data-u-legs="' + h(row.key) + '">ხელახლა ცდა</button></div>';
-  var ros = shRoster(row, plan), idle = ros.filter(function (o) { return o.reg && !o.n; });
-  html += '<p class="u-snapnote" id="u-sh-roster"><b>როსტერი რეესტრით · ' + ros.filter(function (o) { return o.reg; }).length + ' მიმდინარე მძღოლი ' + h(row.code) + '-ში:</b> ' + (ros.filter(function (o) { return o.reg; }).map(function (o) { return h(o.name) + (o.off ? ' (' + (uIsRepair(o.off) ? 'შეკეთება' : 'ისვენებს') + ')' : o.n ? '' : ' (გეგმაში ტვირთი არ აქვს)'); }).join(' · ') || 'არცერთი') +
-    (idle.some(function (o) { return !o.off; }) ? '. მძღოლი, რომელსაც გეგმაში ტვირთი არ აქვს და არც ისვენებს, დღიურ სტანდარტში ითვლება — საჭიროა ტვირთი, დამტკიცებული ახსნა ან დასვენების მონიშვნა.' : '.') + '</p>';
-  if (!items.length) html += '<div class="u-planempty">ამ დღისთვის გეგმაში ტვირთი არ ჩანს. ცარიელი გეგმა თავისთავად დახურვის პირობებს არ ხსნის — სერვერი მაინც ამოწმებს.</div>';
-  else html += shGroups(items).map(function (gr) { var d = (U.by[row.company_id] || { drv: {} }).drv[gr.name];
-    return '<div class="u-plandrv"><div class="u-plandrv-h">' + ic('truck') + '<strong>' + h(gr.name === '—' ? 'მძღოლი მითითებული არ არის' : gr.name) + '</strong>' + (d ? '<small>' + h(capLabel_(d)) + '</small>' : '') + '</div><div class="u-loads">' +
-      gr.items.map(function (it) { return shLoadCard(it, { open: true, legs: legs, waivers: allW }); }).join('') + '</div></div>'; }).join('');
-  if (P && P.data) html += shGatesBlock(P.data.gates, 'დახურვის პირობები', (P.from === 'read' ? 'სერვერის შემოწმება ' : 'ბოლო მცდელობის შედეგი ') + uTzTime(P.at) + ' · ინვოისი/BOL და ჩეკი ეხება დისპეჩერის მიერ დაბუკულ, უკვე ჩაბარებულ ტვირთებს', 'live');
-  else if (E) html += shGatesBlock(E.gates, 'დახურვის პირობები', 'ბოლო მცდელობის ჩანაწერი ' + uTzTime(E.occurred_at) + ' — მას შემდეგ შეიძლება შეიცვალა', 'live');
-  else html += '<div class="u-gates"><h3>დახურვის პირობები</h3><div class="u-planempty">ჯერ არ შეფასებულა. როსტერს, სტანდარტს, ზარებს/SMS-ს, ინვოისს/BOL-ს, ჩეკს, Copart appointment-სა და Gate Pass-ს სერვერი დახურვისას ამოწმებს' + (SH.rpcMissing ? '; წინასწარი შემოწმება ამ გვერდზე ჯერ ჩართული არ არის.' : '.') + '</div></div>';
-  var may = shMayClose(), rem = shRemain(row), blocked = rem.ready === false && P && P.data && P.from === 'read', C = may && SH.close && SH.close.key === row.key ? SH.close : null;
-  html += '<div class="u-admintools">' + (may ? '<button type="button" class="u-btn u-primary" data-u-close="' + h(row.key) + '"' + (blocked || (C && C.phase === 'busy') ? ' disabled' : '') + '>' + ic('check-check') + 'ცვლის დახურვა მენეჯერის მიერ</button>' : '') +
+  if (row.past) {
+    var why = Object.keys(row.src || {}).map(function (k) { return { plan: 'გეგმაში ცვლილება', request: 'ახსნის მოთხოვნა', attempt: 'დახურვის მცდელობა' }[k] || k; }).join(' · ');
+    return '<div class="u-s2-remaining"><div class="u-s2-trow u-s2-needs"><span class="u-s2-tdrv">ცვლა არ დაიხურა</span><div><span class="u-s2-act">' + h(shWdLabel(row.work_day)) + '</span><span class="u-s2-sub">ჩაწერილი სამუშაო: ' + h(why || '—') + '</span></div></div></div>';
+  }
+  var I = shItems(row), by = {}, shared = [], html = '';
+  I.items.forEach(function (i) { if (i.drv) (by[i.drv] = by[i.drv] || []).push(i); else shared.push(i); });
+  /* a call / SMS item that could not be tied to a driver may be any driver's: no ✓ for anyone then */
+  var sharedCalls = shared.some(function (i) { return i.tone !== 'pend' && (/^calls\|/.test(i.u) || /ზარ|SMS|კონტაქტ/.test(i.act)); });
+  var green = I.state === 'read' && !I.legsLoading && !sharedCalls;
+  var plan = shPlanOf(row), pl = {}; plan.items.forEach(function (x) { if (x.driver) (pl[x.driver] = pl[x.driver] || []).push(x); });
+  var rows = '';
+  if (shared.length) rows += '<div class="u-s2-trow u-s2-needs"><span class="u-s2-tdrv">საერთო</span><div>' + shGroupTasks(shared).map(shTaskHtml).join('') + '</div></div>';
+  I.drivers.forEach(function (d) {
+    var it = by[d] || [], dk = 'open|' + row.key + '|' + d, lo = SH.drv === dk, its = pl[d] || [];
+    var none = I.state === 'read' && I.legsLoading ? 'მოწმდება…' : I.state === 'read' && sharedCalls ? 'ზარების საერთო საკითხი — იხ. ზემოთ' : I.state === 'loading' || I.state === 'none' ? 'მოწმდება…' : 'შეფასება არ არის';
+    rows += '<div class="u-s2-trow' + (it.length ? ' u-s2-needs' : '') + '"><span class="u-s2-tdrv">' + h(d) + (its.length ? '<button type="button" class="u-s2-ltoggle" data-u-drv="' + h(dk) + '" aria-expanded="' + lo + '">' + (lo ? 'დაკეცვა' : 'ტვირთები (' + its.length + ')') + '</button>' : '') + '</span><div>' +
+      (it.length ? shGroupTasks(it).map(shTaskHtml).join('') : green ? '<span class="u-s2-done">✓ ყველაფერი შესრულებულია</span>' : '<span class="u-s2-unk">' + none + '</span>') + '</div>' +
+      (lo ? '<div class="u-s2-loads u-s2-oloads">' + shLoadsTable(its, null) + '</div>' : '') + '</div>';
+  });
+  if (!rows) rows = '<div class="u-s2-trow"><span class="u-s2-tdrv">—</span><span class="u-s2-unk">' + (I.state === 'loading' || I.state === 'none' ? 'მოწმდება…' : green ? 'გეგმაში მძღოლი და ტვირთი არ ჩანს; სერვერის პირობები გავლილია' : 'გეგმაში ტვირთი არ ჩანს') + '</span></div>';
+  html += '<div class="u-s2-remaining">' + rows + '</div>';
+  var prov = { read: 'შემოწმდა სერვერზე ' + uTzTime(I.at), stale: 'შემოწმდა ' + uTzTime(I.at) + ' — მოძველებულია, განაახლე', attempt: 'ბოლო დახურვის მცდელობიდან ' + uTzTime(I.at) + ' — მას შემდეგ შეიძლება შეიცვალა', loading: 'სერვერზე მოწმდება…', notyet: 'ეს გეგმის დღე სერვერზე ჩიკაგოს შუაღამისას იწყება — შემოწმება მერე', error: 'სერვერის შემოწმება ვერ ჩაიტვირთა', nocanon: 'სრული შემოწმება ამ გვერდზე ჩართული არ არის — სერვერი ამოწმებს დახურვისას', none: 'ჯერ არ შეფასებულა' }[I.state];
+  if (I.legsError) prov += ' · ზარების/SMS-ის დეტალი ვერ ჩაიტვირთა';
+  var may = shMayClose(), pend = shPendingFor(row), C = may && SH.close && SH.close.key === row.key ? SH.close : null;
+  /* the owner's close is held back only by what the server itself would refuse (its own failure list), not by a pending explanation */
+  var P = SH.prev[row.key], blocked = (I.state === 'read' || I.state === 'stale') && !!(P && P.data) && shFailed(P.data).length > 0;
+  html += '<div class="u-s2-foot"><small class="u-s2-prov">' + h(prov) + '</small><span class="u-s2-btns">' +
     (pend.length ? '<button type="button" class="u-btn" data-u-case-jump="' + h(pend[0].id) + '">' + ic('message-square-text') + 'ახსნის განხილვა' + (pend.length > 1 ? ' (' + pend.length + ')' : '') + '</button>' : '') +
     (!SH.rpcMissing ? '<button type="button" class="u-btn" data-u-recheck="' + h(row.key) + '"' + (P && P.loading ? ' disabled' : '') + '>' + ic('refresh') + 'შემოწმების განახლება</button>' : '') +
-    '<small id="u-close-note">' + (!may ? 'ცვლას დისპეჩერი თავად ხურავს თავის ეკრანზე. დისპეჩერის მაგივრად დახურვა ამ გვერდიდან მხოლოდ მფლობელის ანგარიშს შეუძლია.' : blocked ? 'ჯერ ზემოთ მითითებული საკითხია მოსაგვარებელი.' : 'დახურვისას იგივე პირობები სერვერზე თავიდან მოწმდება.') + '</small></div>';
-  if (C) html += shConfirmHtml(row, C, items);
+    (may ? '<button type="button" class="u-btn u-primary" data-u-close="' + h(row.key) + '"' + (blocked || (C && C.phase === 'busy') ? ' disabled' : '') + '>' + ic('check-check') + 'დახურვა მენეჯერის მიერ</button>' : '') + '</span></div>';
+  if (C) html += shConfirmHtml(row, C, shPlanOf(row).items);
   return html;
 }
 function shConfirmHtml(row, C, items) {
@@ -12715,7 +12971,7 @@ function shConfirmHtml(row, C, items) {
   if (C.phase === 'error') return '<div class="u-confirm" id="u-close-panel" role="alert" tabindex="-1"><h3>დახურვა ვერ გაიგზავნა</h3>' + who + '<p>' + h(C.error) + '</p><p class="u-muted">ცვლა არ დახურულა. შეამოწმე კავშირი და სცადე ხელახლა.</p><div class="u-actions"><button type="button" class="u-btn u-primary" data-u-close-go="' + h(row.key) + '">ხელახლა ცდა</button><button type="button" class="u-btn" data-u-close-cancel>გაუქმება</button></div></div>';
   var busy = C.phase === 'busy';
   return '<div class="u-confirm" id="u-close-panel" role="group" aria-labelledby="u-close-h" tabindex="-1"><h3 id="u-close-h">დავხუროთ ცვლა დისპეჩერის ნაცვლად?</h3>' + who +
-    (C.changed ? '<p style="color:var(--u-bad)">გეგმა ამასობაში შეიცვალა — გადახედე ზემოთ და თავიდან დაადასტურე.</p>' : '') +
+    (C.changed ? '<p style="color:var(--u-bad)">გეგმა ამასობაში შეიცვალა — შემოწმება თავიდან კეთდება; გადახედე დარჩენილ საკითხებს და თავიდან დაადასტურე.</p>' : '') +
     '<p class="u-muted">სერვერი დახურვისას ყველა პირობას თავიდან ამოწმებს: როსტერი, ტვირთების სტანდარტი, ზარები/SMS, ინვოისი და BOL, ჩეკი, Copart appointment, Gate Pass. თუ რომელიმე არ არის გავლილი, ცვლა არ დაიხურება. ქმედება ჩაიწერება შენი სახელით: ' + h(USER.email) + '.</p>' +
     '<div class="u-actions"><button type="button" class="u-btn u-primary" data-u-close-go="' + h(row.key) + '"' + (busy ? ' disabled' : '') + '>' + (busy ? 'მოწმდება სერვერზე…' : 'დახურვა') + '</button><button type="button" class="u-btn" data-u-close-cancel' + (busy ? ' disabled' : '') + '>გაუქმება</button></div></div>';
 }
@@ -12728,10 +12984,17 @@ async function shDoClose(key) {
   C.phase = 'busy'; shPaintBody();
   try {
     /* stale-state guard: read everything again and compare with what the screen showed when the manager confirmed */
-    await Promise.all([uLoad(true), mgiLoad_(true)]);
+    await Promise.all([uLoad(true), mgiLoad_(true), shCwLoad(row.work_day, true)]);
     if (!mgiReady_() || !uReady() || U.error || MGI.error) throw new Error('მიმდინარე მონაცემი ვერ გადამოწმდა — დახურვა არ გაგზავნილა');
+    var wd0 = row.work_day;
     row = shOpenRows().filter(function (r) { return r.key === key; })[0];
-    if (!row) { SH.close = null; await shReload(true); SH.tab = 'closed'; SH.day = tbToday(); SH.open = key; feedback('ეს ცვლა ამასობაში უკვე დაიხურა.'); return render(); }
+    if (!row) {
+      SH.close = null; await shReload(true);
+      var Cw = SH.cw[wd0], wasClosed = !!(Cw && Cw.rows && Cw.rows.some(function (r) { return shKey(r.company_id, r.dispatcher_name, r.work_day) === key; }));
+      if (wasClosed) { SH.view = 'today'; SH.st = 'all'; SH.open = key; feedback('ეს ცვლა ამასობაში უკვე დაიხურა.'); }
+      else feedback('სამუშაო დღე შეიცვალა (08:00) — ეს ცვლა ამ გვერდიდან აღარ იხურება. დახურვა არ გაგზავნილა.', true);
+      return render();
+    }
     var now = uPlan(row.company_id, row.dispatcher, row.work_day).map(function (x) { return x.l.order_number; }).sort();
     if (now.join('|') !== shown.join('|')) { delete SH.prev[key]; SH.legs = {}; SH.close = { key: key, phase: 'ask', orders: now, changed: true }; feedback('გეგმა შეიცვალა — დახურვა არ გაგზავნილა.', true); return render(); }
     var B = U.by[row.company_id] || { load: {} }, gross = shown.reduce(function (s, on) { return s + (B.load[on] ? grossOf_(B.load[on]) : 0); }, 0);
@@ -12740,13 +13003,13 @@ async function shDoClose(key) {
     var d = r.data || {};
     if (d.closed) {
       SH.close = null; await Promise.all([mgiLoad_(true), shReload(true)]);
-      SH.tab = 'closed'; SH.day = tbToday(); SH.open = key; SH.q = '';
+      SH.view = 'today'; SH.rd = null; SH.st = 'all'; SH.open = key; SH.q = '';
       feedback(d.already_closed ? 'ცვლა უკვე დახურული იყო (' + uWhen(d.closed_at) + ') — ახალი ჩანაწერი არ შექმნილა.' : 'ცვლა დაიხურა: ' + row.dispatcher + ' · ' + row.code + ' · ' + uDay(row.work_day) + '. ჩაიწერა შენი სახელით.');
       return render();
     }
     SH.close = { key: key, phase: 'refused', result: d, orders: shown };
-    if (d.server && d.server.gates) SH.prev[key] = { at: Date.now(), data: d.server, error: '', loading: null, from: 'attempt' };
-    await shEventsLoad(true);
+    if (d.server && d.server.gates) SH.prev[key] = { at: Date.now(), data: d.server, error: '', loading: null, notyet: false };
+    await shEvLoad(row.work_day, true);
     feedback('ცვლა არ დაიხურა — სერვერმა უარი თქვა.', true);
     render();
   } catch (e) {
@@ -12756,7 +13019,97 @@ async function shDoClose(key) {
   }
 }
 
-/* ---------- requests ---------- */
+/* ---------- closed detail: frozen close record by driver; approvals with the recorded approver; loads on demand ---------- */
+/* Georgian ergative of a first name ("ვანო" -> "ვანომ", "ზვიად" -> "ზვიადმა"); anything else -> null (the caller falls back) */
+function shErg(name) { var f = String(name || '').trim().split(/\s+/)[0] || ''; if (!/^[ა-ჺ]{2,}$/.test(f)) return null; return f + (/[აეიოუ]$/.test(f) ? 'მ' : 'მა'); }
+function shPersonOf(email) { var e = String(email || '').toLowerCase(); if (!e) return null; return (U.people || []).filter(function (a) { return String(a.email || '').toLowerCase() === e && a.dispatcher_name; })[0] || null; }
+/* "ვანომ დაუდასტურა" when every recorded approver is a known account with a Georgian first name; otherwise the plain names
+   ("დაადასტურა: Vano, ..."); an approver whose account is not known reads "მენეჯმენტი" - never a guessed person */
+function shApprText(ws) {
+  var erg = [], plain = [], allErg = true, unknown = false;
+  ws.forEach(function (w) { var p = shPersonOf(w.decided_by); if (!p) { unknown = true; return; } var e = shErg(p.dispatcher_name), f = String(p.dispatcher_name).trim().split(/\s+/)[0];
+    if (e) { if (erg.indexOf(e) < 0) { erg.push(e); plain.push(f); } } else { allErg = false; if (plain.indexOf(p.dispatcher_name) < 0) plain.push(p.dispatcher_name); } });
+  if (!plain.length) return 'მენეჯმენტმა დაუდასტურა';
+  if (allErg) { if (unknown) erg.push('მენეჯმენტმა'); return erg.length === 1 ? erg[0] + ' დაუდასტურა' : erg.slice(0, -1).join(', ') + ' და ' + erg[erg.length - 1] + ' დაუდასტურეს'; }
+  var all = plain.concat(unknown ? ['მენეჯმენტი'] : []); return (all.length > 1 ? 'დაადასტურეს: ' : 'დაადასტურა: ') + all.join(', ');
+}
+function shApprovals(r, drvNames, drvOfOrder) {
+  var W = SH.wv[r.work_day], out = { by: {}, shared: [], loading: !W || (!W.rows && !W.error), error: W && W.error && !W.rows ? W.error : '' };
+  if (!W || !W.rows) return out;
+  var closedMs = uMs(r.closed_at), groups = {};
+  W.rows.filter(function (w) { return w.status === 'approved' && w.company_id === r.company_id && w.dispatcher_name === r.dispatcher_name && w.work_day === r.work_day; }).forEach(function (w) {
+    var drv = w.kind === 'standard' ? (w.order_number || '') : /_all$/.test(w.kind) ? '' : (drvOfOrder[w.order_number] || '');
+    if (drv && drvNames.indexOf(drv) < 0) drv = '';
+    var subj = w.kind === 'standard' ? '' : (w.order_number ? '#' + w.order_number : '');
+    var gk = drv + '|' + w.kind + '|' + subj, g = groups[gk] || (groups[gk] = { drv: drv, kind: w.kind, subj: subj, ws: [] });
+    g.ws.push(w);
+  });
+  Object.keys(groups).forEach(function (gk) {
+    var g = groups[gk], late = g.ws.every(function (w) { return uMs(w.decided_at) > closedMs + 6 * 60000; });   /* decided_at = the approver's browser clock (minutes off) */
+    var std = g.kind === 'standard', lead = std ? (g.drv ? '' : SH_KIND.standard + (g.ws[0].order_number ? ' · ' + g.ws[0].order_number : '') + ' · ') : (SH_KIND[g.kind] || g.kind) + (g.subj ? ' ' + g.subj : '') + ' · ';
+    var a = { kind: g.kind, label: lead + shApprText(g.ws), late: late, title: g.ws.map(function (w) { return uWhen(w.decided_at); }).join(', ') };
+    if (g.drv) (out.by[g.drv] = out.by[g.drv] || []).push(a); else out.shared.push(a);
+  });
+  return out;
+}
+function shApprHtml(list) { return list.map(function (a) { return '<span class="u-s2-appr" title="' + h(a.title) + '">' + h(a.label) + (a.late ? ' · დახურვის შემდეგ' : '') + '</span>'; }).join(''); }
+function shLoadsTable(it, d) {
+  var cap = d && d.cap != null && isFinite(Number(d.cap)) ? Number(d.cap) + ' მანქანა' : '';
+  var top = '<div class="u-s2-ltop"><span>' + h([cap, d && d.tgt != null ? 'დღის მიზანი ' + money(Number(d.tgt)) : ''].filter(Boolean).join(' · ')) + '</span><details class="u-s2-src"><summary>მიმდინარე SD ⓘ</summary><p>მანქანა, მარშრუტი, თარიღები და ფასი — Super Dispatch-ის მიმდინარე მონაცემია. მძღოლის ჯამი ზემოთ დახურვისას შენახულია.</p></details></div>';
+  var when = function (v, fb) { var s = String(v || ''); return s.length > 10 ? uDayShort(s.slice(0, 10)) + ' · ' + s.slice(11, 16) : (fb ? uDayShort(fb) : '—'); };
+  var body = it.map(function (x) { var l = x.l;
+    if (!l) return '<tr><td><span class="u-s2-veh">#' + h(x.on) + '</span></td><td colspan="3" class="u-muted">ტვირთის ჩანაწერი ვერ მოიძებნა</td></tr>';
+    return '<tr><td><span class="u-s2-veh">' + h(l.vehicle || '—') + '</span><span class="u-s2-lid">#' + h(x.on) + '</span>' + (l.is_inoperable ? '<span class="u-s2-inop">INOP</span>' : '') + '</td>' +
+      '<td><span class="u-s2-rt">' + h(locShort(l.pickup_location) || '—') + '</span><span class="u-s2-rt u-s2-dst">→ ' + h(locShort(l.delivery_location) || '—') + '</span></td>' +
+      '<td><span class="u-s2-rt">↑ ' + h(when(l.pickup_scheduled, puDay_(l))) + '</span><span class="u-s2-rt u-s2-dst">↓ ' + h(when(l.delivery_scheduled)) + '</span></td>' +
+      '<td><span class="u-s2-money">' + h(money(grossOf_(l))) + '</span><span class="u-s2-pay">' + h(((typeof PMLABEL !== 'undefined' && PMLABEL[l.payment_terms]) || l.payment_terms || '—') + (l.payment_method ? ' · ' + l.payment_method : '')) + '</span></td></tr>'; }).join('');
+  return top + '<table class="u-s2-ltable" aria-label="ტვირთების მიმდინარე მონაცემები"><thead><tr><th scope="col">მანქანა / ნომერი</th><th scope="col">მარშრუტი</th><th scope="col">აღება / ჩაბარება · UTC</th><th scope="col">GROSS</th></tr></thead><tbody>' + body + '</tbody></table>';
+}
+function shClosedDetail(r) {
+  if (r._partial) return '<p class="u-s2-prov">დახურულია ' + h(uWhen(r.closed_at)) + ' · დახურვის ჩანაწერი იტვირთება…</p>';
+  var g = r.gates || {}, sv = (g.server && typeof g.server === 'object') ? g.server : null, G = sv && sv.gates ? sv.gates : {}, orders = scOrders_(g.orders), B = U.by[r.company_id] || { load: {}, drv: {} };
+  var det = G.standard && Array.isArray(G.standard.detail) ? G.standard.detail : null, rows = [], idx = {};
+  (det || []).forEach(function (d) { if (!d || !d.driver || idx[d.driver]) return; idx[d.driver] = rows.length; rows.push({ name: d.driver, d: d, items: [] }); });
+  var drvOfOrder = {};
+  (G.rate && Array.isArray(G.rate.detail) ? G.rate.detail : []).forEach(function (x) { if (x && x.order_number && x.driver) drvOfOrder[x.order_number] = x.driver; });   /* frozen at close */
+  orders.forEach(function (on) { var l = B.load[on] || null, n = drvOfOrder[on] || (l && l.driver_name) || '';
+    if (!drvOfOrder[on] && n) drvOfOrder[on] = n;
+    if (idx[n] == null) { idx[n] = rows.length; rows.push({ name: n, d: null, items: [] }); }
+    rows[idx[n]].items.push({ on: on, l: l }); });
+  var names = rows.map(function (x) { return x.name; }).filter(Boolean), A = shApprovals(r, names, drvOfOrder);
+  var cw = function (x) { return (Number(x.d && x.d.n) || 0); };
+  var html = '<div class="u-s2-dtable"><div class="u-s2-dgrid u-s2-dhead"><span>მძღოლი</span><span>ტვირთი</span><span>GROSS დახურვისას</span><span>დადასტურება</span><span></span></div>';
+  if (A.shared.length) html += '<div class="u-s2-drv u-s2-dgrid"><span class="u-s2-dname">საერთო</span><span></span><span></span><span class="u-s2-apprs">' + shApprHtml(A.shared) + '</span><span></span></div>';
+  rows.forEach(function (x, i) {
+    var name = x.name || 'მძღოლი მითითებული არ არის', ap = A.by[x.name] || [], open = SH.drv === r.dispatcher_name + '|' + r.company_id + '|' + x.name;
+    var fb = x.d && x.d.waived === true && !ap.some(function (a) { return a.kind === 'standard'; }) ? [{ label: A.loading ? '…' : 'მენეჯმენტმა დაუდასტურა', late: false, title: 'დახურვის ჩანაწერში დადასტურებულია; დამდასტურებელი ჩანაწერში ვერ მოიძებნა' }] : [];
+    var apprs = shApprHtml(ap.concat(fb)), n = x.d ? cw(x) : x.items.length, gross = x.d ? money(Number(x.d.gross) || 0) : '—';
+    var sub = x.d && !n ? '<span class="u-s2-dsub">გეგმაში ტვირთი არ ჰქონდა</span>' : !x.d && det ? '<span class="u-s2-dsub">დახურვის ჩანაწერში არ არის · მიმდინარე SD</span>' : '';
+    if (x.items.length) html += '<button type="button" class="u-s2-drv u-s2-dgrid" data-u-drv="' + h(r.dispatcher_name + '|' + r.company_id + '|' + x.name) + '" aria-expanded="' + open + '"><span class="u-s2-dname">' + h(name) + sub + '</span><span class="u-num">' + h(n) + '</span><span class="u-num">' + h(gross) + '</span><span class="u-s2-apprs">' + apprs + '<span class="u-s2-link">' + (open ? 'დაკეცვა' : 'ტვირთების ნახვა') + '</span></span><span class="u-chev">' + ic(open ? 'chevron-up' : 'chevron-down') + '</span></button>' +
+      (open ? '<div class="u-s2-loads">' + shLoadsTable(x.items, x.d) + '</div>' : '');
+    else html += '<div class="u-s2-drv u-s2-dgrid"><span class="u-s2-dname">' + h(name) + sub + '</span><span class="u-num">' + h(n) + '</span><span class="u-num">' + h(gross) + '</span><span class="u-s2-apprs">' + (apprs || (x.d && x.d.ok === true ? '<span class="u-s2-link">✓ შესრულებულია</span>' : '')) + '</span><span></span></div>';
+  });
+  if (!rows.length) html += '<div class="u-s2-drv"><span class="u-muted">ამ დახურვაში ტვირთი და მძღოლი არ იყო დაფიქსირებული.</span></div>';
+  html += '</div>';
+  var own = shEmailOf(r.dispatcher_name), by = String(r.closed_by || '').toLowerCase(), self = !!own && own === by;
+  html += '<p class="u-s2-prov">' + h('დახურა ' + uWhen(r.closed_at) + ' · ' + (self ? 'თავად დისპეჩერმა' : by ? 'მენეჯერმა · ' + uNameOfEmail(r.closed_by) : 'ვინ დახურა — არ არის დაფიქსირებული') + (sv ? ' · ჩანაწერი, წესები ' + (sv.rule_version || '—') : ' · ძველი ჩანაწერი: მძღოლების ჯამები არ ინახებოდა') + (A.error ? ' · დადასტურებები ვერ ჩაიტვირთა' : '')) + '</p>';
+  return html;
+}
+
+/* ---------- requests (unchanged behaviour) ---------- */
+function shLegHtml(side, leg, loading, err) {
+  var name = side === 'pu' ? 'აღება' : 'ჩაბარება';
+  if (!leg) return '<details class="u-leg u-unk"><summary>' + ic('circle-dash') + '<span>' + name + ' · ' + (err ? 'შემოწმება ვერ ჩაიტვირთა' : loading ? 'იტვირთება…' : 'ჯერ არ ჩატვირთულა') + '</span></summary></details>';
+  var st = { ok: ['გარკვეულია', 'circle-check', ''], skip: ['ზარი არ მოითხოვება', 'circle-check', ''], wait: ['მუშავდება', 'clock-3', ' u-wait'], no: ['დასაზუსტებელია', 'circle-alert', ' u-bad'], unk: ['ზარის მონაცემი სერვერზე არ არის', 'circle-alert', ' u-bad'] }[leg.st];
+  var body = [];
+  if (leg.st === 'skip') body.push(leg.flag ? 'ბროკერის წესი: კონტაქტი არ მოითხოვება.' : (typeof legSkipText_ === 'function' ? legSkipText_(leg.skip, side) : leg.skip));
+  if (leg.st === 'ok') body.push('საჭირო ფაქტები დადასტურებულია შინაარსით' + (leg.call ? ' · ზარი არის' : '') + (leg.sms ? ' · SMS არის' : '') + '.');
+  if (leg.st === 'wait') body.push('ზარის/SMS-ის შინაარსი ჯერ მუშავდება.');
+  if (leg.st === 'no') { if (leg.reason) body.push(leg.reason); else body.push('საჭირო ფაქტები დადასტურებული არ არის.'); if (leg.missing) body.push('კონტაქტის ნომერი არ არის მითითებული.'); body.push(leg.call ? 'ზარი ჩანს.' : 'ზარი არ ჩანს.'); }
+  if (leg.st === 'unk') body.push('ამ ტვირთზე შემოწმების შედეგი სერვერმა არ დააბრუნა.');
+  return '<details class="u-leg' + st[2] + '"><summary>' + ic(st[1]) + '<span>' + name + ' · ' + st[0] + '</span></summary><div class="u-legbody">' + body.map(h).join('<br>') + '</div></details>';
+}
+function shEmpty(bold, hint) { return '<div class="u-empty">' + ic('inbox') + '<strong>' + h(bold) + '</strong><p>' + h(hint) + '</p></div>'; }
 function shDriversOf(w) {
   var B = U.by[w.company_id];
   if (w.kind === 'standard') return w.order_number ? [w.order_number] : [];
@@ -12843,101 +13196,141 @@ async function shDecide() {
 }
 
 /* ---------- page ---------- */
-function shReload(force) { return Promise.all([shClosedLoad(SH.day || tbToday(), force), SH.day !== tbToday() ? shClosedLoad(tbToday(), force) : null, shEventsLoad(force), SH.tab === 'history' && SH.hfrom ? shHistLoad(force) : null]); }
+/* manual = the user's own refresh; the app's automatic refresh re-reads the day lists but leaves the 30-day history to its cache */
+function shReload(force, manual) {
+  var wd = shWd(), td = shTday();
+  return Promise.all([shCwLoad(wd, force), wd !== td ? shCwLoad(td, force) : null, shEvLoad(td, force), shWvLoad(wd, force),
+    (SH.view === 'missed' || !shIsToday()) ? shMissLoad(!!manual) : null, SH.view === 'history' && SH.hfrom ? shHistLoad(force) : null]);
+}
+/* search text of a Today row: dispatcher, plus its drivers and order numbers (closed: the close record; open: the plan) */
+function shRowText(r) {
+  if (r.closed) { var g = r.closed.gates || {}, sv = g.server && g.server.gates, det = sv && sv.standard && Array.isArray(sv.standard.detail) ? sv.standard.detail : []; return r.dispatcher + ' ' + det.map(function (d) { return d.driver; }).join(' ') + ' ' + scOrders_(g.orders).join(' '); }
+  if (r.past) return r.dispatcher;
+  return r.dispatcher + ' ' + shPlanOf(r).items.map(function (x) { return x.driver + ' ' + x.on; }).join(' ');
+}
+function shCounts() {
+  var T = SH.view === 'today' && shIsToday() ? shTodayRows() : shTodayRowsFor(shTday());
+  var rows = T.rows ? T.rows.filter(shInCo) : null, ready = mgiReady_() && uReady();
+  return { open: rows ? rows.filter(function (r) { return !r.closed; }).length : null, closed: rows ? rows.filter(function (r) { return !!r.closed; }).length : null,
+    pending: ready ? MGI.waivers.filter(function (w) { return w.status === 'pending'; }).filter(shInCo).length : null };
+}
+function shTodayRowsFor(wd) { var keep = SH.rd; SH.rd = null; try { return shTodayRows(); } finally { SH.rd = keep; } }
+function shTileSub(k, c) {
+  if (k === 'today') return c.open == null ? '…' : c.open + ' დასახური · ' + c.closed + ' დახურული';
+  if (k === 'awaiting') return c.pending == null ? '…' : c.pending + ' ახსნა';
+  return k === 'history' ? 'განხილული ახსნები' : 'დაუხურავი ცვლები';
+}
 function shBodyHtml() {
-  var day = SH.day, today = tbToday(), tday = shTday(), ready = mgiReady_() && uReady();
-  var C = SH.closed[day], closedAll = C && C.rows ? C.rows.filter(shInCo) : null;
-  var openAll = ready ? shOpenRows().filter(shInCo) : [], pendAll = ready ? MGI.waivers.filter(function (w) { return w.status === 'pending'; }).filter(shInCo) : [];
-  var counts = { closed: closedAll ? (day === today ? 'დღეს · ' : uDayShort(day) + ' · ') + closedAll.length : '…', open: ready ? openAll.length + ' ცვლა' : '…', pending: ready ? pendAll.length + ' ახსნა' : '…' };
-  var title = '', count = '', body = '';
-  if (!ready) {
-    var err = MGI.error || (U.error && !uReady() ? U.error : '');
-    body = err ? '<div class="u-state u-err" role="alert">' + h(err) + ' <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>' : '<div class="u-state" role="status">ყველა კომპანიის ცვლები და ახსნები იტვირთება…</div>';
-    title = { closed: 'დახურული ცვლები', open: 'დასახური ცვლები', pending: 'ახსნები პასუხის მოლოდინში', history: 'ახსნების ისტორია' }[SH.tab];
-  } else if (SH.tab === 'closed') {
-    title = day === today ? 'დღეს დახურული ცვლები' : uDay(day) + ' · დახურული ცვლები';
-    if (!C || (!C.rows && !C.error)) { body = '<div class="u-state" role="status">იტვირთება…</div>'; }
-    else if (C.error && !C.rows) body = '<div class="u-state u-err" role="alert">დახურული ცვლები ვერ ჩაიტვირთა (' + h(C.error) + '). <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>';
+  var ready = mgiReady_() && uReady(), title = '', count = '', body = '', today = shIsToday(), rd = shRd();
+  if (!uReady()) {
+    var err = U.error || '';
+    return { title: 'ცვლები', count: '', body: err ? '<div class="u-state u-err" role="alert">' + h(err) + ' <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>' : '<div class="u-state" role="status">ცვლები იტვირთება…</div>' };
+  }
+  if (SH.view === 'today') {
+    title = (today ? 'დღეს · ' : '') + uDay(rd);
+    var T = shTodayRows();
+    if (T.loading) body = '<div class="u-state" role="status">იტვირთება…</div>';
+    else if (T.error) body = '<div class="u-state u-err" role="alert">ცვლები ვერ ჩაიტვირთა (' + h(T.error) + ') — ცარიელი სია არ ნიშნავს, რომ ცვლა არ არის. <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>';
     else {
-      var rows = closedAll.filter(function (r) { var g = r.gates || {}, det = g.server && g.server.gates && g.server.gates.standard && g.server.gates.standard.detail; return shMatch(r.dispatcher_name + ' ' + (Array.isArray(det) ? det.map(function (d) { return d.driver; }).join(' ') : '') + ' ' + scOrders_(g.orders).join(' ')); });
-      count = rows.length + ' ცვლა · დრო თბილისის';
-      body = rows.length ? '<div class="u-list"><div class="u-closed-head"><span>დისპეჩერი</span><span>კომპანია</span><span>დახურვის დრო · თბილისის</span><span></span></div>' + rows.map(function (r, i) {
-        var key = shKey(r.company_id, r.dispatcher_name, r.work_day), op = SH.open === key;
-        return '<button type="button" class="u-closed-row" data-u-shift="' + h(key) + '" aria-expanded="' + op + '" aria-controls="u-shd-' + i + '"><span class="u-person2"><span class="u-dispicon">' + ic('headset') + '</span><strong>' + h(r.dispatcher_name) + '</strong></span><span class="u-chip">' + h(uCoCode(r.company_id)) + '</span>' +
-          '<span class="u-closed-time"><small>' + h(uDay(uTzDay(r.closed_at))) + '</small><b><time datetime="' + h(r.closed_at) + '">' + h(uTzTime(r.closed_at)) + '</time></b></span><span class="u-chev">' + ic(op ? 'chevron-up' : 'chevron-down') + '</span></button>' +
-          (op ? '<div class="u-detail" id="u-shd-' + i + '" role="region" aria-label="' + h(r.dispatcher_name) + ' — დახურვის დეტალები">' + shClosedDetail(r) + '</div>' : ''); }).join('') + '</div>'
-        : shEmpty('დახურული ცვლა არ მოიძებნა', 'შეცვალე თარიღი, კომპანია ან ძიება.');
-      if (C.error) body = '<div class="u-state u-err" role="alert" style="margin-bottom:12px">ბოლო განახლება ვერ შესრულდა — ნაჩვენებია ' + h(uTzTime(C.at)) + '-ის სია.</div>' + body;
+      var rows = T.rows.filter(shInCo).filter(function (r) { return (SH.st === 'all' || (SH.st === 'open') === !r.closed) && shMatch(shRowText(r)); });
+      count = rows.length + ' ცვლა';
+      var head = SH.st === 'open' ? 'დარჩა' : SH.st === 'closed' ? 'დახურვა' : 'დარჩა / დახურვა';
+      body = rows.length ? '<div class="u-s2-sheet"><div class="u-s2-grid u-s2-thead"><span>დისპეჩერი</span><span class="u-s2-cocol">კომპანია</span><span>სტატუსი</span><span class="u-s2-tcol">' + head + '</span><span></span></div>' + rows.map(function (r, i) {
+        var op = SH.open === r.key, S = shSumOf(r);
+        return '<div class="u-s2-wrap"><button type="button" class="u-s2-disp u-s2-grid" data-u-shift="' + h(r.key) + '" aria-expanded="' + op + '" aria-controls="u-shd-' + i + '"><span class="u-s2-name">' + h(r.dispatcher) + '</span><span class="u-s2-co">' + h(r.code) + '</span>' +
+          '<span class="u-s2-state ' + (r.closed ? 'u-s2-closed' : 'u-s2-open') + '"><span class="u-s2-dot" aria-hidden="true"></span>' + (r.closed ? 'დახურულია' : 'დასახურია') + '</span><span class="u-s2-time' + S.cls + '"' + (S.title ? ' title="' + h(S.title) + '"' : '') + '>' + h(S.text) + '</span><span class="u-chev">' + ic(op ? 'chevron-up' : 'chevron-down') + '</span></button>' +
+          (op ? '<div class="u-s2-detail" id="u-shd-' + i + '" role="region" aria-label="' + h(r.dispatcher + ' · ' + r.code) + '">' + (r.closed ? shClosedDetail(r.closed) : shOpenDetail(r)) + '</div>' : '') + '</div>'; }).join('') + '</div>'
+        : '<div class="u-s2-empty">დისპეჩერი ვერ მოიძებნა.</div>';
+      var C = SH.cw[shWd()]; if (C && C.error && C.rows) body = '<div class="u-state u-err" role="alert" style="margin-bottom:12px">ბოლო განახლება ვერ შესრულდა — ნაჩვენებია ' + h(uTzTime(C.at)) + '-ის სია.</div>' + body;
+      if (today && SH.ev[shTday()] && SH.ev[shTday()].error) body = '<p class="u-s2-prov">დახურვის მცდელობების ჩანაწერი ვერ ჩაიტვირთა.</p>' + body;
+      if (T.limited) body += '<p class="u-s2-prov">ამ დღისთვის ჩანს მხოლოდ დახურული ცვლები — დაუხურავი ცვლები ითვლება ბოლო ' + SH_MISS_DAYS + ' დღისთვის.</p>';
     }
-  } else if (SH.tab === 'open') {
-    title = 'დასახური ცვლები';
-    var orows = openAll.filter(function (r) { return shMatch(r.dispatcher + ' ' + shPlanOf(r).items.map(function (x) { return x.driver + ' ' + x.on; }).join(' ')); });
-    count = orows.length + ' ცვლა · გეგმის დღე ' + uDay(tday);
-    body = (SH.ev.error ? '<div class="u-state u-err" role="alert" style="margin-bottom:12px">დახურვის მცდელობების ჩანაწერი ვერ ჩაიტვირთა (' + h(SH.ev.error) + ').</div>' : '') +
-      (orows.length ? '<div class="u-list"><div class="u-open-head"><span>დისპეჩერი</span><span>კომპანია</span><span>რა დარჩა</span><span>მზადყოფნა</span><span></span></div>' + orows.map(function (r, i) {
-        var op = SH.open === r.key, rem = shRemain(r), plan = shPlanOf(r), drv = {}; shRoster(r, plan).forEach(function (o) { drv[o.name] = 1; });
-        return '<button type="button" class="u-open-row" data-u-shift="' + h(r.key) + '" aria-expanded="' + op + '" aria-controls="u-shd-' + i + '"><span class="u-person2"><span class="u-dispicon">' + ic('headset') + '</span><strong>' + h(r.dispatcher) + '</strong></span><span class="u-chip">' + h(r.code) + '</span>' +
-          '<span class="u-open-reason' + (rem.ready === true ? ' u-good' : rem.ready === null ? ' u-unk' : '') + '">' + h(rem.text) + (rem.sub ? '<br><small class="u-muted">' + h(rem.sub) + '</small>' : '') + '</span>' +
-          '<span class="u-open-prog"><strong class="' + (rem.ready === true ? '' : rem.ready === false ? 'u-bad' : 'u-unk') + '">' + (rem.ready === true ? 'შეიძლება დახურვა' : rem.ready === false ? 'დასაზუსტებელია' : 'სერვერი ამოწმებს დახურვისას') + '</strong>' + Object.keys(drv).length + ' მძღოლი · ' + plan.items.length + ' ტვირთი</span><span class="u-chev">' + ic(op ? 'chevron-up' : 'chevron-down') + '</span></button>' +
-          (op ? '<div class="u-detail" id="u-shd-' + i + '" role="region" aria-label="' + h(r.dispatcher) + ' — გეგმა და დახურვა">' + shOpenDetail(r) + '</div>' : ''); }).join('') + '</div>'
-        : shEmpty('დასახური ცვლა არ მოიძებნა', 'შეცვალე კომპანია ან ძიება.'));
+  } else if (SH.view === 'missed') {
+    title = 'დაუხურავი ცვლები';
+    var M = SH.miss;
+    if (M.error) body = '<div class="u-state u-err" role="alert">სია ვერ ჩაიტვირთა (' + h(M.error) + ') — ეს არ ნიშნავს, რომ დაუხურავი ცვლა არ არის. <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>';
+    else if (!M.rows) body = '<div class="u-state" role="status">იტვირთება…</div>';
+    else {
+      var items = M.rows.filter(shInCo).filter(function (r) { return shMatch(r.dispatcher); });
+      count = items.length + ' შემთხვევა';
+      body = (items.length ? '<div class="u-s2-sheet"><div class="u-s2-mgrid u-s2-thead"><span>დისპეჩერი</span><span class="u-s2-cocol">კომპანია</span><span>სამუშაო დღე</span></div>' + items.map(function (r) {
+        return '<div class="u-s2-mgrid u-s2-mrow"><span class="u-s2-name">' + h(r.dispatcher) + '</span><span class="u-s2-co">' + h(uCoCode(r.company_id)) + '</span><span class="u-s2-mdate" title="' + h('გეგმის დღე ' + uDay(r.work_day) + ' · ვადა ' + uWhen(new Date(shDeadline(r.work_day)).toISOString())) + '">' + h(shWdLabel(r.work_day)) +
+          (r.late ? '<span class="u-s2-late">დაგვიანებით დახურა · ' + h(uWhen(r.late)) + '</span>' : '') + '</span></div>'; }).join('') + '</div>'
+        : '<div class="u-s2-empty">დაუხურავი ცვლა არ მოიძებნა.</div>') +
+        '<p class="u-s2-prov">ბოლო ' + SH_MISS_DAYS + ' დღე · ჩანს ცვლა, რომელზეც დისპეჩერის სამუშაო ჩაწერილია (გეგმა, ახსნა ან დახურვის მცდელობა) და დახურვა არ არის, ან რომელიც დაიხურა ვადის (08:00 თბილისი) შემდეგ.</p>';
+    }
   } else {
-    var hist = SH.tab === 'history', list;
-    title = hist ? 'ახსნების ისტორია' : 'ახსნები პასუხის მოლოდინში';
-    if (hist) {
+    var hist = SH.view === 'history', list;
+    title = hist ? 'განხილული ახსნები' : 'პასუხის მოლოდინში';
+    if (!ready) body = MGI.error ? '<div class="u-state u-err" role="alert">' + h(MGI.error) + ' <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>' : '<div class="u-state" role="status">იტვირთება…</div>';
+    else if (hist) {
       var H = SH.hist;
       if (H.key !== shHistKey() || (!H.rows && !H.error)) body = '<div class="u-state" role="status">იტვირთება…</div>';
       else if (H.error) body = '<div class="u-state u-err" role="alert">ისტორია ვერ ჩაიტვირთა (' + h(H.error) + '). <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>';
       else list = H.rows.filter(shInCo).filter(function (w) { return SH.hres === 'all' || w.status === SH.hres; });
-    } else list = pendAll.slice().sort(function (a, b) { return uMs(b.requested_at) - uMs(a.requested_at); });
+    } else list = MGI.waivers.filter(function (w) { return w.status === 'pending'; }).filter(shInCo).sort(function (a, b) { return uMs(b.requested_at) - uMs(a.requested_at); });
     if (list) {
       list = list.filter(function (w) { return shMatch([w.dispatcher_name, w.order_number, w.reason, shDriversOf(w).join(' ')].join(' ')); });
       count = list.length + ' ჩანაწერი';
       body = list.length ? '<div class="u-caselist">' + list.slice(0, 300).map(function (w) { return shCaseHtml(w, hist); }).join('') + '</div>' + (list.length > 300 ? '<p class="u-note" style="margin-top:10px">ნაჩვენებია პირველი 300 — დააზუსტე თარიღები ან ძიება.</p>' : '')
-        : hist ? shEmpty('ჩანაწერი არ მოიძებნა', 'შეცვალე თარიღი, კომპანია ან გადაწყვეტილება.') : shEmpty('პასუხს არცერთი ახსნა არ ელოდება', 'ამ ხედში გამოჩნდება მენეჯერის პასუხის მომლოდინე ახსნები.');
+        : '<div class="u-s2-empty">' + (hist ? 'განხილული ახსნა არ არის.' : 'პასუხის მოლოდინში მოთხოვნა არ არის.') + '</div>';
     }
   }
-  return { counts: counts, title: title, count: count, body: body };
+  return { title: title, count: count, body: body };
+}
+function shNavHtml() {
+  if (SH.view !== 'today') return '';
+  var rd = shRd(), cur = shCurRd();
+  return '<span class="u-s2-daynav"><button type="button" class="u-iconbtn" data-u-dayshift="-1" aria-label="წინა სამუშაო დღე">' + ic('chevron-left') + '</button><button type="button" class="u-iconbtn" data-u-dayshift="1" aria-label="შემდეგი სამუშაო დღე"' + (rd >= cur ? ' disabled' : '') + '>' + ic('chevron-right') + '</button>' +
+    '<input class="u-s2-dayin" type="date" id="u-sh-day" value="' + h(rd) + '" max="' + h(cur) + '" aria-label="სამუშაო დღე (08:00–08:00 თბილისი)"></span>';
 }
 function shPaintBody() {
-  var b = shBodyHtml(), set = function (id, v) { var e = document.getElementById(id); if (e && e.innerHTML !== v) e.innerHTML = v; };
-  set('u-sh-c-closed', h(b.counts.closed)); set('u-sh-c-open', h(b.counts.open)); set('u-sh-c-pending', h(b.counts.pending));
-  set('u-sh-title', h(b.title)); set('u-sh-count', h(b.count));
-  var c = document.getElementById('u-sh-content'); if (c) c.innerHTML = b.body;
+  shRoll();
+  var b = shBodyHtml(), c = shCounts(), set = function (id, v) { var e = document.getElementById(id); if (e && e.innerHTML !== v) e.innerHTML = v; };
+  ['today', 'awaiting', 'history', 'missed'].forEach(function (k) { set('u-sh-c-' + k, h(shTileSub(k, c))); });
+  set('u-sh-title', h(b.title)); set('u-sh-count', h(b.count)); set('u-sh-nav', shNavHtml());
+  var e = document.getElementById('u-sh-content'); if (e) e.innerHTML = b.body;
 }
 function shEnsure() {
   if (MGI.user !== USER.email) mgiReset_();
   if (!MGI.loadedAt && !MGI.loading && !MGI.error) mgiLoad_(true).then(function () { if (MTAB === 'shifts') render(); });
   if (!uReady()) return;
   var again = function () { if (MTAB === 'shifts' && uiActive() && document.getElementById('u-sh-content') && !(SH.review && document.activeElement && document.activeElement.id === 'u-review-note')) { shPaintBody(); shEnsure(); } };
-  var C = SH.closed[SH.day]; if (!C || (!C.rows && !C.error && !C.loading)) shClosedLoad(SH.day).then(again);
-  if (!SH.ev.at && !SH.ev.loading && !SH.ev.error) shEventsLoad().then(again);
-  if (SH.tab === 'history' && (SH.hist.key !== shHistKey() || (!SH.hist.rows && !SH.hist.error && !SH.hist.loading))) shHistLoad().then(again);
-  if (SH.tab === 'open' && mgiReady_()) {
-    var rows = shOpenRows().filter(shInCo);
-    /* The canonical evaluation costs about 1.7 s of database time per shift (measured in production 2026-10-07), so it is
-       asked only for the shift the manager opened - never for the whole list, never on a timer. */
-    var op = rows.filter(function (r) { return r.key === SH.open; })[0];
-    if (op && !SH.rpcMissing) { var P0 = SH.prev[op.key]; if (!P0 || (!P0.at && !P0.loading && !P0.error)) shPrevLoad(op).then(again); }
-    if (op) { var ons = shPlanOf(op).items.map(function (x) { return x.on; }), L = shLegs(op.company_id, ons); if (ons.length && (!L || (!L.at && !L.loading && !L.error))) shLegsLoad(op.company_id, ons).then(again); }
+  var need = function (store, day, load) { var c = store[day]; if (!c || (!c.at && !c.loading)) load(day).then(again); };
+  var wd = shWd(), td = shTday();
+  need(SH.cw, wd, shCwLoad); if (wd !== td) need(SH.cw, td, shCwLoad);
+  need(SH.ev, td, shEvLoad); need(SH.wv, wd, shWvLoad);
+  if ((SH.view === 'missed' || !shIsToday()) && !SH.miss.loading && (SH.miss.key !== shMissKey() || !SH.miss.at)) shMissLoad().then(again);
+  /* the inbox knows a close of today that the day list has not read yet: read the day list again (at most every 20 s) */
+  var Ct = SH.cw[td];
+  if (Ct && Ct.rows && !Ct.loading && Date.now() - Ct.at > 20000 && (MGI.closes || []).some(function (s) { return s.work_day === td && U.ids.indexOf(s.company_id) >= 0 && !Ct.rows.some(function (r) { return r.company_id === s.company_id && r.dispatcher_name === s.dispatcher_name; }); })) shCwLoad(td, true).then(again);
+  if (SH.view === 'history' && (SH.hist.key !== shHistKey() || (!SH.hist.rows && !SH.hist.error && !SH.hist.loading))) shHistLoad().then(again);
+  if (SH.view === 'today' && shIsToday() && mgiReady_()) {
+    var op = shOpenRows().filter(function (r) { return r.key === SH.open; })[0];
+    if (op) {
+      var P0 = SH.prev[op.key];
+      if (!SH.rpcMissing && (!P0 || (!P0.loading && !P0.at))) shPrevLoad(op, true).then(again);   /* once; an older one is re-read when the row is opened again or by the queue */
+      var ons = shPlanOf(op).items.map(function (x) { return x.on; }), L = shLegs(op.company_id, ons);
+      if (ons.length && (!L || (!L.at && !L.loading))) shLegsLoad(op.company_id, ons).then(again);
+    }
+    shQueue();
   }
 }
 function shPaint(view) {
-  if (SH.email !== USER.email) { SH.email = USER.email; SH.closed = {}; SH.ev = { day: null, at: 0, map: {}, error: '', loading: null }; SH.hist = { key: '', at: 0, rows: null, error: '', loading: null }; SH.legs = {}; SH.prev = {}; SH.rpcMissing = false; SH.open = null; SH.caseOpen = null; SH.review = null; SH.close = null; }
-  if (!SH.day) SH.day = tbToday();
+  if (SH.email !== USER.email) { SH.email = USER.email; SH.cw = {}; SH.wv = {}; SH.ev = {}; SH.hist = { key: '', at: 0, rows: null, error: '', loading: null }; SH.miss = { key: '', at: 0, rows: null, error: '', loading: null }; SH.legs = {}; SH.prev = {}; SH.rpcMissing = false; SH.open = null; SH.drv = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.qgen++; }
+  shRoll();
   if (!SH.hto) { SH.hto = tbToday(); SH.hfrom = uAddDays(SH.hto, -21); }
-  var cos = U.cos || MGI.cos || [], tab = SH.tab, T = function (k, icon, t, id, stat) { return '<button type="button" class="u-tab" data-u-tab="' + k + '" aria-pressed="' + (tab === k) + '">' + ic(icon) + '<strong>' + t + '</strong><small' + (id ? ' id="' + id + '"' : '') + '>' + (stat || '') + '</small></button>'; };
-  var b = shBodyHtml();
+  var cos = U.cos || MGI.cos || [], v = SH.view, c = shCounts(), b = shBodyHtml();
+  var T = function (k, icon, label) { return '<button type="button" class="u-s2-tile" data-u-view="' + k + '" role="tab" aria-selected="' + (v === k) + '">' + ic(icon) + '<span class="u-s2-tlabel">' + label + '</span><small id="u-sh-c-' + k + '">' + h(shTileSub(k, c)) + '</small></button>'; };
   view.innerHTML = '<div class="u-page" id="u-shifts">' + mobileSub() +
-    '<div class="u-head"><div><h1>ცვლები</h1><p class="u-sub">დახურვები და მენეჯერის პასუხის მომლოდინე ახსნები</p></div><span class="u-date">ყველა კომპანია · გეგმის დღე ' + h(uDay(shTday())) + '</span></div>' +
-    '<div class="u-tabs" role="group" aria-label="ცვლების ხედები">' + T('closed', 'calendar-check-2', 'დახურული ცვლები', 'u-sh-c-closed', h(b.counts.closed)) + T('open', 'calendar-clock', 'დასახური ცვლები', 'u-sh-c-open', h(b.counts.open)) + T('pending', 'message-square-text', 'პასუხის მოლოდინში', 'u-sh-c-pending', h(b.counts.pending)) + T('history', 'history', 'ისტორია', '', 'განხილული ახსნები') + '</div>' +
-    '<div class="u-filterbar"><label class="u-field" for="u-sh-co">კომპანია<select id="u-sh-co"><option value="ALL">ყველა კომპანია</option>' + cos.map(function (c) { return '<option value="' + h(c.company_id) + '"' + (SH.co === c.company_id ? ' selected' : '') + '>' + h(c.code) + '</option>'; }).join('') + '</select></label>' +
-    (tab === 'closed' ? '<div class="u-field u-fday"><label for="u-sh-day">დახურვის დღე · თბილისის</label><div class="u-daynav"><button type="button" class="u-iconbtn" data-u-dayshift="-1" aria-label="წინა დღე">' + ic('chevron-left') + '</button><input class="u-input" type="date" id="u-sh-day" value="' + h(SH.day) + '" max="' + h(tbToday()) + '"><button type="button" class="u-iconbtn" data-u-dayshift="1" aria-label="შემდეგი დღე"' + (SH.day >= tbToday() ? ' disabled' : '') + '>' + ic('chevron-right') + '</button></div></div>' : '') +
-    (tab === 'open' ? '<div class="u-field"><span>გეგმის დღე</span><span class="u-input" style="display:flex;align-items:center">' + h(uDay(shTday())) + '</span></div>' : '') +
-    (tab === 'history' ? '<label class="u-field" for="u-sh-from">თარიღიდან<input class="u-input" type="date" id="u-sh-from" value="' + h(SH.hfrom) + '" max="' + h(SH.hto) + '"></label><label class="u-field" for="u-sh-to">თარიღამდე<input class="u-input" type="date" id="u-sh-to" value="' + h(SH.hto) + '" min="' + h(SH.hfrom) + '" max="' + h(tbToday()) + '"></label><label class="u-field" for="u-sh-res">გადაწყვეტილება<select id="u-sh-res"><option value="all"' + (SH.hres === 'all' ? ' selected' : '') + '>ყველა</option><option value="approved"' + (SH.hres === 'approved' ? ' selected' : '') + '>დადასტურებული</option><option value="rejected"' + (SH.hres === 'rejected' ? ' selected' : '') + '>დაბრუნებული</option></select></label>' : '') +
-    '<button type="button" class="u-btn" data-u-reload title="მონაცემის განახლება">' + ic('refresh') + 'განახლება</button>' +
-    '<label class="u-search" for="u-sh-q">' + ic('search') + '<input id="u-sh-q" type="search" value="' + h(SH.q) + '" placeholder="' + (tab === 'closed' || tab === 'open' ? 'მოძებნე დისპეჩერი ან მძღოლი' : 'სახელი ან ტვირთის ნომერი') + '" aria-label="ცვლის ან ახსნის მოძებნა"></label></div>' +
-    '<div class="u-listtitle"><h2 id="u-sh-title">' + h(b.title) + '</h2><span id="u-sh-count">' + h(b.count) + '</span></div><div id="u-sh-content">' + b.body + '</div></div>';
+    '<div class="u-s2-titlerow"><h1>ცვლები</h1><span class="u-s2-hours">08:00–08:00 · თბილისი</span></div>' +
+    '<div class="u-s2-tiles" role="tablist" aria-label="ცვლების ხედები">' + T('today', 'calendar-days', 'დღეს') + T('awaiting', 'message-square', 'პასუხის მოლოდინში') + T('history', 'history', 'ისტორია') + T('missed', 'calendar-x', 'ისტორია') + '</div>' +
+    '<div class="u-s2-tools"><select class="u-s2-select" id="u-sh-co" aria-label="კომპანია"><option value="ALL">ყველა კომპანია</option>' + cos.map(function (x) { return '<option value="' + h(x.company_id) + '"' + (SH.co === x.company_id ? ' selected' : '') + '>' + h(x.code) + '</option>'; }).join('') + '</select>' +
+    (v === 'today' ? '<div class="u-s2-filter" role="group" aria-label="ცვლის სტატუსი">' + [['all', 'ყველა'], ['open', 'დასახურია'], ['closed', 'დახურულია']].map(function (f) { return '<button type="button" data-u-st="' + f[0] + '" aria-pressed="' + (SH.st === f[0]) + '">' + f[1] + '</button>'; }).join('') + '</div>' : '') +
+    (v === 'history' ? '<label class="u-s2-dlab">თარიღიდან<input class="u-s2-select" type="date" id="u-sh-from" value="' + h(SH.hfrom) + '" max="' + h(SH.hto) + '"></label><label class="u-s2-dlab">თარიღამდე<input class="u-s2-select" type="date" id="u-sh-to" value="' + h(SH.hto) + '" min="' + h(SH.hfrom) + '" max="' + h(tbToday()) + '"></label><select class="u-s2-select" id="u-sh-res" aria-label="გადაწყვეტილება"><option value="all"' + (SH.hres === 'all' ? ' selected' : '') + '>ყველა</option><option value="approved"' + (SH.hres === 'approved' ? ' selected' : '') + '>დადასტურებული</option><option value="rejected"' + (SH.hres === 'rejected' ? ' selected' : '') + '>დაბრუნებული</option></select>' : '') +
+    '<button type="button" class="u-iconbtn u-s2-refresh" data-u-reload title="განახლება" aria-label="განახლება">' + ic('refresh') + '</button>' +
+    '<input class="u-s2-search" id="u-sh-q" type="search" value="' + h(SH.q) + '" placeholder="' + (v === 'today' || v === 'missed' ? 'მოძებნე დისპეჩერი…' : 'სახელი ან ტვირთის ნომერი…') + '" aria-label="ძებნა"></div>' +
+    '<div class="u-s2-sechead"><h3><span id="u-sh-title">' + h(b.title) + '</span><span id="u-sh-nav">' + shNavHtml() + '</span></h3><p class="u-s2-count" id="u-sh-count" aria-live="polite">' + h(b.count) + '</p></div><div id="u-sh-content">' + b.body + '</div></div>';
   shEnsure();
 }
 function shFocus(id) { setTimeout(function () { var e = document.getElementById(id); if (e) { try { e.focus({ preventScroll: false }); e.scrollIntoView({ block: 'nearest' }); } catch (x) {} } }, 0); }
@@ -12946,31 +13339,36 @@ PAGES.shifts = {
   paint: shPaint,
   editing: function () { return !!(SH.close && SH.close.phase === 'busy') || !!(SH.review && SH.review.busy); },
   refresh: function (manual, current) {
-    if (manual) { SH.rpcMissing = false; SH.prev = {}; SH.legs = {}; }                 /* evaluations are re-read only on request; each one shows its time */
-    return current ? shReload(true) : null;
+    shRoll();
+    if (manual) { SH.rpcMissing = false; SH.prev = {}; SH.legs = {}; SH.qgen++; }   /* evaluations are re-read only on request; each one shows its time */
+    return current ? shReload(true, manual) : null;
   },
   click: function (e, el) {
     var a;
-    if ((a = el.closest('[data-u-tab]'))) { SH.tab = a.getAttribute('data-u-tab'); SH.open = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; return render(); }
-    if ((a = el.closest('[data-u-dayshift]'))) { var n = uAddDays(SH.day, Number(a.getAttribute('data-u-dayshift'))); if (n <= tbToday()) { SH.day = n; SH.open = null; render(); } return; }
-    if ((a = el.closest('[data-u-reload]'))) { feedback('მონაცემი ახლდება…'); SH.prev = {}; SH.legs = {}; SH.rpcMissing = false; return Promise.all([uLoad(true), mgiLoad_(true)]).then(function () { return shReload(true); }).then(function () { feedback(U.error || MGI.error ? 'განახლება ვერ დასრულდა.' : 'განახლდა.', !!(U.error || MGI.error)); render(); });
-    }
-    if ((a = el.closest('[data-u-shift]'))) { var k = a.getAttribute('data-u-shift'); SH.open = SH.open === k ? null : k; SH.close = null; return render(); }
-    if ((a = el.closest('[data-u-legs]'))) { SH.legs = {}; return render(); }
+    if ((a = el.closest('[data-u-view]'))) { SH.view = a.getAttribute('data-u-view'); SH.open = null; SH.drv = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; return render(); }
+    if ((a = el.closest('[data-u-st]'))) { SH.st = a.getAttribute('data-u-st'); SH.open = null; SH.drv = null; SH.close = null; return render(); }
+    if ((a = el.closest('[data-u-dayshift]'))) { var n = uAddDays(shRd(), Number(a.getAttribute('data-u-dayshift'))), cur = shCurRd(); if (n <= cur) { SH.rd = n === cur ? null : n; SH.open = null; SH.drv = null; SH.close = null; render(); } return; }
+    if ((a = el.closest('[data-u-reload]'))) { feedback('მონაცემი ახლდება…'); SH.prev = {}; SH.legs = {}; SH.rpcMissing = false; SH.qgen++; return Promise.all([uLoad(true), mgiLoad_(true)]).then(function () { return shReload(true, true); }).then(function () { feedback(U.error || MGI.error ? 'განახლება ვერ დასრულდა.' : 'განახლდა.', !!(U.error || MGI.error)); render(); }); }
+    if ((a = el.closest('[data-u-shift]'))) { var k = a.getAttribute('data-u-shift'); SH.open = SH.open === k ? null : k; SH.drv = null; SH.close = null;
+      var Pk = SH.prev[k], rk0 = SH.open ? shOpenRows().filter(function (r) { return r.key === k; })[0] : null;   /* re-opening an older evaluation reads it again once */
+      if (rk0 && Pk && Pk.at && !Pk.loading && Date.now() - Pk.at > SH_REOPEN_MS) shPrevLoad(rk0, true).then(function () { if (MTAB === 'shifts') { shPaintBody(); shEnsure(); } });
+      return render(); }
+    if ((a = el.closest('[data-u-drv]'))) { var dk = a.getAttribute('data-u-drv'); SH.drv = SH.drv === dk ? null : dk; shPaintBody(); return; }
     if ((a = el.closest('[data-u-recheck]'))) { var rk = a.getAttribute('data-u-recheck'), row = shOpenRows().filter(function (r) { return r.key === rk; })[0]; if (row) { SH.legs = {}; shPrevLoad(row, true).then(function () { if (MTAB === 'shifts') { shPaintBody(); shEnsure(); } }); shPaintBody(); } return; }
     if ((a = el.closest('[data-u-close]'))) { if (!shMayClose()) return; var ck = a.getAttribute('data-u-close'), r2 = shOpenRows().filter(function (r) { return r.key === ck; })[0]; if (!r2) return; SH.close = { key: ck, phase: 'ask', orders: shPlanOf(r2).items.map(function (x) { return x.on; }) }; shPaintBody(); return shFocus('u-close-panel'); }
     if (el.closest('[data-u-close-cancel]')) { if (SH.close && SH.close.phase === 'busy') return; SH.close = null; return shPaintBody(); }
     if ((a = el.closest('[data-u-close-go]'))) return shDoClose(a.getAttribute('data-u-close-go'));
-    if ((a = el.closest('[data-u-case-jump]'))) { SH.tab = 'pending'; SH.caseOpen = a.getAttribute('data-u-case-jump'); SH.open = null; SH.close = null; SH.q = ''; return render(); }
+    if ((a = el.closest('[data-u-case-jump]'))) { SH.view = 'awaiting'; SH.caseOpen = a.getAttribute('data-u-case-jump'); SH.open = null; SH.close = null; SH.q = ''; return render(); }
     if ((a = el.closest('[data-u-case]'))) { var id = a.getAttribute('data-u-case'); SH.caseOpen = SH.caseOpen === id ? null : id; SH.review = null; return shPaintBody(); }
     if ((a = el.closest('[data-u-probe]'))) { var w = (MGI.waivers || []).filter(function (x) { return x.id === a.getAttribute('data-u-probe'); })[0]; if (w) { shLegsLoad(w.company_id, [w.order_number], true).then(function () { if (MTAB === 'shifts') shPaintBody(); }); shPaintBody(); } return; }
     if ((a = el.closest('[data-u-review]'))) { SH.review = { id: SH.caseOpen, action: a.getAttribute('data-u-review'), note: '', err: '', busy: false }; shPaintBody(); return shFocus(SH.review.action === 'return' ? 'u-review-note' : 'u-review-panel'); }
     if (el.closest('[data-u-review-cancel]')) { if (SH.review && SH.review.busy) return; SH.review = null; return shPaintBody(); }
-    if (el.closest('[data-u-review-go]')) return shDecide();
+    if (el.closest('[data-u-review-go]')) { var rw = SH.review && (MGI.waivers || []).filter(function (x) { return x.id === SH.review.id; })[0];   /* after a decision: that shift's evaluation and approvals are read again */
+      return Promise.resolve(shDecide()).then(function () { if (!rw) return; delete SH.prev[shKey(rw.company_id, rw.dispatcher_name, rw.work_day)]; if (SH.wv[rw.work_day]) SH.wv[rw.work_day].at = 0; if (MTAB === 'shifts') render(); }); }
   },
   change: function (e, el) {
-    if (el.id === 'u-sh-co') { SH.co = el.value; SH.open = null; SH.caseOpen = null; SH.review = null; SH.close = null; return render(); }
-    if (el.id === 'u-sh-day') { if (/^\d{4}-\d{2}-\d{2}$/.test(el.value) && el.value <= tbToday()) { SH.day = el.value; SH.open = null; render(); } return; }
+    if (el.id === 'u-sh-day') { var dv = el.value, cu = shCurRd(); if (/^\d{4}-\d{2}-\d{2}$/.test(dv)) { SH.rd = dv >= cu ? null : dv; SH.open = null; SH.drv = null; SH.close = null; render(); } return; }
+    if (el.id === 'u-sh-co') { SH.co = el.value; SH.open = null; SH.drv = null; SH.caseOpen = null; SH.review = null; SH.close = null; return render(); }
     if (el.id === 'u-sh-from' || el.id === 'u-sh-to') { if (/^\d{4}-\d{2}-\d{2}$/.test(el.value)) { if (el.id === 'u-sh-from') SH.hfrom = el.value; else SH.hto = el.value; if (SH.hfrom > SH.hto) SH.hfrom = SH.hto; SH.caseOpen = null; render(); } return; }
     if (el.id === 'u-sh-res') { SH.hres = el.value; SH.caseOpen = null; return shPaintBody(); }
   },
@@ -12978,8 +13376,17 @@ PAGES.shifts = {
     if (el.id === 'u-sh-q') { SH.q = el.value; return shPaintBody(); }
     if (el.id === 'u-review-note' && SH.review) { SH.review.note = el.value; SH.review.err = ''; }
   },
-  key: function (e) { if (e.key === 'Escape') { if (SH.close && SH.close.phase !== 'busy') { SH.close = null; shPaintBody(); } else if (SH.review && !SH.review.busy && !String(SH.review.note || '').trim()) { SH.review = null; shPaintBody(); } } }   /* a typed note is never thrown away by Escape */
+  key: function (e) {
+    if (e.key === 'Escape') { if (SH.close && SH.close.phase !== 'busy') { SH.close = null; shPaintBody(); } else if (SH.review && !SH.review.busy && !String(SH.review.note || '').trim()) { SH.review = null; shPaintBody(); } }   /* a typed note is never thrown away by Escape */
+    var t = e.target; if (t && t.closest && t.closest('.u-s2-tiles') && ['ArrowRight', 'ArrowLeft', 'Home', 'End'].indexOf(e.key) >= 0) {
+      var tabs = [].slice.call(document.querySelectorAll('.u-s2-tiles [data-u-view]')), i = tabs.indexOf(document.activeElement); if (i < 0) return; e.preventDefault();
+      var n = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length; var nv = tabs[n].getAttribute('data-u-view');
+      SH.view = nv; SH.open = null; SH.drv = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; render(); var f = document.querySelector('.u-s2-tiles [data-u-view="' + nv + '"]'); if (f) f.focus();
+    }
+  }
 };
+/* local test harness only (config mode 'test'; never in production) */
+if (window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test') window.UIM_SH = { SH: SH, MGI: MGI, shOpenRows: shOpenRows, shPaintBody: shPaintBody, shEnsure: shEnsure, shWd: shWd, shTday: shTday, shRptDay: shRptDay, shWdLabel: shWdLabel, shItems: shItems, shTodayRows: shTodayRows, shPlanOf: shPlanOf };
 
 /* ---- HOME: every driver of every permitted company, idle first. Read-only. Values come from the all-company store only. ----
    Status = the app's existing building blocks: registry "active", an "off" period for the work day (rest; repair when its reason
@@ -13240,10 +13647,12 @@ function hmGridHtml(all) {
   return { html: html, n: on.length, cur: on.length + dorm.length, unreg: on.concat(dorm).filter(function (x) { return x.d._unreg; }).length };
 }
 function hmShiftsHtml() {
-  var today = tbToday(), C = SH.closed[today], cn = C && C.rows ? C.rows.length : null, on = mgiReady_() && uReady() ? shOpenRows().length : null, pn = pendingCount();
-  if (uReady() && (!C || (!C.rows && !C.error && !C.loading))) shClosedLoad(today).then(function () { if (MTAB === 'overview' && uiActive()) { var e = document.getElementById('u-hm-shifts'); if (e) e.outerHTML = hmShiftsHtml(); } });
+  /* DOS-SHIFTS-UI-20261117: the same reporting workday and counts as the Shifts page's Today tile (08:00–08:00 Tbilisi) */
+  var td = shTday(), C = SH.cw[td], on = null, cn = null, pn = pendingCount();
+  if (uReady() && (!C || (!C.at && !C.loading))) shCwLoad(td).then(function () { if (MTAB === 'overview' && uiActive()) { var e = document.getElementById('u-hm-shifts'); if (e) e.outerHTML = hmShiftsHtml(); } });
+  var T = shTodayRowsFor(td); if (T.rows) { on = T.rows.filter(function (r) { return !r.closed; }).length; cn = T.rows.length - on; }
   var B = function (tab, icon, n, label) { return '<button type="button" class="u-btn" data-u-route="shifts" data-u-jump="' + tab + '">' + ic(icon) + (n == null ? '…' : n) + ' ' + label + '</button>'; };
-  return '<div class="u-homeshifts" id="u-hm-shifts"><div><h2>ცვლების მიმოხილვა</h2><p>' + h(uDay(today)) + ' · ყველა კომპანია · გეგმის დღე ' + h(uDay(shTday())) + '</p></div><div class="u-btns">' + B('closed', 'calendar-check-2', cn, 'დახურული ცვლა') + B('open', 'calendar-clock', on, 'დასახური ცვლა') + B('pending', 'message-square-text', pn, 'პასუხის მოლოდინში') + '</div></div>';
+  return '<div class="u-homeshifts" id="u-hm-shifts"><div><h2>ცვლების მიმოხილვა</h2><p>' + h(uDay(shCurRd())) + ' · ყველა კომპანია · გეგმის დღე ' + h(uDay(td)) + '</p></div><div class="u-btns">' + B('closed', 'calendar-check-2', cn, 'დახურული ცვლა') + B('open', 'calendar-clock', on, 'დასახური ცვლა') + B('pending', 'message-square-text', pn, 'პასუხის მოლოდინში') + '</div></div>';
 }
 function hmFlip(id) {
   HM.flip = id;
@@ -13277,7 +13686,7 @@ PAGES.overview = {
   input: function (e, el) { if (el.id === 'u-hm-q') { HM.q = el.value; HM.flip = null; document.getElementById('u-hm-grid').innerHTML = hmGridHtml(hmDrivers()).html; } },
   key: function (e) { if (e.key === 'Escape' && HM.flip) { var id = HM.flip; hmFlip(null); var f = document.querySelector('#u-home [data-u-card="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"] .u-front'); if (f) f.focus(); } }
 };
-PAGES.shifts.jump = function (tab) { if (['closed', 'open', 'pending', 'history'].indexOf(tab) >= 0) { SH.tab = tab; SH.open = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; if (tab === 'closed') SH.day = tbToday(); } };
+PAGES.shifts.jump = function (tab) { var m = { closed: ['today', 'closed'], open: ['today', 'open'], today: ['today', 'all'], pending: ['awaiting', 'all'], history: ['history', 'all'], missed: ['missed', 'all'] }[tab]; if (m) { SH.view = m[0]; SH.st = m[1]; SH.rd = null; SH.open = null; SH.drv = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; } };
 
 /* ---- tasks store: the additive table public.mgmt_task (Calendar tasks and driver follow-ups). The table is installed by a
    separate, owner-run SQL file; until then every reader/writer here reports "storage not installed" - nothing is kept in the
