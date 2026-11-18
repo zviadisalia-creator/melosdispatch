@@ -12286,7 +12286,7 @@ function feedback(msg, isErr) {
 
 /* ---- the all-company store. Never touches LIVE or any single-company cache of the app. ---- */
 var U = { email: null, gen: 0, mut: 0, sync: 0, loading: null, loadedAt: 0, error: '', cos: null, ids: [], drivers: [], assign: [], loads: [], plans: [], people: [], by: {} };
-var U_COLS = (typeof LOAD_COLS_ === 'string' ? LOAD_COLS_ : '*') + ',company_id,is_canceled';
+var U_COLS = (typeof LOAD_COLS_ === 'string' ? LOAD_COLS_ : '*') + ',company_id,is_canceled,internal_load_id';
 function uReset() { U.gen++; U.email = USER ? USER.email : null; U.loading = null; U.loadedAt = 0; U.error = ''; U.cos = null; U.ids = []; U.drivers = []; U.assign = []; U.loads = []; U.plans = []; U.people = []; U.by = {}; U._mem = null; }
 function uReady() { return !!(U.loadedAt && U.cos && U.email === (USER && USER.email)); }
 /* A confirmed local write (a save this page made and the server accepted). Any read that started before it may hold older
@@ -12340,8 +12340,16 @@ function uLoad(force) {
       got[1].forEach(function (a) { var B = by[a.company_id]; if (B) B.assign.push(a); });
       got[3].forEach(function (p) { var B = by[p.company_id]; if (B) B.plans.push(p); });
       var raw = {}; got[2].forEach(function (l) { (raw[l.company_id] = raw[l.company_id] || []).push(l); });
+      var homeTrips = await Promise.all(ids.map(function (id) { return hmReadTrips(id, raw[id] || []); }));
+      if (!current()) return;
+      if (U.mut !== mut) { again = true; return; }
       var all = [];
       cos.forEach(function (c) { var B = by[c.company_id]; B.loads = uPrepLoads(raw[c.company_id] || [], onKey_, dupScore_, dupSame_); B.loads.forEach(function (l) { B.load[l.order_number] = l; }); all = all.concat(B.loads); });
+      cos.forEach(function (c, i) {
+        var B = by[c.company_id], trips = homeTrips[i];
+        B.homeError = trips.error;
+        B.homeLoads = hmTripLoads(B.loads, raw[c.company_id] || [], trips);
+      });
       U.cos = cos; U.ids = ids; U.by = by; U.drivers = got[0]; U.assign = got[1]; U.plans = got[3]; U.loads = all; U.people = got[4].data || [];
       U.loadedAt = Date.now(); U.error = ''; U._mem = null;
     } catch (e) {
@@ -13467,11 +13475,63 @@ if (window.DISPATCH_OS_CONFIG && window.DISPATCH_OS_CONFIG.mode === 'test') wind
    driver who is current in another company is that driver's history - it is not a card here (the Drivers board lists it).
    Switched-off rows of drivers with no current company are folded into one group, one entry per name. */
 var HM = { q: '', flip: null, off: false, dorm: false };
+/* Only the picked-up trips need source details. Keep the shared plan, history and financial rows intact. */
+async function hmReadTrips(co, loads) {
+  var result = { source: new Map(), names: new Map() };
+  if (!loads.some(function (l) { return l.status === 'picked_up' && !l.is_canceled; })) return result;
+  try {
+    var cols = 'order_number,trip:raw->>internal_load_id,driver:raw->>driver_id_sd,pickup:raw->>pickup_completed';
+    var reads = await Promise.all([
+      selAll_(function () {
+        return sb.from('loads').select(cols).eq('company_id', co).is('deleted_at', null).eq('status', 'picked_up')
+          .contains('raw', { status: 'picked_up', is_canceled: false, delivery_completed: null });
+      }, ['order_number']),
+      sb.rpc('sd_directory_v1', { p_company_id: co })
+    ]);
+    var dir = reads[1];
+    if (dir.error) throw dir.error;
+    if (!dir.data || dir.data.company_id !== co) throw new Error('SD directory company mismatch');
+    if (!dir.data.verified) return result;
+    (dir.data.drivers || []).forEach(function (d) {
+      var row = d.link && d.link.row;
+      if (row && row.active && row.name) result.names.set(String(d.driver_id_sd), row.name);
+    });
+    reads[0].forEach(function (s) { result.source.set(s.order_number, s); });
+  } catch (e) { result.error = true; console.error('Home current trips', e); }
+  return result;
+}
+function hmTripLoads(kept, rows, trips) {
+  if (!trips.source.size) return kept;
+  var visible = new Set(kept), extra = [], replacements = new Map(), used = new Set();
+  var byNumber = new Map();
+  kept.forEach(function (l) {
+    var key = onKey_(l.order_number);
+    if (!byNumber.has(key)) byNumber.set(key, []);
+    byNumber.get(key).push(l);
+    if (l.internal_load_id) used.add(String(l.internal_load_id));
+  });
+  rows.forEach(function (l) {
+    var s = trips.source.get(l.order_number), driver = s && trips.names.get(String(s.driver));
+    if (!driver || !s.trip || !s.driver || l.is_canceled || l.status !== 'picked_up' ||
+        String(l.internal_load_id) !== s.trip || String(l.driver_id_sd) !== s.driver ||
+        uMs(l.pickup_completed) !== uMs(s.pickup)) return;
+    /* The source explicitly has no delivery. Discard an inherited end only if it predates this pickup. */
+    if (l.delivery_completed && !(uMs(l.delivery_completed) < uMs(s.pickup))) return;
+    var display = Object.assign({}, l, { driver_name: driver, delivery_completed: null });
+    if (visible.has(l)) { replacements.set(l, display); return; }
+    /* The legacy display-number dedupe can hide a different SD trip. Only restore proven distinct trips. */
+    var others = byNumber.get(onKey_(l.order_number)) || [];
+    if (others.length && others.every(function (r) { return r.internal_load_id && String(r.internal_load_id) !== s.trip; }) && !used.has(s.trip)) {
+      used.add(s.trip); extra.push(display);
+    }
+  });
+  return kept.map(function (l) { return replacements.get(l) || l; }).concat(extra);
+}
 function hmDrivers() {
   var today = workToday_(), mon = mondayOf(today) || today, sun = addDays_(mon, 6), d30 = addDays_(today, -30), out = [], now = Date.now(), gone = {}, pc = {};
   (U.cos || []).forEach(function (c) {
     var B = U.by[c.company_id], by = {};
-    B.loads.forEach(function (l) { if (l.is_canceled || !l.driver_name) return; (by[l.driver_name] = by[l.driver_name] || []).push(l); });
+    (B.homeLoads || B.loads).forEach(function (l) { if (l.is_canceled || !l.driver_name) return; (by[l.driver_name] = by[l.driver_name] || []).push(l); });
     var names = {}; B.drivers.forEach(function (d) { names[d.name] = d; });
     Object.keys(by).forEach(function (n) { if (!names[n] && by[n].some(function (l) { return l.status === 'picked_up' || l.status === 'new'; })) names[n] = { name: n, company_id: c.company_id, dispatcher_name: null, cap: null, active: true, _unreg: true }; });
     Object.keys(names).forEach(function (n) {
@@ -13735,6 +13795,8 @@ PAGES.overview = {
   paint: function (view) {
     var st = uStateHtml(), all = uReady() ? hmDrivers() : [], act = all.filter(function (x) { return uScopeIn(x.co) && x.kind !== 'off' && x.kind !== 'dormant'; });
     var g = uReady() ? hmGridHtml(all) : { html: '', n: 0, cur: 0, unreg: 0 };
+    var missing = (U.cos || []).filter(function (c) { return uScopeIn(c.company_id) && U.by[c.company_id].homeError; });
+    if (missing.length) st += '<p class="u-note" role="status">' + h(missing.map(function (c) { return c.code; }).join(', ')) + ' · მიმდინარე რეისები ვერ გადამოწმდა. მძღოლის სტატუსი შეიძლება მოძველებული იყოს. განაახლეთ გვერდი.</p>';
     view.innerHTML = '<div class="u-page" id="u-home"><h1 class="h-sr">მთავარი</h1>' + st +
       (uReady() ? hmSummaryHtml(act) +
         '<div class="u-toolbar"><label class="u-search" for="u-hm-q">' + ic('search') + '<input id="u-hm-q" type="search" value="' + h(HM.q) + '" placeholder="მოძებნე მძღოლი" aria-label="მოძებნე მძღოლი"></label>' + uScopeSelect('u-hm-co') +
