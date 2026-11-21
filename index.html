@@ -1136,6 +1136,7 @@ async function critCycle_(opts){
   res.forEach(function(r){ if(seqs[r.n]>(CRIT_DONE[r.n]||0)){ critCommit_(r.n, r.v, seqs[r.n], co); CRIT_DONE[r.n]=seqs[r.n]; } });
   if(names.indexOf('drivers')>=0){ SYNC.base=co; SYNC.drvAt=Date.now(); }
   SYNC.co=co; SYNC.have=true;
+  try{ sdxAfterCycle_(co, g); }catch(e){ console.error(e); }   /* DOS-NOVA-SCREEN-CUTOVER: NOVA only, after the commit, never part of it */
   if(opts.contacts===false) return {ok:true, committed:true, co:co, g:g};
   await loadPlanContacts();                                   /* depends on the committed plan */
   /* P0-R2 (A1): the refresh path reads contacts once more in its outer wrapper;
@@ -3290,8 +3291,110 @@ function docMine_(l){
 }
 function docLoads_(){ return (LIVE||[]).filter(docMine_); }
 
+/* ---- DOS-NOVA-SCREEN-CUTOVER-20261121: NOVA trips from the direct SD reader, applied ONLY to the on-road / board / Home
+   driver-card views (boardDrivers_, hmDrivers). The server decides everything: the switch (sd_screen_switch, default off) and
+   who may see which trip (sd_trip_screen_v1). The page asks only for NOVA and never under view-as; any other answer (off,
+   refused, unreadable, stale) leaves today's path untouched. A separate store: LIVE / U rows are never changed - overlayLoads_
+   returns new objects. Absence or an unverified reader state never removes or downgrades a legacy row; only a close the
+   reader confirmed by id closes one. Shift Close, search, Refresh, plans and money keep reading the legacy rows. ---- */
+var SDX={by:{}, run:{}};
+var SDX_MAX_AGE=600000, SDX_STALE=2700000, SDX_MIN_GAP=60000;   /* answer older than 10 min / reader scan older than 45 min: not used */
+function sdxGate_(code){ return code==='NOVA' && !VIEWAS && !!USER; }
+function sdxCodeOf_(co){ var c=(COLIST||[]).filter(function(x){ return x.company_id===co; })[0]; return c?c.code:''; }
+function sdxFor_(co){
+  if(!co || !sdxGate_(sdxCodeOf_(co))) return null;
+  var X=SDX.by[co];
+  if(!X || !X.data || X.data.enabled!==true || X.data.company_id!==co || !Array.isArray(X.data.trips)) return null;
+  if(Date.now()-X.at>SDX_MAX_AGE) return null;
+  var g=Date.parse(X.data.generated_at||''), s=Date.parse((X.data.freshness&&X.data.freshness.last_bounded_scan_at)||'');
+  if(!isFinite(g) || !isFinite(s) || g-s>SDX_STALE) return null;
+  return X;
+}
+function sdxRefresh_(co, force){
+  if(!co || !sdxGate_(sdxCodeOf_(co))) return Promise.resolve(null);
+  var X=SDX.by[co];
+  if(!force && X && Date.now()-X.at<SDX_MIN_GAP) return Promise.resolve(X);
+  if(SDX.run[co]) return SDX.run[co];
+  var email=USER.email;
+  var p=(async function(){
+    try{
+      var r=await sb.rpc('sd_trip_screen_v1', {p_company_id:co});
+      if(!USER || USER.email!==email || VIEWAS) return null;
+      var d=(r && !r.error) ? r.data : null;
+      if(d && d.enabled===true && d.company_id===co && Array.isArray(d.trips)) SDX.by[co]={data:d, at:Date.now()};
+      else delete SDX.by[co];                                   /* off, refused or unreadable: today's path */
+      if(r && r.error) console.error('SD screen', r.error);
+    }catch(e){ console.error('SD screen', e); delete SDX.by[co]; }
+    finally{ delete SDX.run[co]; }
+    return SDX.by[co]||null;
+  })();
+  SDX.run[co]=p;
+  return p;
+}
+function sdxAfterCycle_(co, g){
+  if(!sdxGate_(sdxCodeOf_(co))) return;
+  var was=SDX.by[co]?SDX.by[co].data:null;
+  sdxRefresh_(co).then(function(X){
+    if(g!==SYNC.gen || co!==COID() || (X?X.data:null)===was) return;
+    var on=(ROLE==='disp' && TAB==='liveboard') || (ROLE==='mgmt' && (MTAB==='liveboard' || MTAB==='exceptions'));
+    if(on && !viewTyping_()){ try{ render(); }catch(e){ console.error(e); } }
+  });
+}
+function sdxFields_(t, row){
+  var same=!!(row && row.driver_id_sd!=null && t.driver_id_sd!=null && String(row.driver_id_sd)===String(t.driver_id_sd));
+  return {status:t.status, is_canceled:t.is_canceled===true, driver_id_sd:t.driver_id_sd==null?null:String(t.driver_id_sd),
+    driver_name:t.driver_linked===true ? t.driver_name : (same ? row.driver_name : null),
+    dispatcher_name:t.dispatcher!=null ? t.dispatcher : (row ? row.dispatcher_name : null),
+    pickup_scheduled:t.pickup_scheduled||null, pickup_completed:t.pickup_completed||null,
+    delivery_scheduled:t.delivery_scheduled||null, delivery_completed:t.delivery_completed||null};
+}
+/* a trip the legacy list does not hold: the minimal card (visible number, SD id, driver, status, dates; details from SD pending) */
+function sdxMinimal_(t, co){
+  return {order_number:t.order_number, internal_load_id:String(t.sd_order_id), company_id:co, pickup_week:String(t.pickup_scheduled||t.pickup_completed||'').slice(0,10)||null,
+    pickup_location:'', delivery_location:'', vehicle:'', customer:'', vehicle_count:1};
+}
+/* precedence (SPEC): CONFIRMED_OPEN -> reader identity / driver / status / times over the legacy row (details kept), or a minimal
+   item when the list has no row; CLOSED -> applied only when closed by id; UNVERIFIED_OPEN / CLOSE_PENDING -> the legacy row
+   unchanged (flag only); a trip the reader does not have -> the legacy row unchanged. Other live rows of a confirmed SD id
+   (stale duplicates) are left out of THIS view only. Every item carries the SD id as identity (_sdk), never merged by number. */
+function overlayLoads_(list, X){
+  if(!X || !X.data || !Array.isArray(X.data.trips) || !X.data.trips.length) return list;
+  var rows=list||[], byOn=new Map(), repl=new Map(), hide=new Set(), extra=[];
+  rows.forEach(function(l){ if(l && l.order_number!=null && !byOn.has(String(l.order_number))) byOn.set(String(l.order_number), l); });
+  X.data.trips.forEach(function(t){
+    if(!t || t.sd_order_id==null) return;
+    var id=String(t.sd_order_id), row=t.legacy_order_number!=null ? (byOn.get(String(t.legacy_order_number))||null) : null;
+    if(row && row.internal_load_id!=null && String(row.internal_load_id)!==id) row=null;
+    if(row && repl.has(row)) row=null;
+    var tag={_sdk:'sd:'+id, _sd:{src:'sd', id:id, state:t.state, last_confirmed_at:t.last_confirmed_at||null, reader_only:!row,
+      legacy_deleted:t.legacy_deleted===true, linked:t.driver_linked===true}};
+    var others=Array.isArray(t.legacy_other_order_numbers) ? t.legacy_other_order_numbers : [];
+    if(t.state==='CONFIRMED_OPEN'){
+      if(row){ repl.set(row, Object.assign({}, row, sdxFields_(t, row), tag)); others.forEach(function(on){ hide.add(String(on)); }); }
+      else extra.push(Object.assign(sdxMinimal_(t, X.data.company_id), sdxFields_(t, null), tag));
+    } else if(t.state==='CLOSED'){
+      if(row && t.close_by_id===true){ repl.set(row, Object.assign({}, row, sdxFields_(t, row), tag)); others.forEach(function(on){ hide.add(String(on)); }); }
+    } else if(row && (t.state==='UNVERIFIED_OPEN' || t.state==='CLOSE_PENDING')){
+      repl.set(row, Object.assign({}, row, tag));
+    }
+  });
+  var out=[];
+  rows.forEach(function(l){ if(repl.has(l)) out.push(repl.get(l)); else if(!(l && hide.has(String(l.order_number)))) out.push(l); });
+  return out.concat(extra);
+}
+function sdxBoard_(list){ var X=sdxFor_(COID()); return X ? overlayLoads_(list, X) : list; }
+function sdxHome_(co, list){ var X=sdxFor_(co); return X ? overlayLoads_(list, X) : list; }
+/* small badges: "SD" (from the reader), "not re-confirmed" (reader unverified / close pending: last known state shown) */
+function sdxChip_(l, mgmt){
+  var m=l && l._sd; if(!m) return '';
+  var unv=m.state==='UNVERIFIED_OPEN' || m.state==='CLOSE_PENDING', s=" style='padding:0 6px;font-size:10px'";
+  return " <span class='chip"+(unv?" y":"")+"'"+s+" title='"+(unv?'Super Dispatch-ის პირდაპირმა წაკითხვამ ეს რეისი ბოლო სრულ შემოწმებაში ვერ დაადასტურა — ნაჩვენებია ბოლო ცნობილი მდგომარეობა':'სტატუსი და მძღოლი — პირდაპირ Super Dispatch-იდან')+"'>"+(unv?'SD · ხელახლა არ დადასტურდა':'SD')+"</span>"+
+    (m.reader_only?" <span class='chip'"+s+">დეტალები SD-იდან მოლოდინშია</span>":"")+
+    (mgmt && m.legacy_deleted?" <span class='chip y'"+s+">ძველ სიაში წაშლილია</span>":"");
+}
+
 function boardDrivers_(){
-  var L=LIVE||[];
+  var L=sdxBoard_(LIVE||[]);
   var byDrv={};
   L.forEach(function(r){
     if(!r.driver_id_sd) return;
@@ -3332,7 +3435,7 @@ function rBoardLive(){
   B.loaded.sort(srt); B.next.sort(srt); B.idle.sort(srt);
   function card(d){
     var detail='';
-    var onc=function(l){ return `<span class='oid'>${esc(l.order_number)}</span> `; };
+    var onc=function(l){ return `<span class='oid'>${esc(l.order_number)}</span>${sdxChip_(l, isMgmtView())} `; };
     if(d.bucket==='loaded'){ var l=d.active[0]; detail=`<span class='load'>${onc(l)}<b>${esc(locShort(l.pickup_location))}</b> → ${esc(locShort(l.delivery_location))} · ${money(l.gross!=null?l.gross:l.price)}${l.vehicle_count>1?` · ${l.vehicle_count} მანქ.`:''}</span>`; }
     else if(d.bucket==='next'){ var n=d.active[0]; detail=`<span class='load'>${onc(n)}შემდეგი: <b>${esc(locShort(n.pickup_location))}</b> → ${esc(locShort(n.delivery_location))} · ${money(n.gross!=null?n.gross:n.price)}${n.vehicle_count>1?` · ${n.vehicle_count} მანქ.`:''}</span>`; }
     else { var del=d.loads.filter(function(l){ return l.status==='delivered'; }).length; detail=`<span class='load' style='color:var(--muted)'>აქტიური ტვირთი არ აქვს · ბოლო ტვირთი ${gd(d.last)} · სულ ${del} ჩაბარებული</span>`; }
@@ -12322,6 +12425,7 @@ function uLoad(force) {
       var allowed = Array.isArray(idr.data) ? idr.data : [];
       var cos = (COLIST || []).filter(function (c) { return allowed.indexOf(c.company_id) >= 0; }), ids = cos.map(function (c) { return c.company_id; });
       if (!ids.length) throw new Error('კომპანია არ არის ხელმისაწვდომი');
+      ids.forEach(function (id) { sdxHomeLoad_(id); });   /* DOS-NOVA-SCREEN-CUTOVER: NOVA only; a separate store, not awaited */
       var from = addDays_(workToday_(), -2);
       var got = await Promise.all([
         selAll_(function () { return sb.from('drivers').select('*').in('company_id', ids); }, ['company_id', 'name']),
@@ -13527,11 +13631,49 @@ function hmTripLoads(kept, rows, trips) {
   });
   return kept.map(function (l) { return replacements.get(l) || l; }).concat(extra);
 }
+/* DOS-NOVA-SCREEN-CUTOVER-20261121: the reader answer for Home (NOVA only, see overlayLoads_). Not part of the store read; Home is
+   painted again once it lands. The unresolved block is management-only (the server sends it only to management). */
+function sdxHomeLoad_(co) {
+  if (!sdxGate_(sdxCodeOf_(co))) return;
+  var was = SDX.by[co] ? SDX.by[co].data : null;
+  sdxRefresh_(co).then(function (X) {
+    if ((X ? X.data : null) === was || !uiActive() || MTAB !== 'overview' || !uReady()) return;
+    if (busyEditing() || selectOpen() || viewTyping_()) return;
+    try { render(); } catch (e) { console.error(e); }
+  });
+}
+function sdxCardTag_(x) {
+  var l = (x.picked || []).concat(x.next || []).filter(function (y) { return y && y._sd; })[0];
+  if (!l) return '';
+  var m = l._sd, unv = m.state === 'UNVERIFIED_OPEN' || m.state === 'CLOSE_PENDING';
+  return '<small title="' + h(unv ? 'Super Dispatch-ის პირდაპირმა წაკითხვამ ბოლო სრულ შემოწმებაში ვერ დაადასტურა — ნაჩვენებია ბოლო ცნობილი მდგომარეობა' : 'სტატუსი და მძღოლი — პირდაპირ Super Dispatch-იდან') + '">' +
+    (unv ? 'SD · ხელახლა არ დადასტურდა' : 'SD') + (m.reader_only ? ' · დეტალები მოლოდინშია' : '') + (m.legacy_deleted ? ' · ძველ სიაში წაშლილია' : '') + '</small>';
+}
+var SDX_WHY = { sd_driver_not_linked: 'SD-ის მძღოლი რეესტრს არ უკავშირდება', no_driver_in_sd: 'SD-ში მძღოლი მიბმული არ არის', not_reconfirmed: 'SD-ში ხელახლა არ დადასტურდა', close_pending: 'დახურვა SD-ში დასადასტურებელია' };
+function sdxUnresolvedHtml_() {
+  if (!uiActive()) return '';
+  var rows = [], notes = [];
+  (U.cos || []).forEach(function (c) {
+    if (!uScopeIn(c.company_id) || !sdxGate_(c.code)) return;
+    var X = sdxFor_(c.company_id), Y = SDX.by[c.company_id];
+    if (!X) { if (Y && Y.data && Y.data.enabled === true) notes.push(c.code); return; }
+    (X.data.unresolved || []).forEach(function (u) {
+      rows.push('<li><b>' + h(c.code) + ' · ' + h(u.order_number || '—') + '</b> · SD ' + h(u.sd_order_id) + ' · ' + h(u.sd_driver_name || (u.driver_id_sd ? 'SD ' + u.driver_id_sd : 'მძღოლი არ არის')) +
+        ' — ' + h(SDX_WHY[u.reason] || u.reason) + (u.legacy_deleted ? ' · ძველ სიაში წაშლილია' : u.legacy_order_number ? ' · ძველ სიაში: ' + h(u.legacy_order_number) : ' · ძველ სიაში არ არის') +
+        (u.last_confirmed_at ? ' · ბოლო ცნობა ' + h(uWhen(u.last_confirmed_at)) : '') + '</li>');
+    });
+  });
+  var o = notes.length ? '<p class="u-note" role="status">' + h(notes.join(', ')) + ' · SD-ის პირდაპირი წაკითხვა მოძველებულია — ნაჩვენებია ძველი სინქრონის მონაცემი.</p>' : '';
+  if (!rows.length) return o;
+  return o + '<details class="u-sdx" style="margin-top:14px"><summary><b>გადასაწყვეტი მიბმები · SD · ' + rows.length + '</b> — მხოლოდ მენეჯმენტს უჩანს</summary>' +
+    '<p class="u-note">ეს რეისები დისპეჩერის დაფაზე არ ჩანს, სანამ მძღოლი რეესტრს არ დაუკავშირდება ან SD რეისს ხელახლა არ დაადასტურებს.</p><ul style="margin:6px 0 0 18px;padding:0">' + rows.join('') + '</ul></details>';
+}
 function hmDrivers() {
   var today = workToday_(), mon = mondayOf(today) || today, sun = addDays_(mon, 6), d30 = addDays_(today, -30), out = [], now = Date.now(), gone = {}, pc = {};
   (U.cos || []).forEach(function (c) {
-    var B = U.by[c.company_id], by = {};
-    (B.homeLoads || B.loads).forEach(function (l) { if (l.is_canceled || !l.driver_name) return; (by[l.driver_name] = by[l.driver_name] || []).push(l); });
+    var B = U.by[c.company_id], by = {}, base = B.homeLoads || B.loads, view = sdxHome_(c.company_id, base), byM = by;   /* status: view; money: base */
+    view.forEach(function (l) { if (l.is_canceled || !l.driver_name) return; (by[l.driver_name] = by[l.driver_name] || []).push(l); });
+    if (view !== base) { byM = {}; base.forEach(function (l) { if (l.is_canceled || !l.driver_name) return; (byM[l.driver_name] = byM[l.driver_name] || []).push(l); }); }
     var names = {}; B.drivers.forEach(function (d) { names[d.name] = d; });
     Object.keys(by).forEach(function (n) { if (!names[n] && by[n].some(function (l) { return l.status === 'picked_up' || l.status === 'new'; })) names[n] = { name: n, company_id: c.company_id, dispatcher_name: null, cap: null, active: true, _unreg: true }; });
     Object.keys(names).forEach(function (n) {
@@ -13541,7 +13683,7 @@ function hmDrivers() {
       var picked = ls.filter(function (l) { return l.status === 'picked_up' && !l.delivery_completed; }), next = ls.filter(function (l) { return l.status === 'new'; });
       var lastDel = null, lastPu = ''; ls.forEach(function (l) { var t = uMs(l.delivery_completed), p = puDay_(l); if (isFinite(t) && (!lastDel || t > lastDel.t)) lastDel = { t: t, l: l }; if (p && p > lastPu) lastPu = p; });
       var kind = !act ? 'off' : off ? (uIsRepair(off) ? 'repair' : 'rest') : picked.length ? 'loaded' : next.length ? 'pickup' : (lastPu && lastPu >= d30) ? 'idle' : 'dormant';
-      var wk = ls.filter(function (l) { var p = puDay_(l); return p && p >= mon && p <= sun; }), m30 = ls.filter(function (l) { var p = puDay_(l); return p && p >= d30; });
+      var lm = byM[n] || [], wk = lm.filter(function (l) { var p = puDay_(l); return p && p >= mon && p <= sun; }), m30 = lm.filter(function (l) { var p = puDay_(l); return p && p >= d30; });
       var x = { id: c.company_id + '|' + n, co: c.company_id, code: c.code, codes: [c.code], name: n, d: d, kind: kind, off: off, picked: picked, next: next, lastDel: lastDel, lastPu: lastPu, idleMs: kind === 'idle' && lastDel ? now - lastDel.t : null,
         owner: uOwner(c.company_id, n, today) || d.dispatcher_name || '', wkGross: wk.reduce(function (s, l) { return s + grossOf_(l); }, 0), wkN: wk.length, wkCars: wk.reduce(function (s, l) { return s + cars_(l); }, 0), g30: m30.reduce(function (s, l) { return s + grossOf_(l); }, 0), n30: m30.length };
       if (!act) gone[uNameKey(n)] = x;
@@ -13746,7 +13888,7 @@ function hmCard(x) {
   var flipped = HM.flip === x.id;
   return '<article class="u-card u-k-' + x.kind + (cv.amber ? ' h-amber' : '') + (flipped ? ' u-flipped' : '') + '" data-u-card="' + h(x.id) + '" data-u-cov="' + cv.group + '"><div class="u-turn">' +
     '<button type="button" class="u-front h-front" data-u-flip="' + h(x.id) + '" aria-expanded="' + flipped + '"' + (flipped ? ' inert' : '') + '>' +
-    '<span class="h-top"><span class="h-co"><span>' + h(x.code) + '</span>' + (x.d._unreg ? '<small>რეესტრში არ არის</small>' : '') + '</span>' + badge + '</span>' +
+    '<span class="h-top"><span class="h-co"><span>' + h(x.code) + '</span>' + (x.d._unreg ? '<small>რეესტრში არ არის</small>' : '') + sdxCardTag_(x) + '</span>' + badge + '</span>' +
     '<span class="h-name">' + ic('steering-wheel', 'h-ic28') + '<span>' + h(x.name) + '</span></span>' +
     '<span class="h-locrow"><span class="h-loc"' + (where ? ' title="' + h(where) + '"' : '') + '>' + ic('map-pin', 'h-ic28 h-pin') + '<span>' + h(loc || '—') + '</span></span>' + side + '</span>' +
     info + '<span class="h-disp">' + ic('headset') + '<span>' + h(x.owner || 'დისპეჩერი მიუნიჭებელია') + '</span></span></button>' +
@@ -13800,7 +13942,7 @@ PAGES.overview = {
     view.innerHTML = '<div class="u-page" id="u-home"><h1 class="h-sr">მთავარი</h1>' + st +
       (uReady() ? hmSummaryHtml(act) +
         '<div class="u-toolbar"><label class="u-search" for="u-hm-q">' + ic('search') + '<input id="u-hm-q" type="search" value="' + h(HM.q) + '" placeholder="მოძებნე მძღოლი" aria-label="მოძებნე მძღოლი"></label>' + uScopeSelect('u-hm-co') +
-        '</div><div id="u-hm-grid">' + g.html + '</div>' : '') +
+        '</div><div id="u-hm-grid">' + g.html + '</div>' + sdxUnresolvedHtml_() : '') +
       hmShiftsHtml() + '<p class="u-note" style="margin-top:14px">სტატუსი ეფუძნება Super Dispatch-ის ტვირთებს და აპში ჩაწერილ დასვენება/შეკეთების პერიოდებს. „გაჩერებული“ — მძღოლი, რომელსაც ბოლო 30 დღეში ტვირთი ჰქონდა და ახლა არც აყვანილი, არც დაგეგმილი ტვირთი არ აქვს (იგივე ფარგლები, რაც ცოცხალ დაფაზე). გაჩერების დრო ითვლება ბოლო ჩაბარებიდან; თუ ჩაბარების დრო არ ჩანს, დრო არ გამოითვლება. ' +
       '<button type="button" class="u-btn u-link" data-u-route="mghome">ხვალინდელი გეგმა, ჩეკები და სხვა საკითხები →</button></p></div>';
   },
