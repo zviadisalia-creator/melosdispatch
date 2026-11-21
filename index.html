@@ -281,14 +281,102 @@ if (DOS_CFG.mode !== "production") {
     document.body.appendChild(b);
   });
 }
+/* ---- DOS-VIEWAS-PREVIEW-20261121 · view-only guard for the "view as dispatcher" preview ----
+   While VIEWAS is set (a management login previewing a dispatcher's screen) NOTHING that changes data or spends money leaves
+   the page. Deny by default, two layers, both pass-through when VIEWAS is not set (same requests as before):
+   1. network: window.fetch is wrapped BEFORE any Supabase client is created (every client, incl. the two lazy ones, uses it).
+      Allowed in preview: GET/HEAD to this site, to PostgREST tables and to storage objects; POST to the read-only RPCs listed in
+      VA_READ_RPC; auth token refresh / sign-out; storage signed-URL reads. Everything else gets a local 403 answer, nothing is sent.
+   2. API (main client sb): insert / update / upsert / delete and every RPC not in VA_READ_RPC return {error:{message:'view-only…'}}
+      without a request; storage uploads / removals likewise. This is a client-side guard: the server rules are unchanged. */
+var VA_READ_RPC = { ai_ctx_identity:1, ai_source_queue_health:1, ai_support_message_recovery:1, ai_support_message_state:1,
+  ai_support_thread_read:1, ai_technical_exception_list:1, call_processing_state_v1:1, call_quality:1, close_work_day:1,
+  contact_attempts:1, contact_check:1, contact_check_orders:1, contact_content_orders:1, contact_stats:1, driver_directory:1,
+  employee_phone_alerts_v1:1, leg_skip_co:1, lv5_date_warnings_v1:1, mgmt_close_gates_read_v1:1, mgmt_doc_obligations_review:1,
+  mgmt_doc_obligations_v2:1, my_company_ids:1, next_work_day:1, rate_floor_co:1, sd_directory_v1:1, sd_pending_v1:1,
+  sd_trip_screen_v1:1, ui_pilot_enabled:1, sd_trip_screen_as_v1:1, ui_pilot_enabled_for_v1:1 };
+var VA_ERR = { message:'view-only: დისპეტჩერის ეკრანის დათვალიერება — არაფერი გაიგზავნა', code:'VIEWONLY' };
+var VA_BLOCKED = [];
+function vaOn_(){ try { return !!VIEWAS; } catch (e) { return false; } }
+function vaNote_(kind, what){ try { VA_BLOCKED.push({ at:Date.now(), kind:kind, what:String(what).slice(0,200) }); if (VA_BLOCKED.length > 200) VA_BLOCKED.shift();
+  console.info('view-only: blocked', kind, String(what).slice(0,200)); } catch (e) {} }
+function vaDenied_(kind, what){
+  vaNote_(kind, what);
+  var p = Promise.resolve({ data:null, error:VA_ERR, count:null, status:403, statusText:'view-only' }), px;
+  px = new Proxy({}, { get:function(t, k){
+    if (k === 'then') return function(a, b){ return p.then(a, b); };
+    if (k === 'catch') return function(b){ return p.catch(b); };
+    if (k === 'finally') return function(f){ return p.finally(f); };
+    return function(){ return px; }; } });
+  return px;
+}
+function vaReqOk_(method, url){
+  var u, base; try { u = new URL(String(url), location.href); base = new URL(String(SB_URL)); } catch (e) { return false; }
+  var p = u.pathname, sbo = (u.origin === base.origin), rpc = /^\/rest\/v1\/rpc\/([A-Za-z0-9_]+)\/?$/.exec(p);
+  if (u.protocol === 'blob:' || u.protocol === 'data:') return method === 'GET';
+  if (method === 'GET' || method === 'HEAD') {
+    if (u.origin === location.origin) return true;
+    if (sbo && rpc) return !!VA_READ_RPC[rpc[1]];
+    return sbo && (/^\/rest\/v1\//.test(p) || /^\/storage\/v1\/object\//.test(p) || p === '/auth/v1/user');
+  }
+  if (method === 'POST' && sbo) {
+    if (rpc) return !!VA_READ_RPC[rpc[1]];
+    return p === '/auth/v1/token' || p === '/auth/v1/logout' || /^\/storage\/v1\/object\/sign\//.test(p);
+  }
+  return false;
+}
+(function(){
+  var f0 = window.fetch;
+  if (typeof f0 !== 'function') return;
+  window.fetch = function(input, init){
+    if (!vaOn_()) return f0.apply(window, arguments);
+    var url = (input && typeof input === 'object' && 'url' in input) ? input.url : input;
+    var method = String((init && init.method) || (input && typeof input === 'object' && input.method) || 'GET').toUpperCase();
+    if (vaReqOk_(method, url)) return f0.apply(window, arguments);
+    vaNote_('network', method + ' ' + url);
+    return Promise.resolve(new Response(JSON.stringify({ message:VA_ERR.message, code:VA_ERR.code, view_only:true }),
+      { status:403, headers:{ 'Content-Type':'application/json' } }));
+  };
+})();
+function vaGuardClient_(cl){
+  if (!cl || cl.__vaGuard) return cl;
+  var from0 = cl.from, rpc0 = cl.rpc;
+  if (typeof from0 === 'function') cl.from = function(t){
+    var b = from0.apply(cl, arguments);
+    if (!vaOn_() || !b) return b;
+    ['insert','update','upsert','delete'].forEach(function(m){ if (typeof b[m] === 'function') b[m] = function(){ return vaDenied_('table', m + ' ' + t); }; });
+    return b;
+  };
+  if (typeof rpc0 === 'function') cl.rpc = function(fn){
+    if (vaOn_() && !VA_READ_RPC[fn]) return vaDenied_('rpc', fn);
+    return rpc0.apply(cl, arguments);
+  };
+  var d = null, o = cl;
+  while (o && !d) { d = Object.getOwnPropertyDescriptor(o, 'storage'); o = Object.getPrototypeOf(o); }
+  if (d) Object.defineProperty(cl, 'storage', { configurable:true, get:function(){
+    var s = d.get ? d.get.call(cl) : d.value;
+    if (!s || !vaOn_() || typeof s.from !== 'function') return s;
+    var sw = Object.create(s);
+    sw.from = function(bucket){
+      var api = s.from.apply(s, arguments), w = Object.create(api);
+      ['upload','update','remove','move','copy','uploadToSignedUrl','createSignedUploadUrl'].forEach(function(m){
+        w[m] = function(){ vaNote_('storage', m + ' ' + bucket); return Promise.resolve({ data:null, error:VA_ERR }); }; });
+      return w;
+    };
+    return sw;
+  } });
+  cl.__vaGuard = true;
+  return cl;
+}
 const sb = window.supabase.createClient(SB_URL, SB_KEY, {
   auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage: window.localStorage }
 });
+vaGuardClient_(sb);
 let USER = null;            // {email,name,role:'mgmt'|'disp',dispatcher,quality}
-/* ---- „დისპეტჩერის ხედით ყურება" (act-as) ----
-   მხოლოდ SUPERADMIN-ს უჩანს. ჩართვისას აპლიკაცია იქცევა ისე, თითქოს არჩეული
-   დისპეტჩერი შემოვიდა — მათ შორის ჩაწერებიც მის სახელზე მიდის, ხოლო
-   created_by / closed_by / requested_by რჩება ნამდვილი (ვინც გააკეთა). */
+/* ---- „დისპეტჩერის ხედით ყურება" — მხოლოდ სანახავად (DOS-VIEWAS-PREVIEW-20261121) ----
+   ყველა მენეჯმენტის ანგარიშს უჩანს. არჩეული დისპეტჩერის ეკრანი მისივე მონაცემებით
+   (იგივე წესი, რაც მის შესვლაზე: vaApply_) — აქედან არაფერი იგზავნება (vaGuardClient_).
+   ცვლის დახურვა სხვის მაგივრად მხოლოდ მფლობელის „ცვლების" გვერდზე რჩება (shMayClose). */
 const SUPERADMIN = ['zviadisalia@gmail.com'];
 let VIEWAS = null;          // დისპეტჩერის სახელი, ვისი ხედითაც ვუყურებთ
 let DISPLIST = [];          // allowlist-ის აქტიური დისპეტჩერები
@@ -429,7 +517,7 @@ function docsGate_(l){ if(!l) return false; var a=actOf_(l.order_number)||{}, in
 let CONTACTS = [];  // contact_check rows for the next work day
 function fmtPhone_(p){ p=String(p||'').replace(/\D/g,''); return p.length===10 ? '('+p.slice(0,3)+') '+p.slice(3,6)+'-'+p.slice(6) : (p||'—'); }
 async function loadContacts(){ return auxLoad_('contacts', async function(co){ return auxRes_(await sb.rpc('contact_check', { p_day: ymd_(nextWorkDay_()), p_company_id: co })); },
-  function(data){ CONTACTS = data || []; }, function(){ CONTACTS = []; }, true); }   /* P0-R3 */
+  function(data){ CONTACTS = data || []; vaAuxPut_('contacts', CONTACTS); }, function(){ CONTACTS = []; }, true); }   /* P0-R3; DOS-VIEWAS-PREVIEW-20261121: kept copy */
 /* SHIFT-CLOSE-OVERNIGHT-007 P2: an SD pickup/delivery contact equal to one of our own verified Quo work
    lines. Management only, informational: it never blocks a close and never notifies anyone. Until the
    P2 SQL is installed the RPC does not exist; that case is an empty list, not an error banner. */
@@ -1063,8 +1151,149 @@ function critFetch_(name, co){
   }
   return Promise.reject(new Error('unknown dataset '+name));
 }
-/* the same transforms the old loaders applied, only moved behind the commit */
+/* ---- DOS-VIEWAS-PREVIEW-20261121 · the preview shows the datasets the selected dispatcher's OWN login receives ----
+   A management login holds every row of the company. The kept management copy (VA.raw: as committed; loads as a clone taken
+   BEFORE normalizeDriverNames_/dedupeLoads_ mutate them) is never shown in the preview and never changed by it. While VIEWAS is
+   set every commit re-derives the globals from VA.raw through the dispatcher's own read rules, on fresh clones; leaving the preview
+   recommits VA.raw in the same tick (vaRestore_), before any management render. Rules replicated from production RLS (catalog
+   2026-11-08; loads_read / drv_read / dp_read re-read 2026-11-21) and helper bodies:
+     loads_read  in_my_companies AND (dispatcher = X OR dispatcher IS NULL OR my_driver(driver) OR driver = ANY(my_cover_names) OR booking = X)
+     drv_read    in_my_companies AND (dispatcher = X OR name = ANY(my_cover_names));  dp_read / lw_read: dispatcher = X;  wr_read: dispatcher = X
+     la_read     a live load row of that order passes (dispatcher = X OR NULL OR my_driver OR booking = X)  [deleted load rows are not in the page]
+     doc_hist    in_my_companies;  driver_assignment / broker_flags / app_settings / driver_directory: no dispatcher rule (unchanged)
+     contact_check rows: dispatcher = X OR NULL OR my_driver;  contact_attempts rows: the load's dispatcher = X
+   my_driver: a drivers row of the company (ANY active state) with dispatcher X, or a not-canceled cover of X whose from_day is null
+   or <= today and to_day null or >= today; my_cover_names: the same covers but from_day must be set. today = the database's
+   current_date (UTC). in_my_companies for X = an active allowlist row of X (role dispatcher) whose company_codes are null or hold
+   this company's code; unknown / not loaded = nothing is shown (fail closed). */
+var VA={who:null, seq:0, wait:false, codes:null, codesOk:false, pilot:null, raw:{}, aux:{}};
+var VA_SC={drivers:1, roster:1, plan:1, waivers:1, actions:1, doc_hist:1, loads:1};
+var VA_ORDER=['drivers','roster','plan','waivers','doc_hist','loads','actions'];
+var VA_ANYCO={drivers:1, roster:1};                       /* kept/restored like the base page does across a company switch */
+function vaClone_(a){ return (a||[]).map(function(r){ return Object.assign({}, r); }); }
+function vaToday_(){ return new Date().toISOString().slice(0,10); }
+function vaCoAllowed_(){
+  if(!VA.codesOk || !CO) return false;
+  if(VA.codes===null) return true;
+  var c=String(CO.code||'').trim().toUpperCase();
+  return VA.codes.indexOf(c)>=0;
+}
+function vaRules_(who, drv, dasg, t){
+  var own=Object.create(null), cov=Object.create(null), covS=Object.create(null);
+  (drv||[]).forEach(function(d){ if(d && d.name && d.dispatcher_name===who) own[d.name]=1; });
+  (dasg||[]).forEach(function(a){
+    if(!a || a.kind!=='cover' || a.canceled_at || a.dispatcher_name!==who || !a.driver_name) return;
+    if(a.to_day && String(a.to_day).slice(0,10)<t) return;
+    var f=a.from_day?String(a.from_day).slice(0,10):'';
+    if(!f || f<=t) cov[a.driver_name]=1;
+    if(f && f<=t) covS[a.driver_name]=1;
+  });
+  var myDrv=function(n){ return !!(n && (own[n] || cov[n])); };
+  var load=function(l){ return !!l && (l.dispatcher_name===who || l.dispatcher_name==null || myDrv(l.driver_name)
+    || (l.driver_name!=null && !!covS[l.driver_name]) || l.booking_dispatcher===who); };
+  return {who:who, myDrv:myDrv, load:load, drv:function(d){ return !!d && (d.dispatcher_name===who || !!covS[d.name]); }};
+}
+function vaKeep_(n, R, ok, byOn){
+  if(n==='roster') return function(x){ return !!x && x.dispatcher_name===R.who; };
+  if(!ok) return function(){ return false; };
+  if(n==='loads') return R.load;
+  if(n==='drivers') return R.drv;
+  if(n==='plan' || n==='waivers') return function(x){ return !!x && x.dispatcher_name===R.who; };
+  if(n==='actions') return function(a){ var l=a && byOn[a.order_number];
+    return !!l && (l.dispatcher_name===R.who || l.dispatcher_name==null || R.myDrv(l.driver_name) || l.booking_dispatcher===R.who); };
+  return function(){ return true; };                      /* doc_hist: company rule only */
+}
+function vaApply_(){
+  var who=VIEWAS; if(!who) return;
+  var co=COID(), R0=VA.raw, ok=vaCoAllowed_(), t=vaToday_();
+  var drv=R0.drivers ? (R0.drivers.v||[]) : [], lds=(R0.loads && R0.loads.co===co) ? (R0.loads.v||[]) : [];
+  var R=vaRules_(who, drv, DASG||[], t), byOn=Object.create(null);
+  lds.forEach(function(l){ if(l) byOn[l.order_number]=l; });
+  VA_ORDER.forEach(function(n){
+    var r=R0[n]; if(!r || (!VA_ANYCO[n] && r.co!==co)) return;
+    critCommitRaw_(n, vaClone_((r.v||[]).filter(vaKeep_(n, R, ok, byOn))), r.seq, r.co);
+  });
+  var c=VA.aux.contacts; if(c && c.co===co) CONTACTS=ok ? vaClone_(c.v.filter(function(x){ return !!x && (x.dispatcher_name===who || x.dispatcher_name==null || R.myDrv(x.driver_name)); })) : [];
+  var a=VA.aux.attempts; if(a && a.co===co){ var m={};
+    if(ok) a.v.forEach(function(x){ var l=x && byOn[x.order_number]; if(l && l.dispatcher_name===who) m[x.order_number]=Object.assign({}, x); });
+    ATT=m; }
+}
+/* leaving: a dataset no commit replaced during the preview gets back the very objects it had before entering (VA.kept);
+   one that was refreshed meanwhile is recommitted from the kept management copy (VA.raw) */
+function vaKeepNow_(){
+  return {co:COID(), dirty:{}, loads:{LIVE:LIVE, LBYON:LBYON, DUPS:DUPS}, actions:ACT, plan:DPLAN, waivers:WAIV, drivers:DRIVERS_BY_NAME,
+    roster:WROS, doc_hist:DOC_HIST, contacts:CONTACTS, attempts:ATT};
+}
+function vaRestore_(){
+  var co=COID(), R0=VA.raw, K=VA.kept, same=!!(K && K.co===co);
+  VA.kept=null;
+  VA_ORDER.forEach(function(n){
+    if(same && !K.dirty[n]){
+      if(n==='loads'){ LIVE=K.loads.LIVE; LBYON=K.loads.LBYON; DUPS=K.loads.DUPS; }
+      else if(n==='actions') ACT=K.actions; else if(n==='plan'){ DPLAN=K.plan; PDRVC=null; } else if(n==='waivers') WAIV=K.waivers;
+      else if(n==='drivers') DRIVERS_BY_NAME=K.drivers; else if(n==='roster') WROS=K.roster; else if(n==='doc_hist') DOC_HIST=K.doc_hist;
+      return;
+    }
+    var r=R0[n]; if(!r || (!VA_ANYCO[n] && r.co!==co)) return;
+    critCommitRaw_(n, n==='loads' ? vaClone_(r.v) : r.v, r.seq, r.co);
+  });
+  if(same && !K.dirty.contacts) CONTACTS=K.contacts;
+  else { var c=VA.aux.contacts; if(c && c.co===co) CONTACTS=c.v; }
+  if(same && !K.dirty.attempts) ATT=K.attempts;
+  else { var a=VA.aux.attempts; if(a && a.co===co){ var m={}; a.v.forEach(function(x){ m[x.order_number]=x; }); ATT=m; } }
+}
+function vaAuxPut_(name, v){
+  if(!USER || USER.role!=='mgmt') return;
+  VA.aux[name]={v:v||[], co:COID()};
+  if(vaOn_()){ if(VA.kept) VA.kept.dirty[name]=1; vaApply_(); }
+}
+/* entering, switching A -> B, leaving: nothing of the previous selection survives (scope, flag, SD answer, close row, plan
+   contacts, open panels); the management copy is put back in the same tick when leaving */
+function vaSwitch_(){
+  if(VIEWAS && !VA.who) VA.kept=vaKeepNow_();             /* entering from the management view: keep its objects */
+  VA.who=VIEWAS; VA.pilot=null; VA.codes=null; VA.codesOk=false; VA.wait=!!VIEWAS;
+  SCLOSE=null; PCONT=[]; SC_REF=null;
+  SDX.as={}; SDX.asRun={};
+  try{ SCP_OPEN={}; SCP_LOPEN={}; SCP_REST=false; SCP_ADD=false; SCP_SDL=null; }catch(e){}
+  if(VIEWAS) vaApply_(); else vaRestore_();
+}
+/* the selected dispatcher's companies and board flag (management reads; the server re-checks management) */
+async function vaLoad_(who, seq){
+  var a={ok:false, rows:[]}, b={ok:false, on:false};
+  await Promise.all([
+    (async function(){ try{ var r=await sb.from('access_allowlist').select('dispatcher_name,role,active,company_codes').eq('dispatcher_name', who).eq('active', true);
+      if(!r.error) a={ok:true, rows:r.data||[]}; }catch(e){ console.error(e); } })(),
+    Promise.race([(async function(){ try{ var r=await sb.rpc('ui_pilot_enabled_for_v1', {p_feature:'shift_close_v2', p_dispatcher:who});
+      b={ok:!r.error, on:!r.error && r.data===true}; if(r.error) console.error('pilot flag', r.error); }catch(e){ console.error(e); } })(),
+      new Promise(function(r){ setTimeout(r, 4000); })])
+  ]);
+  if(seq!==VA.seq || VIEWAS!==who) return false;
+  var rows=(a.rows||[]).filter(function(x){ return x && x.dispatcher_name===who && x.role==='dispatcher' && x.active===true; });
+  VA.codesOk=a.ok && rows.length>0;
+  if(rows.some(function(x){ return x.company_codes==null; })) VA.codes=null;
+  else { var cs=[]; rows.forEach(function(x){ (x.company_codes||[]).forEach(function(c){ c=String(c||'').trim().toUpperCase(); if(c && cs.indexOf(c)<0) cs.push(c); }); }); VA.codes=cs; }
+  VA.pilot={who:who, ok:b.ok, on:b.on};
+  return true;
+}
+function vaPilotOn_(){ return !!(VIEWAS && VA.pilot && VA.pilot.who===VIEWAS && VA.pilot.on===true && USER && USER.role==='mgmt' && ROLE==='disp'); }
+function vaBanner_(){
+  var t='👁 მხოლოდ სანახავად · '+VIEWAS+'-ის ეკრანი, მისივე მონაცემებით. აქედან არაფერი იგზავნება: ცვლის დახურვა, ახსნა, SD-დან განახლება, შენახვა და სხვა ქმედებები გამორთულია.';
+  if(VA.wait) return t+' · იტვირთება…';
+  if(!vaCoAllowed_()) t+=' · ⚠ '+(VA.codesOk?'ამ დისპეტჩერს ამ კომპანიაზე წვდომა არ აქვს — მისი მონაცემი აქ არ არის.':'დისპეტჩერის წვდომა ვერ წაიკითხა — მონაცემი არ ჩანს.');
+  if(VA.pilot && !VA.pilot.ok) t+=' · ⚠ ახალი დაფის ნიშანი ვერ წაიკითხა — ნაჩვენებია ძველი დაფა.';
+  return t;
+}
+function vaWaitPaint_(){ var v=$('view'); if(v) v.innerHTML="<div class='card p' data-va-wait='1'><h4>"+esc(VIEWAS||'')+" — მხოლოდ სანახავად</h4><div class='muted'>დისპეტჩერის ეკრანი იტვირთება…</div></div>"; }
 function critCommit_(name, v, seq, co){
+  if(VA_SC[name] && USER && USER.role==='mgmt'){
+    VA.raw[name]={v:(name==='loads' ? vaClone_(v) : v), seq:seq, co:co};
+    if(vaOn_()){ if(VA.kept) VA.kept.dirty[name]=1; vaApply_(); return; }
+  }
+  critCommitRaw_(name, v, seq, co);
+  if(name==='assign' && vaOn_()) vaApply_();              /* covers changed: the dispatcher's rules changed */
+}
+/* the same transforms the old loaders applied, only moved behind the commit */
+function critCommitRaw_(name, v, seq, co){
   if(name==='loads'){ LIVE=v; normalizeDriverNames_(); dedupeLoads_(); rebuildLoadIndex_(); }
   else if(name==='actions'){ var m={}; (v||[]).forEach(function(a){ m[a.order_number]=a; }); actReapply_(m, seq||0, co||COID()); ACT=m; }
   else if(name==='doc_hist'){ var dh=Object.create(null); (v||[]).forEach(function(r){ if(r.company_id===co && r.scope==='invoice_bol' && !r.revoked_at) dh[r.order_number]=r; }); DOC_HIST={co:co,rows:dh}; }
@@ -1348,28 +1577,48 @@ async function loadDispatchers(){
 }
 function buildViewAs(){
   var el=document.getElementById('viewas'); if(!el) return;
-  if(!isSuper() || !USER || USER.role!=='mgmt' || !DISPLIST.length){ el.style.display='none'; return; }
+  if(!USER || USER.role!=='mgmt' || !DISPLIST.length){ el.style.display='none'; return; }   /* DOS-VIEWAS-PREVIEW-20261121: every management login, view only */
   el.innerHTML='<option value="">👁 დისპეტჩერის ხედი…</option>'+
     DISPLIST.map(function(n){ return '<option value="'+esc(n)+'"'+(VIEWAS===n?' selected':'')+'>'+esc(n)+'</option>'; }).join('');
   el.style.display='';
 }
-/* ხედის გადართვა — მონაცემები უკვე ჩატვირთულია (მენეჯმენტი ყველაფერს ხედავს),
-   ცალკე მხოლოდ ცვლის დახურვის სტრიქონი იკითხება არჩეულ დისპეტჩერზე. */
+/* DOS-VIEWAS-PREVIEW-20261121 · ხედის გადართვა — მხოლოდ სანახავად. ჩართვისას/გადართვისას წინა არჩევანის მონაცემი
+   ერთ ტაქტში ქრება და ეკრანი არჩეული დისპეტჩერის საკუთარ მონაცემზე (vaApply_) იწყობა; გამოსვლისას მენეჯმენტის სრული
+   მონაცემი ერთ ტაქტში ბრუნდება (vaRestore_), ნებისმიერ მენეჯმენტის ეკრანამდე. */
 async function enterViewAs(name){
-  if(!isSuper() || !USER || USER.role!=='mgmt') return;
+  if(!USER || USER.role!=='mgmt') return;
   name=(name||'').trim();
+  var seq=++VA.seq;
   VIEWAS = name || null;
+  vaSwitch_();
   MYCS=null; MYCS_LOADING=false; WRSEL=null; /* ზარების სტატისტიკა და როსტერი თავიდან */
-  try{ await loadWeekRoster(); }catch(e){ console.error(e); }
   var bar=document.getElementById('vaBar'), tx=document.getElementById('vaTxt');
+  if(VIEWAS){
+    if(bar){ bar.style.display='block'; }
+    if(tx){ tx.textContent=vaBanner_(); }
+    setRole('disp');                                     /* "loading" until the scope and the board flag are known */
+    await vaLoad_(VIEWAS, seq);
+    if(seq!==VA.seq) return;
+    vaApply_();
+  } else {
+    if(bar){ bar.style.display='none'; }
+    setRole('mgmt');                                     /* the full data is back: the preview board is replaced in this tick */
+  }
+  try{ await loadWeekRoster(); }catch(e){ console.error(e); }
+  if(seq!==VA.seq) return;
   if(VIEWAS){
     try{ await loadClose(); }catch(e){ console.error(e); }
     try{ await loadPlanContacts(); }catch(e){ console.error(e); }
+    /* NOVA: the selected dispatcher's own SD answer (sd_trip_screen_as_v1), as his board asks it; at most 4 s, then without it */
+    try{ await Promise.race([sdxRefresh_(COID(), true), new Promise(function(r){ setTimeout(r, 4000); })]); }catch(e){ console.error(e); }
+    if(seq!==VA.seq) return;
+    VA.wait=false;
     if(bar){ bar.style.display='block'; }
-    if(tx){ tx.textContent='⚠ ხედავ და მოქმედებ '+VIEWAS+'-ის სახელით. ყველა ცვლილება მის ანგარიშზე აისახება (ჩანაწერში რჩება, რომ შენ გააკეთე).'; }
+    if(tx){ tx.textContent=vaBanner_(); }
   } else {
     SCLOSE=null;
     try{ await loadPlanContacts(); }catch(e){ console.error(e); }
+    if(seq!==VA.seq) return;
     if(bar){ bar.style.display='none'; }
   }
   buildViewAs();
@@ -1539,7 +1788,7 @@ function setRole(r){
   $('rDisp').classList.toggle('on',r==='disp'); $('rMgmt').classList.toggle('on',r==='mgmt');
   $('tabsDisp').classList.toggle('hidden',r!=='disp'); $('tabsMgmt').classList.toggle('hidden',r!=='mgmt');
   const nm=VIEWAS||((USER&&USER.name)||''); const av=(nm||'•').trim().charAt(0)||'•';
-  if(r==='disp'){ $('uav').textContent=av; $('unm').textContent=nm; $('url').textContent=VIEWAS?'დისპეტჩერი (მენეჯმენტის ხედით)':'დისპეტჩერი'; TAB='board'; render(); }
+  if(r==='disp'){ $('uav').textContent=av; $('unm').textContent=nm; $('url').textContent=VIEWAS?'დისპეტჩერის ეკრანი · მხოლოდ სანახავად':'დისპეტჩერი'; TAB='board'; render(); }
   else { $('uav').textContent=av; $('unm').textContent=nm; $('url').textContent='მენეჯმენტი'; MTAB='overview'; render(); }
   const box=(r==='disp'?$('tabsDisp'):$('tabsMgmt')); box.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('on',i===0));
 }
@@ -1561,6 +1810,7 @@ function gd(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if(!m)
 function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if(!m) return String(s||'—'); return (+m[3])+' '+GMF[+m[2]-1];}
 
 function render(){
+  if(VIEWAS && (VA.wait || ROLE!=='disp')) return vaWaitPaint_();   /* DOS-VIEWAS-PREVIEW-20261121: never a management page from the preview scope */
   if(ROLE==='disp'){ if(TAB==='board')return ((typeof scPilotOn_==='function' && scPilotOn_())?rBoardPilot_():rBoard()); if(TAB==='plan')return rPlan(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
   ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,debt:rDebt,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,paymix:rPayMix,closes:rCloses,health:rHealth}[MTAB])();
 }
@@ -1822,7 +2072,7 @@ var ATT={};    // contact_attempts by order_number
 var WAIV={};   // waivers
 function wkey_(disp,day,kind,subj){ return (disp||'')+'|'+day+'|'+kind+'|'+(subj||''); }
 async function loadAttempts(){ return auxLoad_('attempts', async function(co){ return auxRes_(await sb.rpc('contact_attempts',{p_day:ymd_(nextWorkDay_()), p_company_id: co})); },
-  function(data){ var m={}; (data||[]).forEach(function(a){ m[a.order_number]=a; }); ATT=m; }, function(){ ATT={}; }, true); }   /* P0-R3 */
+  function(data){ var m={}; (data||[]).forEach(function(a){ m[a.order_number]=a; }); ATT=m; vaAuxPut_('attempts', data||[]); }, function(){ ATT={}; }, true); }   /* P0-R3; DOS-VIEWAS-PREVIEW-20261121: kept copy */
 var WROS={}, WRSEL=null;
 function weekMon_(){ return mondayOf(workToday_())||workToday_(); }
 async function loadWeekRoster(){ return critLoad_('roster'); }   /* SC-STABILIZE-001-P0: an error no longer reads as "roster not confirmed" */
@@ -3297,14 +3547,18 @@ function docLoads_(){ return (LIVE||[]).filter(docMine_); }
    refused, unreadable, stale) leaves today's path untouched. A separate store: LIVE / U rows are never changed - overlayLoads_
    returns new objects. Absence or an unverified reader state never removes or downgrades a legacy row; only a close the
    reader confirmed by id closes one. Shift Close, search, Refresh, plans and money keep reading the legacy rows. ---- */
-var SDX={by:{}, run:{}};
+/* DOS-VIEWAS-PREVIEW-20261121 (owner 2026-11-21 "Yes, display only"): the management preview of a dispatcher's board asks
+   sd_trip_screen_as_v1(company, that dispatcher) - exactly what his own board receives - and keeps it in a separate store keyed
+   by company + previewed dispatcher (SDX.as), emptied on every switch. The non-preview path (SDX.by) is unchanged. */
+var SDX={by:{}, run:{}, as:{}, asRun:{}};
 var SDX_MAX_AGE=600000, SDX_STALE=2700000, SDX_MIN_GAP=60000;   /* answer older than 10 min / reader scan older than 45 min: not used */
-function sdxGate_(code){ return code==='NOVA' && !VIEWAS && !!USER; }
+function sdxGate_(code){ return code==='NOVA' && !!USER && (!VIEWAS || (USER.role==='mgmt' && ROLE==='disp')); }
 function sdxCodeOf_(co){ var c=(COLIST||[]).filter(function(x){ return x.company_id===co; })[0]; return c?c.code:''; }
 function sdxFor_(co){
   if(!co || !sdxGate_(sdxCodeOf_(co))) return null;
-  var X=SDX.by[co];
+  var S=(VIEWAS ? {by:SDX.as, run:SDX.asRun, k:co+'|'+VIEWAS, who:VIEWAS} : {by:SDX.by, run:SDX.run, k:co, who:null}), X=S.by[S.k];
   if(!X || !X.data || X.data.enabled!==true || X.data.company_id!==co || !Array.isArray(X.data.trips)) return null;
+  if(S.who && X.data.view_as!==S.who) return null;
   if(Date.now()-X.at>SDX_MAX_AGE) return null;
   var g=Date.parse(X.data.generated_at||''), s=Date.parse((X.data.freshness&&X.data.freshness.last_bounded_scan_at)||'');
   if(!isFinite(g) || !isFinite(s) || g-s>SDX_STALE) return null;
@@ -3312,31 +3566,32 @@ function sdxFor_(co){
 }
 function sdxRefresh_(co, force){
   if(!co || !sdxGate_(sdxCodeOf_(co))) return Promise.resolve(null);
-  var X=SDX.by[co];
+  var S=(VIEWAS ? {by:SDX.as, run:SDX.asRun, k:co+'|'+VIEWAS, who:VIEWAS} : {by:SDX.by, run:SDX.run, k:co, who:null}), K=S.k, BY=S.by, RUN=S.run, who=S.who;
+  var X=BY[K];
   if(!force && X && Date.now()-X.at<SDX_MIN_GAP) return Promise.resolve(X);
-  if(SDX.run[co]) return SDX.run[co];
+  if(RUN[K]) return RUN[K];
   var email=USER.email;
   var p=(async function(){
     try{
-      var r=await sb.rpc('sd_trip_screen_v1', {p_company_id:co});
-      if(!USER || USER.email!==email || VIEWAS) return null;
+      var r=who ? await sb.rpc('sd_trip_screen_as_v1', {p_company_id:co, p_dispatcher:who}) : await sb.rpc('sd_trip_screen_v1', {p_company_id:co});
+      if(!USER || USER.email!==email || (VIEWAS||null)!==who) return null;
       var d=(r && !r.error) ? r.data : null;
-      if(d && d.enabled===true && d.company_id===co && Array.isArray(d.trips)) SDX.by[co]={data:d, at:Date.now()};
-      else delete SDX.by[co];                                   /* off, refused or unreadable: today's path */
+      if(d && d.enabled===true && d.company_id===co && Array.isArray(d.trips) && (!who || d.view_as===who)) BY[K]={data:d, at:Date.now()};
+      else delete BY[K];                                        /* off, refused or unreadable: today's path */
       if(r && r.error) console.error('SD screen', r.error);
-    }catch(e){ console.error('SD screen', e); delete SDX.by[co]; }
-    finally{ delete SDX.run[co]; }
-    return SDX.by[co]||null;
+    }catch(e){ console.error('SD screen', e); delete BY[K]; }
+    finally{ delete RUN[K]; }
+    return BY[K]||null;
   })();
-  SDX.run[co]=p;
+  RUN[K]=p;
   return p;
 }
 function sdxAfterCycle_(co, g){
   if(!sdxGate_(sdxCodeOf_(co))) return;
-  var was=SDX.by[co]?SDX.by[co].data:null;
+  var S0=(VIEWAS ? {by:SDX.as, run:SDX.asRun, k:co+'|'+VIEWAS, who:VIEWAS} : {by:SDX.by, run:SDX.run, k:co, who:null}), was=S0.by[S0.k]?S0.by[S0.k].data:null;
   sdxRefresh_(co).then(function(X){
     if(g!==SYNC.gen || co!==COID() || (X?X.data:null)===was) return;
-    var on=(ROLE==='disp' && TAB==='liveboard') || (ROLE==='mgmt' && (MTAB==='liveboard' || MTAB==='exceptions'));
+    var on=(ROLE==='disp' && (TAB==='liveboard' || (TAB==='board' && typeof scpSdChanged_==='function' && scpSdChanged_()))) || (ROLE==='mgmt' && (MTAB==='liveboard' || MTAB==='exceptions'));
     if(on && !viewTyping_()){ try{ render(); }catch(e){ console.error(e); } }
   });
 }
@@ -9419,6 +9674,7 @@ var SCP_I = {"pin": "<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 
 
 function scPilotOn_() {
   try {
+    if (VIEWAS) return vaPilotOn_();   /* DOS-VIEWAS-PREVIEW-20261121: the previewed dispatcher's own flag (ui_pilot_enabled_for_v1) */
     return !!(SC_PILOT.on && USER && USER.role === 'disp' && !VIEWAS && ROLE === 'disp'
               && SC_PILOT.email && SC_PILOT.email === USER.email);
   } catch (e) { return false; }
@@ -9675,7 +9931,45 @@ function scpWeek_(all) {
 }
 
 /* ---- drivers and their declared loads -------------------------------- */
-function scpDriver_(d, M) {
+/* DOS-VIEWAS-PREVIEW-20261121 · owner 2026-11-21, verbatim: "Yes, display only" (the dispatcher's board shows the direct
+   Super Dispatch status and driver). NOVA only, sd_screen_switch on, the cutover's overlay and stale guard (boardDrivers_ /
+   overlayLoads_ on a COPY). One display line per driver card, only where the reader answer is applied (CONFIRMED_OPEN, or
+   closed by id): bucket, the SD driver's trip and its pickup / delivery time. A driver without such a trip gets no line - never
+   "stopped" because a trip is absent. scpModel_, every gate, rem, the close button, the plan, the add box, documents and money
+   keep reading the legacy rows; no switch / no answer / another company = no line, byte-identical HTML. */
+var SCP_SDL = null;
+function scpSdT_(t) {
+  var d = new Date(t); if (!t || !isFinite(d.getTime())) return '—';
+  try {
+    var o = {}; new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+      .formatToParts(d).forEach(function (x) { o[x.type] = x.value; });
+    return gd(o.year + '-' + o.month + '-' + o.day) + ' ' + o.hour + ':' + o.minute + ' CT';
+  } catch (e) { return String(t).slice(0, 16); }
+}
+function scpSdHtml_(d, l) {
+  var lab = { loaded: 'დატვირთულია', next: 'შემდეგ ტვირთზე', idle: 'უტვირთოდ' }[d.bucket], cls = { loaded: 'g', next: 'y', idle: 'r' }[d.bucket];
+  var when = d.bucket === 'loaded' ? ('აიყვანა ' + scpSdT_(l.pickup_completed) + (l.delivery_scheduled ? (' · ჩაბარება ' + scpSdT_(l.delivery_scheduled)) : ''))
+    : d.bucket === 'next' ? ('აღება ' + scpSdT_(l.pickup_scheduled)) : ('ჩააბარა ' + scpSdT_(l.delivery_completed));
+  var route = (l.pickup_location || l.delivery_location) ? (' · ' + locShort(l.pickup_location) + ' → ' + locShort(l.delivery_location)) : '';
+  return "<div class='scp-sdline' data-sd-id='" + scpAttr_(l._sd.id) + "' data-sd-bucket='" + d.bucket + "' style='margin:2px 0 6px;font-size:12px' title='სტატუსი და მძღოლი — პირდაპირ Super Dispatch-იდან (მხოლოდ საჩვენებლად; ცვლის შემოწმება ძველ სიას კითხულობს)'>" +
+    "<span class='chip " + cls + "' style='padding:0 6px;font-size:10px'><span class='dot'></span>SD · " + lab + "</span> " +
+    "<span class='scp-muted'>" + esc(String(l.order_number == null ? '' : l.order_number) + route + ' · ' + when) + (l._sd.reader_only ? ' · დეტალები SD-იდან მოლოდინშია' : '') + "</span></div>";
+}
+function scpSdMap_() {
+  var X = (typeof sdxFor_ === 'function') ? sdxFor_(COID()) : null;
+  if (!X) return null;
+  var out = {};
+  boardDrivers_().drivers.forEach(function (d) {
+    var src = d.bucket === 'idle' ? d.loads.slice().sort(function (a, b) { return String(b.delivery_completed || '').localeCompare(String(a.delivery_completed || '')); }) : d.active;
+    var hit = src.filter(function (l) { return l && l._sd && (l._sd.state === 'CONFIRMED_OPEN' || l._sd.state === 'CLOSED'); })[0];
+    if (hit) out[d.name] = scpSdHtml_(d, hit);
+  });
+  return out;
+}
+function scpSdChanged_() {
+  try { if (!scPilotOn_()) return false; var m = scpSdMap_(); return (m ? JSON.stringify(m) : null) !== SCP_SDL; } catch (e) { return false; }
+}
+function scpDriver_(d, M, SDL) {
   var tday = M.tday, reg = DRIVERS_BY_NAME[d.name] || {}, cap = Number(reg.cap) || 1;
   var dl = M.plDrv_(d.name), st = driverStd_(d.name, dl), tgt = st.tgt;
   var okW = waivOk_('standard', d.name, tday), ok = st.ok || okW;
@@ -9715,6 +10009,7 @@ function scpDriver_(d, M) {
     "<div class='scp-dhd'><span class='scp-rig'>" + scpRig_(cap) + "</span>" +
       "<div class='scp-person'><h4>" + esc(d.name) + covChip + "</h4><p>" + esc(capLabel_(reg)) + "</p></div>" +
       "<div class='scp-goal'><span>დღიური გეგმა</span><strong>" + (tgt != null ? money(tgt) : '—') + "</strong></div></div>" +
+    ((SDL && SDL[d.name]) || '') +
     "<div class='scp-loads'>" + loads + why + "</div></div>";
 }
 
@@ -9930,7 +10225,9 @@ function rBoardPilot_() {
   var coName = CO && (CO.legal_name || CO.code) || 'კომპანია ვერ დადგინდა';
   var unread = 0; try { unread = notifUnseen_().length; } catch (e) {}
   var list = M.list;
-  var drivers = list.map(function (d) { return scpDriver_(d, M); }).join('');
+  var SDL = null; try { SDL = scpSdMap_(); } catch (e) { console.error(e); SDL = null; }   /* display only (owner 2026-11-21) */
+  SCP_SDL = SDL ? JSON.stringify(SDL) : null;
+  var drivers = list.map(function (d) { return scpDriver_(d, M, SDL); }).join('');
   var rest = M.resting.length ? ("<div class='scp-rest'><button type='button' class='scp-restsum' aria-expanded='" + SCP_REST + "' onclick='scpRestToggle()'>" +
       scpIc_('moon') + M.resting.length + " ისვენებს" + scpIc_('chev', 'scp-chev') + "</button>" +
       (SCP_REST ? M.resting.map(function (d) { var o = offOf_(d.name, tday) || {};
