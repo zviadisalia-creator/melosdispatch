@@ -294,7 +294,7 @@ var VA_READ_RPC = { ai_ctx_identity:1, ai_source_queue_health:1, ai_support_mess
   contact_attempts:1, contact_check:1, contact_check_orders:1, contact_content_orders:1, contact_stats:1, driver_directory:1,
   employee_phone_alerts_v1:1, leg_skip_co:1, lv5_date_warnings_v1:1, mgmt_close_gates_read_v1:1, mgmt_doc_obligations_review:1,
   mgmt_doc_obligations_v2:1, my_company_ids:1, next_work_day:1, rate_floor_co:1, sd_directory_v1:1, sd_pending_v1:1,
-  sd_trip_screen_v1:1, ui_pilot_enabled:1, sd_trip_screen_as_v1:1, ui_pilot_enabled_for_v1:1 };
+  sd_trip_screen_v1:1, ui_pilot_enabled:1, sd_trip_screen_as_v1:1, ui_pilot_enabled_for_v1:1, sd_effective_patch_v1:1 };   /* DOS-SC-SDFACTS-20261121 */
 var VA_ERR = { message:'view-only: დისპეტჩერის ეკრანის დათვალიერება — არაფერი გაიგზავნა', code:'VIEWONLY' };
 var VA_BLOCKED = [];
 function vaOn_(){ try { return !!VIEWAS; } catch (e) { return false; } }
@@ -1253,7 +1253,7 @@ function vaSwitch_(){
   if(VIEWAS && !VA.who) VA.kept=vaKeepNow_();             /* entering from the management view: keep its objects */
   VA.who=VIEWAS; VA.pilot=null; VA.codes=null; VA.codesOk=false; VA.wait=!!VIEWAS;
   SCLOSE=null; PCONT=[]; SC_REF=null;
-  SDX.as={}; SDX.asRun={};
+  SDX.as={}; SDX.asRun={}; SCF.by={}; SCF_C=null;   /* DOS-SC-SDFACTS-20261121 */
   try{ SCP_OPEN={}; SCP_LOPEN={}; SCP_REST=false; SCP_ADD=false; SCP_SDL=null; }catch(e){}
   if(VIEWAS) vaApply_(); else vaRestore_();
 }
@@ -1294,7 +1294,7 @@ function critCommit_(name, v, seq, co){
 }
 /* the same transforms the old loaders applied, only moved behind the commit */
 function critCommitRaw_(name, v, seq, co){
-  if(name==='loads'){ LIVE=v; normalizeDriverNames_(); dedupeLoads_(); rebuildLoadIndex_(); }
+  if(name==='loads'){ scfStash_(v, co); LIVE=v; normalizeDriverNames_(); dedupeLoads_(); rebuildLoadIndex_(); }   /* DOS-SC-SDFACTS-20261121 */
   else if(name==='actions'){ var m={}; (v||[]).forEach(function(a){ m[a.order_number]=a; }); actReapply_(m, seq||0, co||COID()); ACT=m; }
   else if(name==='doc_hist'){ var dh=Object.create(null); (v||[]).forEach(function(r){ if(r.company_id===co && r.scope==='invoice_bol' && !r.revoked_at) dh[r.order_number]=r; }); DOC_HIST={co:co,rows:dh}; }
   else if(name==='plan'){ DPLAN=v||[]; PDRVC=null; }
@@ -1350,6 +1350,7 @@ async function critCycle_(opts){
   var names=(SYNC.base===co ? (drvAgain?['drivers']:[]) : CRIT_BASE.slice()).concat(CRIT_CYCLE);
   var seqs={}; names.forEach(function(n){ seqs[n]=(CRIT_SEQ[n]=(CRIT_SEQ[n]||0)+1); });
   SYNC.tryAt=Date.now();
+  var scfP=scfFetch_(co);   /* DOS-SC-SDFACTS-20261121: NOVA only; never fails the cycle */
   var res=await Promise.all(names.map(function(n){
     return critFetch_(n, co).then(function(v){ return {n:n, ok:true, v:v}; },
                                   function(e){ console.error(e); return {n:n, ok:false, e:e}; });
@@ -1365,6 +1366,7 @@ async function critCycle_(opts){
   res.forEach(function(r){ if(seqs[r.n]>(CRIT_DONE[r.n]||0)){ critCommit_(r.n, r.v, seqs[r.n], co); CRIT_DONE[r.n]=seqs[r.n]; } });
   if(names.indexOf('drivers')>=0){ SYNC.base=co; SYNC.drvAt=Date.now(); }
   SYNC.co=co; SYNC.have=true;
+  if(scfP){ try{ await scfP; }catch(e){ console.error(e); } if(g!==SYNC.gen || co!==COID()) return {stale:true}; }   /* DOS-SC-SDFACTS-20261121 */
   try{ sdxAfterCycle_(co, g); }catch(e){ console.error(e); }   /* DOS-NOVA-SCREEN-CUTOVER: NOVA only, after the commit, never part of it */
   if(opts.contacts===false) return {ok:true, committed:true, co:co, g:g};
   await loadPlanContacts();                                   /* depends on the committed plan */
@@ -1608,6 +1610,7 @@ async function enterViewAs(name){
   if(seq!==VA.seq) return;
   if(VIEWAS){
     try{ await loadClose(); }catch(e){ console.error(e); }
+    try{ var scfQ=scfFetch_(COID()); if(scfQ) await Promise.race([scfQ, new Promise(function(r){ setTimeout(r, 4000); })]); }catch(e){ console.error(e); }   /* DOS-SC-SDFACTS-20261121 */
     try{ await loadPlanContacts(); }catch(e){ console.error(e); }
     /* NOVA: the selected dispatcher's own SD answer (sd_trip_screen_as_v1), as his board asks it; at most 4 s, then without it */
     try{ await Promise.race([sdxRefresh_(COID(), true), new Promise(function(r){ setTimeout(r, 4000); })]); }catch(e){ console.error(e); }
@@ -1811,7 +1814,7 @@ function gdFull(s){const m=/(\d{4})-(\d{1,2})-(\d{1,2})/.exec(String(s||'')); if
 
 function render(){
   if(VIEWAS && (VA.wait || ROLE!=='disp')) return vaWaitPaint_();   /* DOS-VIEWAS-PREVIEW-20261121: never a management page from the preview scope */
-  if(ROLE==='disp'){ if(TAB==='board')return ((typeof scPilotOn_==='function' && scPilotOn_())?rBoardPilot_():rBoard()); if(TAB==='plan')return rPlan(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
+  if(ROLE==='disp'){ if(TAB==='board')return scfRun_(function(){ return ((typeof scPilotOn_==='function' && scPilotOn_())?rBoardPilot_():rBoard()); });   /* DOS-SC-SDFACTS-20261121 */ if(TAB==='plan')return rPlan(); if(TAB==='liveboard')return rBoardLive(); if(TAB==='liveloads')return rLive(); if(TAB==='profile')return rProfile(); return rWorklog(); }
   ({overview:rOverview,liveboard:rBoardLive,liveloads:rLive,coverage:rCoverage,drivers:rDrivers,leaderboard:rLeader,exceptions:rExc,analysis:rAnalysis,invoices:rInv,receivables:rRecv,overdue:rOverdue,debt:rDebt,payroll:rPayroll,disppay:rDispPay,expenses:rExpenses,paymix:rPayMix,closes:rCloses,health:rHealth}[MTAB])();
 }
 
@@ -2726,7 +2729,7 @@ function rBoard(){
     "<div style='display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center'>"+(chips||"<span class='muted'>მძღოლი არ არის</span>")+
       (cnt.n?("<span class='chip'><span class='dot'></span>"+cnt.n+" სამიზნის გარეშე</span>"):"")+
       (pend?("<span class='chip y'><span class='dot'></span>"+pend+" მოთხოვნა პასუხს ელოდება</span>"):"")+"</div>"+
-    weekBox_(allDrv)+
+    scfNotice_()+weekBox_(allDrv)+
     "<div class='card' style='margin-bottom:16px'>"+(cards||"<div class='muted' style='padding:14px'>ბოლო 30 დღეში აქტიური მძღოლი არ არის</div>")+restHtml+"</div>"+
     addBox_(tday, list)+
     "<div class='sect'>ცვლის დახურვა</div>"+
@@ -2955,6 +2958,7 @@ async function closeShift(opts){
     var frozen=PLd.map(function(l){ return l.order_number; });
     var client={orders:frozen, count:frozen.length, rem:0,          /* the button is enabled only at rem===0 */
                 gross:PLd.reduce(function(s,l){ return s+grossOf_(l); },0)};
+    var scfB=scfBasis_(); if(scfB) client.sd_basis=scfB;   /* DOS-SC-SDFACTS-20261121 */
     if(opts.auto==='all_off'){ client.auto='all_off'; client.gates={standard:{all_off:true, auto:true}}; }
     var res=await sb.rpc('shift_close_submit',{p_company_id:co, p_work_day:day, p_client:client,
                                                p_dispatcher:(VIEWAS||null)});
@@ -2978,7 +2982,7 @@ async function closeShift(opts){
     if(!same()){ moved(); return; }
     SC_REF={key:co+'|'+me+'|'+day, at:new Date(), event:r.event_id||null,
             reconciled:!!(rr && rr.ok),                 /* F2: say "reloaded" only when it was */
-            items:items.map(function(it){ it.fp=scFp_(it.gate, it.order, day); return it; })};
+            items:scfRun_(function(){ return items.map(function(it){ it.fp=scFp_(it.gate, it.order, day); return it; }); })};   /* DOS-SC-SDFACTS-20261121 */
     CLOSE_INFLIGHT=null; render(); painted=true;
     setTimeout(function(){ var b=document.getElementById('scRetry'); if(b && !CLOSE_INFLIGHT) b.disabled=false; }, 15100);
   }catch(e){
@@ -3646,6 +3650,106 @@ function sdxChip_(l, mgmt){
   return " <span class='chip"+(unv?" y":"")+"'"+s+" title='"+(unv?'Super Dispatch-ის პირდაპირმა წაკითხვამ ეს რეისი ბოლო სრულ შემოწმებაში ვერ დაადასტურა — ნაჩვენებია ბოლო ცნობილი მდგომარეობა':'სტატუსი და მძღოლი — პირდაპირ Super Dispatch-იდან')+"'>"+(unv?'SD · ხელახლა არ დადასტურდა':'SD')+"</span>"+
     (m.reader_only?" <span class='chip'"+s+">დეტალები SD-იდან მოლოდინშია</span>":"")+
     (mgmt && m.legacy_deleted?" <span class='chip y'"+s+">ძველ სიაში წაშლილია</span>":"");
+}
+
+/* ---- DOS-SC-SDFACTS-20261121: the Shift Close screens evaluate the SAME effective Super Dispatch trip facts as shift_close_submit.
+   One server answer (rpc sd_effective_patch_v1: the switch sd_gate_switch, the reader state and the precedence rules are all decided
+   there), read in the same cycle as the loads (critCycle_) for NOVA only, on a dispatcher's own login and in the management view-only
+   preview. The answer is a per-order patch of trip fields; it is applied ONLY to a Shift-Close copy of LIVE, built from the rows as
+   they were read (before normalizeDriverNames_ / dedupeLoads_, which then run on the copy, as on LIVE). Every Shift Close input reads
+   that copy: both boards (render -> rBoardPilot_ / rBoard), planLoads_ / planOrders_ wherever they are called (plan, add box,
+   contacts, rate floor, lv5 warnings), p_client.orders and the refusal fingerprints of closeShift. LIVE itself, Home, search, the live
+   board, invoices, receivables, payroll, disppay, debt and Refresh are never changed. Switch off / another company / no answer ->
+   nothing is applied and nothing is shown. A failed or too old answer -> the old rows and a notice; never green from a failure: the
+   server stays the authority. Late answers for another company / dispatcher / preview selection / day are dropped. ---- */
+var SCF={by:{}, run:{}}, SCF_RAW=null, SCF_C=null, SCF_IN=0, SCF_SV=null;
+var SCF_MAX_AGE=600000;   /* an answer older than 10 min (failed refreshes) is not used */
+var SCF_KEYS=['driver_name','driver_id_sd','status','pickup_completed','delivery_completed','pickup_scheduled','delivery_scheduled','pickup_week','is_canceled'];
+function scfGate_(co){ return !!co && !!USER && sdxCodeOf_(co)==='NOVA' && ((USER.role==='disp' && !VIEWAS) || (USER.role==='mgmt' && !!VIEWAS && ROLE==='disp')); }
+function scfKey_(co){ return co+'|'+(VIEWAS||'')+'|'+ymd_(nextWorkDay_()); }
+/* the rows as read, kept before the commit transforms mutate them (NOVA only) */
+function scfStash_(v, co){ co=co||COID(); SCF_RAW=scfGate_(co) ? {co:co, rows:vaClone_(v)} : null; SCF_C=null; }
+function scfFetch_(co){
+  if(!scfGate_(co)) return null;
+  var K=scfKey_(co), day=ymd_(nextWorkDay_()), email=USER.email, who=VIEWAS||null;
+  if(SCF.run[K]) return SCF.run[K];
+  var p=(async function(){
+    var prev=SCF.by[K]||null, was=!!(prev && (prev.was || (prev.ok && prev.data && prev.data.enabled===true))), rec=null;
+    try{
+      var r=await sb.rpc('sd_effective_patch_v1', {p_company_id:co, p_work_day:day});
+      var d=(r && !r.error) ? r.data : null;
+      if(d && d.company_id===co && String(d.work_day)===day && (d.enabled===false || (d.enabled===true && Array.isArray(d.rows)))) rec={ok:true, data:d, at:Date.now()};
+      else { if(r && r.error) console.error('SD facts', r.error); rec={ok:false, was:was, at:Date.now()}; }
+    }catch(e){ console.error('SD facts', e); rec={ok:false, was:was, at:Date.now()}; }
+    finally{ delete SCF.run[K]; }
+    if(!USER || USER.email!==email || (VIEWAS||null)!==who || co!==COID() || scfKey_(co)!==K) return null;   /* another scope now */
+    SCF.by[K]=rec; SCF_C=null;
+    return rec;
+  })();
+  SCF.run[K]=p;
+  return p;
+}
+function scfFor_(){
+  var co=COID(); if(!scfGate_(co)) return null;
+  var X=SCF.by[scfKey_(co)];
+  if(!X || !X.ok || !X.data || X.data.enabled!==true || X.data.company_id!==co || !Array.isArray(X.data.rows)) return null;
+  if(Date.now()-X.at>SCF_MAX_AGE) return null;
+  return X;
+}
+/* the Shift-Close copy: null when nothing is to be applied (then every caller runs on LIVE, unchanged) */
+function scfLive_(){
+  var X=scfFor_(); if(!X || !SCF_RAW || SCF_RAW.co!==COID()) return null;
+  if(SCF_C && SCF_C.x===X && SCF_C.raw===SCF_RAW) return SCF_C.live ? SCF_C : null;
+  var map={}, n=0;
+  X.data.rows.forEach(function(r){
+    if(!r || r.order_number==null || !r.patch || typeof r.patch!=='object') return;
+    var p={}, k=0;
+    SCF_KEYS.forEach(function(f){ if(Object.prototype.hasOwnProperty.call(r.patch, f)){ p[f]=r.patch[f]; k++; } });
+    if(k){ map[String(r.order_number)]=p; n++; }
+  });
+  SCF_C={x:X, raw:SCF_RAW, live:null, lbyon:null, dups:null};
+  if(!n) return null;
+  var rows=SCF_RAW.rows.map(function(l){ var p=l && map[String(l.order_number)]; return p ? Object.assign({}, l, p) : Object.assign({}, l); });
+  var sv=[LIVE, DUPS];
+  try{ LIVE=rows; normalizeDriverNames_(); dedupeLoads_(); SCF_C.live=LIVE; SCF_C.dups=DUPS; }
+  finally{ LIVE=sv[0]; DUPS=sv[1]; }
+  var ix={}; SCF_C.live.forEach(function(l){ ix[l.order_number]=l; }); SCF_C.lbyon=ix;
+  return SCF_C;
+}
+/* run fn with the Shift-Close copy in place of LIVE (synchronous only; nested calls run as they are) */
+function scfRun_(fn){
+  if(SCF_IN) return fn();
+  var C=scfLive_(); if(!C) return fn();
+  var sv=[LIVE, LBYON, DUPS];
+  SCF_IN++; SCF_SV=sv; LIVE=C.live; LBYON=C.lbyon; DUPS=C.dups;
+  try{ return fn(); } finally{ SCF_IN--; SCF_SV=null; LIVE=sv[0]; LBYON=sv[1]; DUPS=sv[2]; }
+}
+/* inside scfRun_: run fn on the legacy rows (the display-only SD line of PR #17 stays exactly as it is) */
+function scfRaw_(fn){
+  if(!SCF_IN || !SCF_SV) return fn();
+  var cur=[LIVE, LBYON, DUPS], sv=SCF_SV, k=SCF_IN;
+  LIVE=sv[0]; LBYON=sv[1]; DUPS=sv[2]; SCF_IN=0; SCF_SV=null;
+  try{ return fn(); } finally{ LIVE=cur[0]; LBYON=cur[1]; DUPS=cur[2]; SCF_IN=k; SCF_SV=sv; }
+}
+/* p_client.sd_basis (stored in shift_close.gates.client): only when a patch answer is in use */
+function scfBasis_(){
+  var X=scfFor_(); if(!X) return null;
+  return {generated_at:X.data.generated_at||null, run_id:X.data.run_id||null, enabled:true, n:X.data.rows.length};
+}
+/* the board notice: server-computed freshness (fresh = the reader's last complete scan within 45 min when the answer was made) */
+function scfNotice_(){
+  try{
+    var co=COID(); if(!scfGate_(co)) return '';
+    var X=SCF.by[scfKey_(co)]; if(!X) return '';
+    var kind='';
+    if(!X.ok){ if(X.was) kind='unavailable'; }
+    else if(X.data && X.data.enabled===true){ if(Date.now()-X.at>SCF_MAX_AGE) kind='unavailable'; else if(X.data.fresh===false) kind='stale'; }
+    if(!kind) return '';
+    var t=kind==='stale'
+      ? 'SD-ის პირდაპირი მონაცემი მოძველებულია (ბოლო სრული წაკითხვა 45 წუთზე ძველია): მძღოლი და თარიღები ძველი სიიდანაა, აღება, ჩაბარება და გაუქმება — SD-იდან. საბოლოო შემოწმება სერვერზეა.'
+      : 'SD-ის პირდაპირი მონაცემი ვერ წაიკითხა: შემოწმება ძველ სიას იყენებს და შეიძლება სერვერს არ დაემთხვეს. საბოლოო შემოწმება სერვერზეა — დააჭირე ⟳.';
+    return "<div class='callout' data-scf='"+kind+"' role='status' style='margin:8px 0'><span class='b'>!</span><div>"+esc(t)+"</div></div>";
+  }catch(e){ return ''; }
 }
 
 function boardDrivers_(){
@@ -5082,6 +5186,7 @@ function planRows_(day, disp){
    დამატება კი იმ შემთხვევებისთვის, როცა SD-ში თარიღი სხვაა ან ტვირთი ჯერ
    მძღოლზე არ მიბმულა. */
 function planLoads_(day, disp){
+  if(!SCF_IN && scfLive_()) return scfRun_(function(){ return planLoads_(day, disp); });   /* DOS-SC-SDFACTS-20261121 */
   var d=disp||(USER&&MYD())||'';
   var added={}, removed={};
   planRows_(day,d).forEach(function(p){
@@ -10225,7 +10330,7 @@ function rBoardPilot_() {
   var coName = CO && (CO.legal_name || CO.code) || 'კომპანია ვერ დადგინდა';
   var unread = 0; try { unread = notifUnseen_().length; } catch (e) {}
   var list = M.list;
-  var SDL = null; try { SDL = scpSdMap_(); } catch (e) { console.error(e); SDL = null; }   /* display only (owner 2026-11-21) */
+  var SDL = null; try { SDL = scfRaw_(scpSdMap_); } catch (e) { console.error(e); SDL = null; }   /* display only (owner 2026-11-21) */
   SCP_SDL = SDL ? JSON.stringify(SDL) : null;
   var drivers = list.map(function (d) { return scpDriver_(d, M, SDL); }).join('');
   var rest = M.resting.length ? ("<div class='scp-rest'><button type='button' class='scp-restsum' aria-expanded='" + SCP_REST + "' onclick='scpRestToggle()'>" +
@@ -10244,7 +10349,7 @@ function rBoardPilot_() {
       (unread ? ("<span class='scp-cnt'>" + unread + "</span>") : '') + "</button></header>" +
     (pend ? ("<div class='scp-banner'>" + scpIc_('wait') + pend + " ახსნა მენეჯმენტის პასუხს ელოდება</div>") : '') +
     (M.closed ? ("<div class='scp-banner ok'>" + scpIc_('lock') + "ცვლა დახურულია" + (closedAt ? (' · ' + esc(closedAt)) : '') + ". გამოცხადებულ ტვირთებს ვეღარ მოხსნი.</div>") : '') +
-    scpWeek_(M.allDrv) +
+    scfNotice_() + scpWeek_(M.allDrv) +
     "<section class='scp-card scp-drivers' aria-label='მძღოლები'><div class='scp-sechd'>მძღოლები</div>" +
       (drivers || "<p class='scp-muted scp-pad'>ბოლო 30 დღეში აქტიური მძღოლი არ არის</p>") +
       "<div class='scp-addrow'><button type='button' class='scp-add' aria-expanded='" + addOpen + "' onclick='scpAddToggle()'>" + scpIc_('plus') + "ტვირთის დამატება</button></div>" +
@@ -12745,7 +12850,7 @@ function uLoad(force) {
       if (!current()) return;
       if (U.mut !== mut) { again = true; return; }
       var all = [];
-      cos.forEach(function (c) { var B = by[c.company_id]; B.loads = uPrepLoads(raw[c.company_id] || [], onKey_, dupScore_, dupSame_); B.loads.forEach(function (l) { B.load[l.order_number] = l; }); all = all.concat(B.loads); });
+      cos.forEach(function (c) { var B = by[c.company_id]; B.raw = (String(c.code || '') === 'NOVA') ? vaClone_(raw[c.company_id] || []) : null; /* DOS-SC-SDFACTS r3 */ B.loads = uPrepLoads(raw[c.company_id] || [], onKey_, dupScore_, dupSame_); B.loads.forEach(function (l) { B.load[l.order_number] = l; }); all = all.concat(B.loads); });
       cos.forEach(function (c, i) {
         var B = by[c.company_id], trips = homeTrips[i];
         B.homeError = trips.error;
@@ -12861,6 +12966,102 @@ function uScopeNote() {
     (top ? ' · ზედა გადამრთველი („' + h(top) + '“) ამ გვერდს არ ფილტრავს — ის მხოლოდ ძველ, ერთკომპანიიან გვერდებზე მოქმედებს' : '') + '</p>';
 }
 function uPlan(co, disp, day) { var B = U.by[co]; if (!B) return []; return uPlanSelect(B.loads, B.plans, function (n) { return uOwner(co, n, day); }, disp, day); }
+/* ---- DOS-SC-SDFACTS-20261121 r3 (RELEASE BLOCKER D7, owner "Yes. Take the Shifts-page close blocker next."): the Shifts page
+   derives a shift's plan from the SAME effective Super Dispatch trip facts as shift_close_submit. The server's own answer
+   (rpc sd_effective_patch_v1, management scope, for the ROW's work day - history rows too) is applied to a Shifts-page-only copy of
+   that company's rows as read (U.by[co].raw, NOVA only, kept before uPrepLoads), then the same clean-up (uPrepLoads) runs on the
+   copy. Only the close-plan path reads it: shPlanOf, shItems, the confirm count, shDoClose's stale-state guard and gross. U.loads,
+   Home, Drivers, gross pages and every other company keep the store unchanged. The page still submits ITS OWN derivation (never
+   the server's order list), so plan_mismatch stays a real check; shMayClose and the server's checks are unchanged. A failed or
+   too old answer -> the store rows and a visible notice; never green from a failure: the server stays the authority. Answers for
+   another user / an older request are dropped. ---- */
+/* ---- r4 (staging finding F2): ONE read per company + work day per refresh cycle. A row's evaluation (shPrevLoad, the queue walks
+   the rows one by one) reuses the answer of the current cycle (SHF.cyc: the app's refresh cycle, the manual reload and the row's
+   "recheck" button start a new one) while it is successful and younger than SHF_REUSE_MS; a request in flight is shared. A failed
+   answer is not reused (the next evaluation asks again, still one request at a time). The forced read stays where it was: once
+   per close attempt, in shDoClose's stale-state re-read. Only rows on the list are evaluated, so a company without rows on the
+   list is never asked. ---- */
+var SHF = { by: {}, run: {}, seq: {}, cyc: 0 }, SHF_C = {}, SHF_REUSE_MS = 180000;   /* 180 s = the app's own refresh period (170 s) rounded up */
+function shfGate_(co) { return !!co && uiActive() && uCoCode(co) === 'NOVA'; }
+function shfKey_(co, day) { return co + '|' + day; }
+function shfFetch_(co, day, force) {
+  if (!shfGate_(co) || !day) return null;
+  var K = shfKey_(co, day);
+  if (!force) {
+    if (SHF.run[K]) return SHF.run[K];
+    var Y = SHF.by[K];
+    if (Y && Y.ok && Y.cyc === SHF.cyc && Date.now() - Y.at < SHF_REUSE_MS) return Promise.resolve(Y);   /* r4: the fresh answer of this cycle */
+  }
+  var cyc = SHF.cyc, seq = SHF.seq[K] = (SHF.seq[K] || 0) + 1, email = USER.email;
+  var p = (async function () {
+    var prev = SHF.by[K] || null, was = !!(prev && (prev.was || (prev.ok && prev.data && prev.data.enabled === true))), rec = null;
+    try {
+      var r = await sb.rpc('sd_effective_patch_v1', { p_company_id: co, p_work_day: day });
+      var d = (r && !r.error) ? r.data : null;
+      if (d && d.company_id === co && String(d.work_day) === day && (d.enabled === false || (d.enabled === true && Array.isArray(d.rows)))) rec = { ok: true, data: d, at: Date.now() };
+      else { if (r && r.error) console.error('SD facts (shifts)', r.error); rec = { ok: false, was: was, at: Date.now() }; }
+    } catch (e) { console.error('SD facts (shifts)', e); rec = { ok: false, was: was, at: Date.now() }; }
+    finally { if (SHF.seq[K] === seq) delete SHF.run[K]; }
+    if (SHF.seq[K] !== seq || !USER || USER.email !== email || !uiActive()) return null;   /* a newer request / another user: dropped */
+    rec.cyc = cyc; SHF.by[K] = rec; delete SHF_C[K];
+    return rec;
+  })();
+  SHF.run[K] = p;
+  return p;
+}
+function shfFor_(co, day) {
+  if (!shfGate_(co)) return null;
+  var X = SHF.by[shfKey_(co, day)];
+  if (!X || !X.ok || !X.data || X.data.enabled !== true || X.data.company_id !== co || !Array.isArray(X.data.rows)) return null;
+  if (Date.now() - X.at > SCF_MAX_AGE) return null;
+  return X;
+}
+/* the rows a shift's close plan is derived from: the store's own (U.by[co]) unless a patch answer for that day is in use */
+function shLoads_(co, day) {
+  var B = U.by[co]; if (!B) return null;
+  var X = shfFor_(co, day); if (!X || !B.raw) return B;
+  var K = shfKey_(co, day), Cc = SHF_C[K];
+  if (Cc && Cc.x === X && Cc.raw === B.raw && Cc.B === B) return Cc.S || B;
+  var map = {}, n = 0;
+  X.data.rows.forEach(function (r) {
+    if (!r || r.order_number == null || !r.patch || typeof r.patch !== 'object') return;
+    var p = {}, k = 0;
+    SCF_KEYS.forEach(function (f) { if (Object.prototype.hasOwnProperty.call(r.patch, f)) { p[f] = r.patch[f]; k++; } });
+    if (k) { map[String(r.order_number)] = p; n++; }
+  });
+  var S = null;
+  if (n) {
+    var rows = B.raw.map(function (l) { var q = l && map[String(l.order_number)]; return q ? Object.assign({}, l, q) : Object.assign({}, l); });
+    var loads = uPrepLoads(rows, onKey_, dupScore_, dupSame_), load = {};
+    loads.forEach(function (l) { load[l.order_number] = l; });
+    S = Object.assign({}, B, { loads: loads, load: load, sdf: true });
+  }
+  SHF_C[K] = { x: X, raw: B.raw, B: B, S: S };
+  return S || B;
+}
+/* r4 (staging finding F1): the basis of a Shifts-page close, as the dispatcher path sends it (scfBasis_): only when a patch answer is
+   in use for that row's company and day (switch off / another company / failed or too old answer -> none) */
+function shfBasis_(co, day) {
+  var X = shfFor_(co, day); if (!X) return null;
+  return { generated_at: X.data.generated_at || null, run_id: X.data.run_id || null, enabled: true, n: X.data.rows.length };
+}
+function shfClient_(row, client) { var b = shfBasis_(row.company_id, row.work_day); if (b) client.sd_basis = b; return client; }
+function shPlan_(co, disp, day) { var S = shLoads_(co, day); if (!S) return []; return uPlanSelect(S.loads, S.plans, function (n) { return uOwner(co, n, day); }, disp, day); }
+/* the row's notice (server-computed freshness; an answer that failed after an enabled one, or is too old) */
+function shfNotice_(row) {
+  try {
+    if (!row || !shfGate_(row.company_id)) return '';
+    var X = SHF.by[shfKey_(row.company_id, row.work_day)]; if (!X) return '';
+    var kind = '';
+    if (!X.ok) { if (X.was) kind = 'unavailable'; }
+    else if (X.data && X.data.enabled === true) { if (Date.now() - X.at > SCF_MAX_AGE) kind = 'unavailable'; else if (X.data.fresh === false) kind = 'stale'; }
+    if (!kind) return '';
+    var t = kind === 'stale'
+      ? 'SD-ის პირდაპირი მონაცემი მოძველებულია (ბოლო სრული წაკითხვა 45 წუთზე ძველია): გეგმაში მძღოლი და თარიღები ძველი სიიდანაა. საბოლოო შემოწმება სერვერზეა.'
+      : 'SD-ის პირდაპირი მონაცემი ვერ წაიკითხა: გეგმა ძველი სიიდანაა და შეიძლება სერვერს არ დაემთხვეს. საბოლოო შემოწმება სერვერზეა — განაახლე.';
+    return '<div class="u-state u-err" data-shf="' + kind + '" role="status">' + h(t) + '</div>';
+  } catch (e) { return ''; }
+}
 function uStateHtml() {
   if (U.error && !uReady()) return '<div class="u-state u-err" role="alert">' + h(U.error) + ' <button type="button" class="u-btn" data-u-reload>' + ic('refresh') + 'ხელახლა ცდა</button></div>';
   if (!uReady()) return '<div class="u-state" role="status">ყველა კომპანიის მონაცემი იტვირთება…</div>';
@@ -13195,7 +13396,9 @@ function shPrevLoad(row, force) {
   if (!force && P.at && Date.now() - P.at < 90000) return Promise.resolve();
   P.loading = (async function () {
     try {
+      var shfP = shfFetch_(row.company_id, row.work_day);   /* DOS-SC-SDFACTS r3: NOVA only, the row's work day */
       var r = await sb.rpc('mgmt_close_gates_read_v1', { p_company_id: row.company_id, p_disp: row.dispatcher, p_work_day: row.work_day });
+      if (shfP) { try { await shfP; } catch (e) { console.error(e); } }
       if (r.error) { if (uMissing(r.error)) { SH.rpcMissing = true; return; } throw r.error; }
       var d = r.data || null;
       if (d && d.refused && Array.isArray(d.reasons) && d.reasons.indexOf('work_day_mismatch') >= 0) { P.notyet = true; P.data = null; P.at = Date.now(); P.error = ''; return; }
@@ -13266,12 +13469,12 @@ function shTodayRows() {
   return { rows: out, limited: limited };
 }
 function shPlanOf(row) {
-  var P = SH.prev[row.key], B = U.by[row.company_id] || { load: {} };
+  var P = SH.prev[row.key], B = shLoads_(row.company_id, row.work_day) || { load: {} };   /* DOS-SC-SDFACTS r3 */
   if (P && P.data && Array.isArray(P.data.orders)) {
-    var mine = {}; uPlan(row.company_id, row.dispatcher, row.work_day).forEach(function (x) { mine[x.l.order_number] = x; });
+    var mine = {}; shPlan_(row.company_id, row.dispatcher, row.work_day).forEach(function (x) { mine[x.l.order_number] = x; });
     return { canonical: true, at: P.okAt || 0, items: P.data.orders.map(function (on) { var m = mine[on], l = B.load[on] || null; return { on: on, l: l, driver: m ? m.driver : (l && l.driver_name) || '', source: m ? m.source : '' }; }) };
   }
-  return { canonical: false, at: U.loadedAt, items: uPlan(row.company_id, row.dispatcher, row.work_day).map(function (x) { return { on: x.l.order_number, l: x.l, driver: x.driver, source: x.source }; }) };
+  return { canonical: false, at: U.loadedAt, items: shPlan_(row.company_id, row.dispatcher, row.work_day).map(function (x) { return { on: x.l.order_number, l: x.l, driver: x.driver, source: x.source }; }) };
 }
 function shPendingFor(row) { return (MGI.waivers || []).filter(function (w) { return w.status === 'pending' && w.company_id === row.company_id && w.dispatcher_name === row.dispatcher && w.work_day === row.work_day; }); }
 
@@ -13279,7 +13482,7 @@ function shPendingFor(row) { return (MGI.waivers || []).filter(function (w) { re
 var SH_SIDE = { pu: 'Pickup', del: 'Delivery' };
 function shVehOf(l, on) { return (l && l.vehicle ? l.vehicle + ' · ' : '') + '#' + on; }
 function shItems(row) {
-  var P = SH.prev[row.key], E = shEvOf(row), plan = shPlanOf(row), B = U.by[row.company_id] || { load: {} };
+  var P = SH.prev[row.key], E = shEvOf(row), plan = shPlanOf(row), B = shLoads_(row.company_id, row.work_day) || { load: {} };   /* DOS-SC-SDFACTS r3 */
   /* a history row the server no longer evaluates: no cached evaluation or attempt is presented as current */
   var expired = !!row.hist && (!shSrvOk(row.work_day) || !!(P && P.notyet));
   if (expired) { P = null; E = null; }
@@ -13398,7 +13601,7 @@ function shOpenDetail(row) {
       (lo ? '<div class="u-s2-loads u-s2-oloads">' + shLoadsTable(its, null) + '</div>' : '') + '</div>';
   });
   if (!rows) rows = '<div class="u-s2-trow"><span class="u-s2-tdrv">—</span><span class="u-s2-unk">' + (I.state === 'loading' || I.state === 'none' ? 'მოწმდება…' : green ? 'გეგმაში მძღოლი და ტვირთი არ ჩანს; სერვერის პირობები გავლილია' : 'გეგმაში ტვირთი არ ჩანს') + '</span></div>';
-  html += '<div class="u-s2-remaining">' + rows + '</div>';
+  html += '<div class="u-s2-remaining">' + rows + '</div>' + shfNotice_(row);   /* DOS-SC-SDFACTS r3 */
   var prov = { read: 'შემოწმდა სერვერზე ' + uTzTime(I.at), stale: 'ბოლო წარმატებული შემოწმება ' + uTzTime(I.at) + (I.lastError ? ' — განახლება ვერ მოხერხდა (' + I.lastError + ')' : ' — მოძველებულია, განაახლე') + '', attempt: 'ბოლო დახურვის მცდელობიდან ' + uTzTime(I.at) + ' — მას შემდეგ შეიძლება შეიცვალა', loading: 'სერვერზე მოწმდება…', notyet: 'ეს გეგმის დღე სერვერზე ჩიკაგოს შუაღამისას იწყება — შემოწმება მერე', error: 'სერვერის შემოწმება ვერ ჩაიტვირთა', nocanon: 'სრული შემოწმება ამ გვერდზე ჩართული არ არის — სერვერი ამოწმებს დახურვისას', none: 'ჯერ არ შეფასებულა', expired: 'სერვერი ამ სამუშაო დღეს აღარ ამოწმებს და აღარ ხურავს — მიმდინარე შეფასება არ არის' }[I.state];
   if (I.legsError) prov += ' · ზარების/SMS-ის დეტალი ვერ განახლდა';
   var gone = I.state === 'expired', may = shMayClose() && !gone, pend = shPendingFor(row), C = may && SH.close && SH.close.key === row.key ? SH.close : null;
@@ -13439,7 +13642,7 @@ async function shDoClose(key) {
   try {
     /* stale-state guard: read everything again and compare with what the screen showed when the manager confirmed */
     /* plus the server's closable days and (for a history row) the 30-day list; the shift keeps its own work_day - never retargeted */
-    await Promise.all([uLoad(true), mgiLoad_(true), shCwLoad(row.work_day, true), shSrvLoad(true), wasHist ? shMissLoad(true) : null]);
+    await Promise.all([uLoad(true), mgiLoad_(true), shCwLoad(row.work_day, true), shSrvLoad(true), wasHist ? shMissLoad(true) : null, shfFetch_(row.company_id, row.work_day, true)]);   /* DOS-SC-SDFACTS r3 */
     if (!mgiReady_() || !uReady() || U.error || MGI.error) throw new Error('მიმდინარე მონაცემი ვერ გადამოწმდა — დახურვა არ გაგზავნილა');
     var wd0 = row.work_day;
     if (wasHist && SH.srv.error) throw new Error('სერვერის სამუშაო დღე ვერ გადამოწმდა — დახურვა არ გაგზავნილა');
@@ -13452,10 +13655,10 @@ async function shDoClose(key) {
       else feedback('სამუშაო დღე შეიცვალა (08:00) — ეს ცვლა ამ გვერდიდან აღარ იხურება. დახურვა არ გაგზავნილა.', true);
       return render();
     }
-    var now = uPlan(row.company_id, row.dispatcher, row.work_day).map(function (x) { return x.l.order_number; }).sort();
+    var now = shPlan_(row.company_id, row.dispatcher, row.work_day).map(function (x) { return x.l.order_number; }).sort();
     if (now.join('|') !== shown.join('|')) { delete SH.prev[key]; SH.legs = {}; SH.close = { key: key, phase: 'ask', orders: now, changed: true }; feedback('გეგმა შეიცვალა — დახურვა არ გაგზავნილა.', true); return render(); }
-    var B = U.by[row.company_id] || { load: {} }, gross = shown.reduce(function (s, on) { return s + (B.load[on] ? grossOf_(B.load[on]) : 0); }, 0);
-    var r = await sb.rpc('shift_close_submit', { p_company_id: row.company_id, p_work_day: row.work_day, p_client: { source: 'uimgmt-shifts', orders: shown, count: shown.length, gross: gross }, p_dispatcher: row.dispatcher });
+    var B = shLoads_(row.company_id, row.work_day) || { load: {} }, gross = shown.reduce(function (s, on) { return s + (B.load[on] ? grossOf_(B.load[on]) : 0); }, 0);
+    var r = await sb.rpc('shift_close_submit', { p_company_id: row.company_id, p_work_day: row.work_day, p_client: shfClient_(row, { source: 'uimgmt-shifts', orders: shown, count: shown.length, gross: gross }), p_dispatcher: row.dispatcher });   /* DOS-SC-SDFACTS r4 */
     if (r.error) throw r.error;
     var d = r.data || {};
     if (d.closed) {
@@ -13812,6 +14015,7 @@ PAGES.shifts = {
   paint: shPaint,
   editing: function () { return !!(SH.close && SH.close.phase === 'busy') || !!(SH.review && SH.review.busy); },
   refresh: function (manual, current) {
+    SHF.cyc++;   /* DOS-SC-SDFACTS r4 */
     shRoll();
     if (manual) { SH.rpcMissing = false; SH.prev = {}; SH.legs = {}; SH.qgen++; }   /* evaluations are re-read only on request; each one shows its time */
     return current ? shReload(true, manual) : null;
@@ -13821,7 +14025,7 @@ PAGES.shifts = {
     if ((a = el.closest('[data-u-view]'))) { SH.view = a.getAttribute('data-u-view'); SH.open = null; SH.hopen = null; SH.drv = null; SH.caseOpen = null; SH.review = null; SH.close = null; SH.q = ''; return render(); }
     if ((a = el.closest('[data-u-st]'))) { SH.st = a.getAttribute('data-u-st'); SH.open = null; SH.drv = null; SH.close = null; return render(); }
     if ((a = el.closest('[data-u-dayshift]'))) { var n = uAddDays(shRd(), Number(a.getAttribute('data-u-dayshift'))), cur = shCurRd(); if (n <= cur) { SH.rd = n === cur ? null : n; SH.open = null; SH.drv = null; SH.close = null; render(); } return; }
-    if ((a = el.closest('[data-u-reload]'))) { feedback('მონაცემი ახლდება…'); SH.prev = {}; SH.legs = {}; SH.rpcMissing = false; SH.qgen++; return Promise.all([uLoad(true), mgiLoad_(true)]).then(function () { return shReload(true, true); }).then(function () { feedback(U.error || MGI.error ? 'განახლება ვერ დასრულდა.' : 'განახლდა.', !!(U.error || MGI.error)); render(); }); }
+    if ((a = el.closest('[data-u-reload]'))) { feedback('მონაცემი ახლდება…'); SHF.cyc++; /* DOS-SC-SDFACTS r4 */ SH.prev = {}; SH.legs = {}; SH.rpcMissing = false; SH.qgen++; return Promise.all([uLoad(true), mgiLoad_(true)]).then(function () { return shReload(true, true); }).then(function () { feedback(U.error || MGI.error ? 'განახლება ვერ დასრულდა.' : 'განახლდა.', !!(U.error || MGI.error)); render(); }); }
     if ((a = el.closest('[data-u-shift]'))) { var k = a.getAttribute('data-u-shift'); SH.open = SH.open === k ? null : k; SH.drv = null; SH.close = null;
       var Pk = SH.prev[k], rk0 = SH.open ? shOpenRows().filter(function (r) { return r.key === k; })[0] : null;   /* re-opening an older evaluation reads it again once */
       if (rk0 && Pk && Pk.at && !Pk.loading && Date.now() - Pk.at > SH_REOPEN_MS) shPrevLoad(rk0, true).then(function () { if (MTAB === 'shifts') { shPaintBody(); shEnsure(); } });
@@ -13831,7 +14035,7 @@ PAGES.shifts = {
       if (hr && Ph && Ph.at && !Ph.loading && Date.now() - Ph.at > SH_REOPEN_MS) shPrevLoad(hr, true).then(function () { if (MTAB === 'shifts') { shPaintBody(); shEnsure(); } });
       return render(); }
     if ((a = el.closest('[data-u-drv]'))) { var dk = a.getAttribute('data-u-drv'); SH.drv = SH.drv === dk ? null : dk; shPaintBody(); return; }
-    if ((a = el.closest('[data-u-recheck]'))) { var rk = a.getAttribute('data-u-recheck'), row = shCloseRows().filter(function (r) { return r.key === rk; })[0]; if (row) { SH.legs = {}; shPrevLoad(row, true).then(function () { if (MTAB === 'shifts') { shPaintBody(); shEnsure(); } }); shPaintBody(); } return; }
+    if ((a = el.closest('[data-u-recheck]'))) { var rk = a.getAttribute('data-u-recheck'), row = shCloseRows().filter(function (r) { return r.key === rk; })[0]; if (row) { SH.legs = {}; SHF.cyc++; /* DOS-SC-SDFACTS r4 */ shPrevLoad(row, true).then(function () { if (MTAB === 'shifts') { shPaintBody(); shEnsure(); } }); shPaintBody(); } return; }
     if ((a = el.closest('[data-u-close]'))) { if (!shMayClose()) return; var ck = a.getAttribute('data-u-close'), r2 = shCloseRows().filter(function (r) { return r.key === ck; })[0]; if (!r2) return; SH.close = { key: ck, phase: 'ask', orders: shPlanOf(r2).items.map(function (x) { return x.on; }) }; shPaintBody(); return shFocus('u-close-panel'); }
     if (el.closest('[data-u-close-cancel]')) { if (SH.close && SH.close.phase === 'busy') return; SH.close = null; return shPaintBody(); }
     if ((a = el.closest('[data-u-close-go]'))) return shDoClose(a.getAttribute('data-u-close-go'));
