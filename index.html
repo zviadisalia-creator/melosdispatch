@@ -13152,6 +13152,14 @@ buildTabs = function () { var r = prevBuild.apply(this, arguments); try { if (ui
 /* late answers of the legacy overview readers must not paint the old home over the new one */
 rOverview = function () { if (uiActive() && MTAB === 'overview') return render(); return prevOverview.apply(this, arguments); };
 var inRefresh = false;
+/* DOS-NOVA-WHLIVE-20261126: what the live-signal listener (script "nova-whlive-001") may ask of this layer. `showing` = one of
+   the new pages is on screen and NOVA is in its store; `load` = read the all-company store again now (the same forced read the
+   page's own reload button asks for; a background refresh that follows waits for it instead of reading twice); `paint` = this
+   layer's own safe repaint (never over a save in flight, an open drop-down or typing). */
+window.__uimLive = {
+  showing: function () { return uiActive() && !!PAGES[MTAB] && uReady() && (U.cos || []).some(function (c) { return String(c.code || '') === 'NOVA'; }); },
+  load: function () { return uiActive() ? uLoad(true) : Promise.resolve(); },
+  paint: function () { if (uiActive() && PAGES[MTAB] && !busyEditing() && !selectOpen() && !(typeof viewTyping_ === 'function' && viewTyping_())) render(); } };
 refreshLive_ = async function (manual) {
   var out;
   inRefresh = true;
@@ -16431,5 +16439,142 @@ try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', 
     };
     window.__invsd001 = '2026-10-07';
   } catch (e) { try { console.error('INV-SD-001 failed to install', e); } catch (x) {} }
+})();
+</script>
+<script id="nova-whlive-001">
+/* ---- DOS-NOVA-WHLIVE-20261126 (owner 2026-11-26: "It should appear automatically, without a manual refresh or a wait for the
+   3-minute timer"). The database says "a NOVA load changed" on the Realtime channel dos-live (sd_push_notify_v1: the company code
+   and a time, never load data). An open page that shows NOVA then runs ITS OWN background refresh at once - the same
+   refreshLive_(false) the 3-minute timer runs - with two reads made fresh for it: the Super Dispatch trip answer
+   (sd_trip_screen_v1, about half a second, painted first) and, on the new management pages, the all-company store (at most once
+   in 30 s; the last signal is always honoured). Nothing here decides anything: it only chooses WHEN the existing reads run.
+   A hidden tab does not read; it catches up once when it is shown again. Without the channel nothing else changes: the 3-minute
+   timer stays exactly as it was. The channel is public, so a signal is only ever a reason to read: the floors below bound how
+   often (5 s between refreshes; 30 s after ten refreshes in five minutes). ---- */
+(function () {
+  if (window.__dosLive) return;
+  var DELAY = 500, GAP = 5000, SLOW_GAP = 30000, STORE_GAP = 30000, FAST_GAP = 2000, BURST_N = 10, BURST_MS = 300000, WATCH = 5000;
+  var LV = window.__dosLive = { v: '2026-11-26.1', ch: null, st: '', bad: 0, down: false, pings: 0, pingAt: 0, seq: 0, fastSeq: 0, fastAt: 0, ftimer: null, runs: 0, runAt: 0, doneAt: 0,
+    storeAt: 0, stores: 0, storeOwed: false, busy: false, dirty: false, timer: null, due: 0, wait: 0, recent: [] };
+  function user_() { try { return (typeof USER !== 'undefined' && USER) ? USER : null; } catch (e) { return null; } }
+  function novaId_() { try { var c = (COLIST || []).filter(function (x) { return String(x.code || '') === 'NOVA'; })[0]; return c ? c.company_id : null; } catch (e) { return null; } }
+  /* does this page show NOVA now? `store` = a new management page (all companies); `legacy` = the company on screen is NOVA */
+  function scope_() {
+    var id = novaId_(), M = window.__uimLive, store = false, legacy = false;
+    if (!id || !user_()) return { any: false };
+    try { store = !!(M && M.showing()); } catch (e) {}
+    try { legacy = COID() === id; } catch (e) {}
+    return { any: store || legacy, store: store, legacy: legacy, id: id };
+  }
+  function gap_() {
+    var now = Date.now(); LV.recent = LV.recent.filter(function (t) { return now - t < BURST_MS; });
+    return LV.recent.length >= BURST_N ? SLOW_GAP : GAP;
+  }
+  function at_(due) {                                        /* one pending run; an earlier request replaces a later one */
+    if (LV.timer && LV.due <= due) return;
+    if (LV.timer) clearTimeout(LV.timer);
+    LV.due = due;
+    LV.timer = setTimeout(function () { LV.timer = null; LV.due = 0; run_(); }, Math.max(0, due - Date.now()));
+  }
+  function plan_(ms) { at_(Math.max(Date.now() + (ms || 0), LV.runAt + gap_())); }
+  function mark_() { LV.seq++; LV.dirty = true; }
+  function ping_(p) {
+    if (!p || String(p.company || '') !== 'NOVA') return;
+    LV.pings++; LV.pingAt = Date.now(); mark_();
+    if (document.hidden) return;                             /* shown again -> one catch-up (below) */
+    fastPlan_(DELAY); plan_(DELAY);
+  }
+  /* the SD trip answer for the newest signal: read once per signal (2 s apart at least), without waiting for a refresh that is
+     running, and painted where the page's own after-cycle paint would paint it. A read already in flight may have started
+     before the change, so it is followed by one more. */
+  function fastPlan_(ms) {
+    if (LV.ftimer) return;
+    LV.ftimer = setTimeout(function () {
+      LV.ftimer = null;
+      try { if (document.hidden || !user_()) return; var sc = scope_(); if (sc.any) fast_(sc); } catch (e) { console.error('live SD read', e); }
+    }, Math.max(ms || 0, LV.fastAt + FAST_GAP - Date.now(), 0));
+  }
+  function fast_(sc) {
+    if (LV.fastSeq === LV.seq) return;
+    if (Date.now() - LV.fastAt < FAST_GAP) { fastPlan_(0); return; }
+    LV.fastSeq = LV.seq; LV.fastAt = Date.now();
+    try {
+      var riding = Object.keys(SDX.run).length + Object.keys(SDX.asRun).length > 0;
+      var s = Promise.resolve(sdxRefresh_(sc.id, true));
+      if (riding) s = s.then(function () { return sdxRefresh_(sc.id, true); });
+      s.then(function () {
+        try {
+          var M = window.__uimLive;
+          if (sc.store && M) { if (MTAB === 'overview') M.paint(); return; }
+          if (COID() !== sc.id) return;
+          var on = (ROLE === 'disp' && TAB === 'liveboard') || (ROLE === 'mgmt' && (MTAB === 'liveboard' || MTAB === 'exceptions'));
+          if (on && !viewTyping_()) render();
+        } catch (e) { console.error('live paint', e); }
+      }, function (e) { console.error('live SD read', e); });
+    } catch (e) { console.error('live SD read', e); }
+  }
+  function run_() {
+    if (!user_()) { LV.dirty = false; return; }
+    if (document.hidden || LV.busy) return;                   /* shown again / the running one looks at `dirty` when it ends */
+    var sc = scope_();
+    if (!sc.any) { LV.dirty = false; LV.storeOwed = false; return; }
+    fast_(sc);
+    /* a refresh already in flight may have read before the change: it is waited for (30 s at most), then the read runs */
+    var inflight = false; try { inflight = !!REFRESHING || !!SYNC_RUN; } catch (e) {}
+    if (inflight && LV.wait < 40) { LV.wait++; at_(Date.now() + 750); return; }
+    LV.wait = 0;
+    var now = Date.now(), M = window.__uimLive;
+    LV.busy = true; LV.dirty = false; LV.runAt = now; LV.runs++; LV.recent.push(now);
+    /* the all-company store (a new management page is showing): read again now, beside the page's refresh - which then waits
+       for this read instead of starting its own - and painted as soon as it lands. Inside the 30 s floor the read is owed and
+       follows when the floor is over, as long as such a page is still showing. */
+    LV.storeOwed = false;
+    if (sc.store && M) {
+      if (now - LV.storeAt >= STORE_GAP) {
+        LV.storeAt = now; LV.stores++;
+        try { Promise.resolve(M.load()).then(function () { try { M.paint(); } catch (e) { console.error('live paint', e); } }, function (e) { console.error('live store read', e); }); }
+        catch (e) { console.error('live store read', e); }
+      } else LV.storeOwed = true;
+    }
+    var p;
+    try { p = Promise.resolve(refreshLive_(false)); } catch (e) { console.error('live refresh', e); p = Promise.resolve(); }
+    p.then(null, function (e) { console.error('live refresh', e); }).then(function () {
+      LV.busy = false; LV.doneAt = Date.now();
+      if (LV.dirty) { plan_(DELAY); return; }
+      if (!LV.storeOwed) return;
+      var still = false; try { still = !!(window.__uimLive && window.__uimLive.showing()); } catch (e) {}
+      if (still) plan_(Math.max(DELAY, LV.storeAt + STORE_GAP - Date.now())); else LV.storeOwed = false;
+    });
+  }
+  function drop_() { var c = LV.ch; LV.ch = null; LV.st = ''; if (c) { try { sb.removeChannel(c); } catch (e) {} } }
+  function connect_() {
+    if (LV.ch || !user_()) return;
+    try {
+      var ch = sb.channel('dos-live');
+      LV.ch = ch;
+      ch.on('broadcast', { event: 'loads_changed' }, function (m) { try { ping_(m && m.payload); } catch (e) { console.error('live signal', e); } });
+      ch.subscribe(function (s) {
+        if (LV.ch !== ch) return;
+        LV.st = s;
+        /* back after a break: signals may have been missed - one catch-up read */
+        if (s === 'SUBSCRIBED') { if (LV.down) { LV.down = false; mark_(); if (!document.hidden) plan_(DELAY); } }
+        else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') LV.down = true;
+      });
+    } catch (e) { console.error('live channel', e); LV.ch = null; }
+  }
+  function watch_() {
+    try {
+      if (!user_()) { drop_(); return; }
+      if (LV.busy && Date.now() - LV.runAt > 120000) LV.busy = false;         /* a refresh that never answered */
+      if (!LV.ch) { connect_(); return; }
+      var s = ''; try { s = LV.ch.state; } catch (e) {}
+      if (s === 'joined' || s === 'joining') { LV.bad = 0; return; }
+      LV.down = true;
+      if (++LV.bad >= 12) { LV.bad = 0; drop_(); connect_(); }                 /* a minute without the channel: start it afresh */
+    } catch (e) { console.error('live watch', e); }
+  }
+  document.addEventListener('visibilitychange', function () { try { if (!document.hidden && (LV.dirty || LV.storeOwed)) { fastPlan_(200); plan_(200); } } catch (e) {} });
+  setInterval(watch_, WATCH);
+  setTimeout(watch_, 1500);
 })();
 </script>
