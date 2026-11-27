@@ -3666,7 +3666,8 @@ function sdxChip_(l, mgmt){
 var SCF={by:{}, run:{}}, SCF_RAW=null, SCF_C=null, SCF_IN=0, SCF_SV=null;
 var SCF_MAX_AGE=600000;   /* an answer older than 10 min (failed refreshes) is not used */
 var SCF_KEYS=['driver_name','driver_id_sd','status','pickup_completed','delivery_completed','pickup_scheduled','delivery_scheduled','pickup_week','is_canceled'];
-function scfGate_(co){ return !!co && !!USER && sdxCodeOf_(co)==='NOVA' && ((USER.role==='disp' && !VIEWAS) || (USER.role==='mgmt' && !!VIEWAS && ROLE==='disp')); }
+/* DOS-QRD-WHLIVE-20261127 (owner: QRD matches NOVA incl. the Shift Close switch): QRD asks too; the server's sd_gate_switch decides */
+function scfGate_(co){ return !!co && !!USER && (sdxCodeOf_(co)==='NOVA' || sdxCodeOf_(co)==='QRD') && ((USER.role==='disp' && !VIEWAS) || (USER.role==='mgmt' && !!VIEWAS && ROLE==='disp')); }
 function scfKey_(co){ return co+'|'+(VIEWAS||'')+'|'+ymd_(nextWorkDay_()); }
 /* the rows as read, kept before the commit transforms mutate them (NOVA only) */
 function scfStash_(v, co){ co=co||COID(); SCF_RAW=scfGate_(co) ? {co:co, rows:vaClone_(v)} : null; SCF_C=null; }
@@ -12938,7 +12939,7 @@ function uLoad(force) {
       if (!current()) return;
       if (U.mut !== mut) { again = true; return; }
       var all = [];
-      cos.forEach(function (c) { var B = by[c.company_id]; B.raw = (String(c.code || '') === 'NOVA') ? vaClone_(raw[c.company_id] || []) : null; /* DOS-SC-SDFACTS r3 */ B.loads = uPrepLoads(raw[c.company_id] || [], onKey_, dupScore_, dupSame_); B.loads.forEach(function (l) { B.load[l.order_number] = l; }); all = all.concat(B.loads); });
+      cos.forEach(function (c) { var B = by[c.company_id]; B.raw = (String(c.code || '') === 'NOVA' || String(c.code || '') === 'QRD') ? vaClone_(raw[c.company_id] || []) : null; /* DOS-SC-SDFACTS r3; DOS-QRD-WHLIVE: QRD too */ B.loads = uPrepLoads(raw[c.company_id] || [], onKey_, dupScore_, dupSame_); B.loads.forEach(function (l) { B.load[l.order_number] = l; }); all = all.concat(B.loads); });
       cos.forEach(function (c, i) {
         var B = by[c.company_id], trips = homeTrips[i];
         B.homeError = trips.error;
@@ -13070,7 +13071,7 @@ function uPlan(co, disp, day) { var B = U.by[co]; if (!B) return []; return uPla
    per close attempt, in shDoClose's stale-state re-read. Only rows on the list are evaluated, so a company without rows on the
    list is never asked. ---- */
 var SHF = { by: {}, run: {}, seq: {}, cyc: 0 }, SHF_C = {}, SHF_REUSE_MS = 180000;   /* 180 s = the app's own refresh period (170 s) rounded up */
-function shfGate_(co) { return !!co && uiActive() && uCoCode(co) === 'NOVA'; }
+function shfGate_(co) { return !!co && uiActive() && (uCoCode(co) === 'NOVA' || uCoCode(co) === 'QRD'); }   /* DOS-QRD-WHLIVE-20261127: QRD too */
 function shfKey_(co, day) { return co + '|' + day; }
 function shfFetch_(co, day, force) {
   if (!shfGate_(co) || !day) return null;
