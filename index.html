@@ -3556,7 +3556,8 @@ function docLoads_(){ return (LIVE||[]).filter(docMine_); }
    by company + previewed dispatcher (SDX.as), emptied on every switch. The non-preview path (SDX.by) is unchanged. */
 var SDX={by:{}, run:{}, as:{}, asRun:{}};
 var SDX_MAX_AGE=600000, SDX_STALE=2700000, SDX_MIN_GAP=60000;   /* answer older than 10 min / reader scan older than 45 min: not used */
-function sdxGate_(code){ return code==='NOVA' && !!USER && (!VIEWAS || (USER.role==='mgmt' && ROLE==='disp')); }
+/* DOS-QRD-WHLIVE-20261127: QRD asks too; the server's own switch (sd_screen_switch) still decides - "off" leaves today's path */
+function sdxGate_(code){ return (code==='NOVA' || code==='QRD') && !!USER && (!VIEWAS || (USER.role==='mgmt' && ROLE==='disp')); }
 function sdxCodeOf_(co){ var c=(COLIST||[]).filter(function(x){ return x.company_id===co; })[0]; return c?c.code:''; }
 function sdxFor_(co){
   if(!co || !sdxGate_(sdxCodeOf_(co))) return null;
@@ -13244,7 +13245,8 @@ var inRefresh = false;
    page's own reload button asks for; a background refresh that follows waits for it instead of reading twice); `paint` = this
    layer's own safe repaint (never over a save in flight, an open drop-down or typing). */
 window.__uimLive = {
-  showing: function () { return uiActive() && !!PAGES[MTAB] && uReady() && (U.cos || []).some(function (c) { return String(c.code || '') === 'NOVA'; }); },
+  /* DOS-QRD-WHLIVE-20261127: showing(code) = that company is in the store; showing() = any company that sends live signals */
+  showing: function (code) { return uiActive() && !!PAGES[MTAB] && uReady() && (U.cos || []).some(function (c) { var k = String(c.code || ''); return code ? k === code : (k === 'NOVA' || k === 'QRD'); }); },
   load: function () { return uiActive() ? uLoad(true) : Promise.resolve(); },
   paint: function () { if (uiActive() && PAGES[MTAB] && !busyEditing() && !selectOpen() && !(typeof viewTyping_ === 'function' && viewTyping_())) render(); } };
 refreshLive_ = async function (manual) {
@@ -14776,7 +14778,7 @@ REG_MSG.assignment_pending = 'ამ ტვირთზე SD-დან ახ�
 REG_MSG.orders_required = 'ამ SD მძღოლის ნომერზე ღია ტვირთი აღარ არის — დასადასტურებელი სტრიქონი აღარ არსებობს. არაფერი შენახულა.';
 REG_MSG.manual_links = 'ამ კომპანიაში მძღოლები ხელით ებმება: SD-ის მძღოლების სია აღარ იკითხება და SD-ს მოთხოვნა არ ეგზავნება.';
 REG_MSG.not_manual_company = 'ეს გზა მხოლოდ ხელით დაკავშირების კომპანიისთვისაა — არაფერი შეცვლილა.';
-function regManual(co) { return uCoCode(co) === 'NOVA'; }
+function regManual(co) { var k = uCoCode(co); return k === 'NOVA' || k === 'QRD'; }   /* DOS-QRD-WHLIVE-20261127: QRD too */
 function regOrdersHtml(x) {
   if (!regManual(x.company_id) || !(x.orders || []).length) return '';
   return '<small class="u-regorders">Order ID (SD): ' + x.orders.map(function (o) {
@@ -14858,7 +14860,7 @@ function regStripHtml() {
       (nod.length ? '<p class="u-note"><b>დისპეჩერი მისანიჭებელია:</b> ' + nod.map(function (x) { return h(x.name) + ' (' + h(x.code) + ')'; }).join(', ') + ' — დისპეჩერი სტრიქონის „დისპეჩერი“ სვეტში აირჩიე.</p>' : '') +
       (nosd.length ? '<p class="u-note">ზოგ ღია ტვირთს მძღოლის სახელი აქვს, მაგრამ SD-ის მძღოლის ნომერი არა — ასეთები აქ არ ჯგუფდება და ავტომატურად არავის ებმება.</p>' : '') +
       (unv.length ? '<p class="u-note">SD ანგარიში დადასტურებული არ არის: ' + unv.map(function (x) { return h(x.code); }).join(', ') + ' — იქ SD-სთან დაკავშირება და ეს სია არ მოქმედებს.</p>' : '') +
-      (items.some(function (x) { return regManual(x.company_id); }) ? '<p class="u-note"><b>NOVA:</b> SD-ის მძღოლის სახელს აპი აღარ კითხულობს. დააკოპირე Order ID, მოძებნე ტვირთი Super Dispatch-ში, ნახე ვინ არის მძღოლი და ამ სტრიქონიდან დააკავშირე არსებულ მძღოლთან ან დაამატე ახალი (სახელი და გვარი). შენახვამდე აპი ამოწმებს, რომ ამ ტვირთზე მძღოლი ამასობაში არ შეცვლილა.</p>' : '') +
+      (items.some(function (x) { return regManual(x.company_id); }) ? '<p class="u-note"><b>' + h(items.filter(function (x) { return regManual(x.company_id); }).map(function (x) { return x.code; }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(', ')) + ':</b> SD-ის მძღოლის სახელს აპი აღარ კითხულობს. დააკოპირე Order ID, მოძებნე ტვირთი Super Dispatch-ში, ნახე ვინ არის მძღოლი და ამ სტრიქონიდან დააკავშირე არსებულ მძღოლთან ან დაამატე ახალი (სახელი და გვარი). შენახვამდე აპი ამოწმებს, რომ ამ ტვირთზე მძღოლი ამასობაში არ შეცვლილა.</p>' : '') +
       '<p class="u-note">ერთი სტრიქონი = ერთი SD მძღოლი ერთ კომპანიაში (რამდენი ტვირთიც არ უნდა ჰქონდეს). დამთხვევა მოწმდება SD-ის მძღოლის ნომრით, არა სახელით.</p></div>' : '') + '</section>';
 }
 function regFindItem(key) { return ((REG.data && REG.data.items) || []).filter(function (x) { return x.company_id + '|' + x.driver_id_sd === key; })[0] || null; }
@@ -16586,17 +16588,26 @@ try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', 
   if (window.__dosLive) return;
   var DELAY = 500, GAP = 5000, SLOW_GAP = 30000, STORE_GAP = 30000, FAST_GAP = 2000, BURST_N = 10, BURST_MS = 300000, WATCH = 5000;
   var LV = window.__dosLive = { v: '2026-11-26.1', ch: null, st: '', bad: 0, down: false, pings: 0, pingAt: 0, seq: 0, fastSeq: 0, fastAt: 0, ftimer: null, runs: 0, runAt: 0, doneAt: 0,
-    storeAt: 0, stores: 0, storeOwed: false, busy: false, dirty: false, timer: null, due: 0, wait: 0, recent: [] };
+    storeAt: 0, stores: 0, storeOwed: false, busy: false, dirty: false, timer: null, due: 0, wait: 0, recent: [], pend: {} };
   function user_() { try { return (typeof USER !== 'undefined' && USER) ? USER : null; } catch (e) { return null; } }
-  function novaId_() { try { var c = (COLIST || []).filter(function (x) { return String(x.code || '') === 'NOVA'; })[0]; return c ? c.company_id : null; } catch (e) { return null; } }
-  /* does this page show NOVA now? `store` = a new management page (all companies); `legacy` = the company on screen is NOVA */
+  /* DOS-QRD-WHLIVE-20261127: the signal names its company (NOVA or QRD). `LV.pend` = the companies signalled since the last run.
+     Does this page show one of them now? `store` = a new management page with that company in its store; `legacy` = the company
+     on screen is that company; `sdx` = the signalled companies this user has (their Super Dispatch trip answer is read first). */
+  var CODES = ['NOVA', 'QRD'];
+  function ids_() { var o = {}; try { (COLIST || []).forEach(function (x) { var k = String(x.code || ''); if (CODES.indexOf(k) >= 0) o[k] = x.company_id; }); } catch (e) {} return o; }
   function scope_() {
-    var id = novaId_(), M = window.__uimLive, store = false, legacy = false;
-    if (!id || !user_()) return { any: false };
-    try { store = !!(M && M.showing()); } catch (e) {}
-    try { legacy = COID() === id; } catch (e) {}
-    return { any: store || legacy, store: store, legacy: legacy, id: id };
+    var ids = ids_(), M = window.__uimLive, store = false, legacy = false, id = null, cur = null, sdx = [], k;
+    if (!user_()) return { any: false };
+    try { cur = COID(); } catch (e) {}
+    for (k in LV.pend) {
+      if (!ids[k]) continue;
+      sdx.push(ids[k]);
+      try { if (M && M.showing(k)) store = true; } catch (e) {}
+      if (cur && cur === ids[k]) { legacy = true; id = cur; }
+    }
+    return { any: store || legacy, store: store, legacy: legacy, id: id, sdx: sdx };
   }
+  function pendAll_() { CODES.forEach(function (k) { LV.pend[k] = true; }); }
   function gap_() {
     var now = Date.now(); LV.recent = LV.recent.filter(function (t) { return now - t < BURST_MS; });
     return LV.recent.length >= BURST_N ? SLOW_GAP : GAP;
@@ -16610,7 +16621,9 @@ try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', 
   function plan_(ms) { at_(Math.max(Date.now() + (ms || 0), LV.runAt + gap_())); }
   function mark_() { LV.seq++; LV.dirty = true; }
   function ping_(p) {
-    if (!p || String(p.company || '') !== 'NOVA') return;
+    var code = p ? String(p.company || '') : '';
+    if (CODES.indexOf(code) < 0) return;
+    LV.pend[code] = true;
     LV.pings++; LV.pingAt = Date.now(); mark_();
     if (document.hidden) return;                             /* shown again -> one catch-up (below) */
     fastPlan_(DELAY); plan_(DELAY);
@@ -16631,8 +16644,9 @@ try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', 
     LV.fastSeq = LV.seq; LV.fastAt = Date.now();
     try {
       var riding = Object.keys(SDX.run).length + Object.keys(SDX.asRun).length > 0;
-      var s = Promise.resolve(sdxRefresh_(sc.id, true));
-      if (riding) s = s.then(function () { return sdxRefresh_(sc.id, true); });
+      var readAll = function () { return Promise.all((sc.sdx || []).map(function (co) { return sdxRefresh_(co, true); })); };
+      var s = Promise.resolve(readAll());
+      if (riding) s = s.then(readAll);
       s.then(function () {
         try {
           var M = window.__uimLive;
@@ -16648,14 +16662,15 @@ try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', 
     if (!user_()) { LV.dirty = false; return; }
     if (document.hidden || LV.busy) return;                   /* shown again / the running one looks at `dirty` when it ends */
     var sc = scope_();
-    if (!sc.any) { LV.dirty = false; LV.storeOwed = false; return; }
+    if (!sc.any) { LV.dirty = false; LV.storeOwed = false; LV.pend = {}; return; }
     fast_(sc);
     /* a refresh already in flight may have read before the change: it is waited for (30 s at most), then the read runs */
     var inflight = false; try { inflight = !!REFRESHING || !!SYNC_RUN; } catch (e) {}
     if (inflight && LV.wait < 40) { LV.wait++; at_(Date.now() + 750); return; }
     LV.wait = 0;
     var now = Date.now(), M = window.__uimLive;
-    LV.busy = true; LV.dirty = false; LV.runAt = now; LV.runs++; LV.recent.push(now);
+    var pend = LV.pend;                                        /* what this run answers; kept only for a store read that is still owed */
+    LV.busy = true; LV.dirty = false; LV.pend = {}; LV.runAt = now; LV.runs++; LV.recent.push(now);
     /* the all-company store (a new management page is showing): read again now, beside the page's refresh - which then waits
        for this read instead of starting its own - and painted as soon as it lands. Inside the 30 s floor the read is owed and
        follows when the floor is over, as long as such a page is still showing. */
@@ -16665,7 +16680,7 @@ try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', 
         LV.storeAt = now; LV.stores++;
         try { Promise.resolve(M.load()).then(function () { try { M.paint(); } catch (e) { console.error('live paint', e); } }, function (e) { console.error('live store read', e); }); }
         catch (e) { console.error('live store read', e); }
-      } else LV.storeOwed = true;
+      } else { LV.storeOwed = true; for (var pk in pend) LV.pend[pk] = true; }
     }
     var p;
     try { p = Promise.resolve(refreshLive_(false)); } catch (e) { console.error('live refresh', e); p = Promise.resolve(); }
@@ -16688,7 +16703,7 @@ try { if (uiActive()) render(); } catch (e) { console.error('UIMGMT-001 start', 
         if (LV.ch !== ch) return;
         LV.st = s;
         /* back after a break: signals may have been missed - one catch-up read */
-        if (s === 'SUBSCRIBED') { if (LV.down) { LV.down = false; mark_(); if (!document.hidden) plan_(DELAY); } }
+        if (s === 'SUBSCRIBED') { if (LV.down) { LV.down = false; pendAll_(); mark_(); if (!document.hidden) plan_(DELAY); } }
         else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') LV.down = true;
       });
     } catch (e) { console.error('live channel', e); LV.ch = null; }
