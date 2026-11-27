@@ -11040,13 +11040,20 @@ try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' 
   var FEED_WHY = { not_applying: 'ცვლილებების ჩაწერა გამორთულია', subscriptions_missing: 'SD-ის გამოწერა აკლია', events_stuck: 'ცვლილებები რიგში გაიჭედა',
     events_failed: 'ცვლილება ვერ დამუშავდა', deliveries_refused: 'შემოსული შეტყობინება უარყოფილია', single_order_check_failing: 'ცალკეული ტვირთის შემოწმება ვერ სრულდება',
     subscriptions_unchecked: 'გამოწერების სია 26 საათია არ შემოწმებულა', daily_check_missing: 'დღიური სიის შემოწმება აკლია' };
+  /* r2.5 (owner 2026-11-27 "Yes, add it"): the same incident also announces its END - once, when the database's health check has
+     been healthy for 30 minutes after it (sd_push_incident.restored_at). An entry with ok = true; its own title, text and colour. */
+  var FEED_OK_TITLE = 'SD კავშირი აღდგა';
+  function feedTitle(e) { return e && e.ok ? FEED_OK_TITLE : FEED_TITLE; }
   function feedWhy(e) { return (e.reasons || []).map(function (r) { return FEED_WHY[r] || String(r); }).join('; '); }
-  function feedLine(e) { var w = feedWhy(e); return 'Super Dispatch-ის ცვლილებების მიღება შეფერხდა · ' + e.code + ' · ' + hhmm(e.at) + (w ? ' · ' + w : ''); }
+  function feedLine(e) {
+    if (e.ok) return 'Super Dispatch-ის ცვლილებების მიღება აღდგა · ' + e.code + ' · ' + hhmm(e.at) + (e.opened ? ' · შეფერხება დაიწყო ' + hhmm(e.opened) : '');
+    var w = feedWhy(e); return 'Super Dispatch-ის ცვლილებების მიღება შეფერხდა · ' + e.code + ' · ' + hhmm(e.at) + (w ? ' · ' + w : '');
+  }
   function feedAnnounce(list, leader) {
     list.forEach(function (e) { toast(e); });
     if (!leader) return;
     var played = !A.st.muted && beep();
-    list.slice(0, 3).forEach(function (e, i) { osNotify(FEED_TITLE, feedLine(e), 'dos-feed:' + e.id, played || A.st.muted || i > 0); });
+    list.slice(0, 3).forEach(function (e, i) { osNotify(feedTitle(e), feedLine(e), 'dos-feed:' + e.id, played || A.st.muted || i > 0); });
   }
   function feedToast(e) {
     try {
@@ -11055,8 +11062,8 @@ try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' 
       if (!box) { box = document.createElement('div'); box.id = 'd3Toasts'; box.setAttribute('aria-live', 'polite'); box.style.cssText = 'position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9995;max-width:min(380px,calc(100vw - 32px))'; document.body.appendChild(box); }
       var c = document.createElement('div');
       c.setAttribute('data-d3-toast', e.id);
-      c.style.cssText = 'background:var(--card);color:var(--ink);border:1px solid var(--border);border-left:4px solid var(--crit);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px 12px;cursor:pointer;font-size:13px';
-      c.innerHTML = "<div style='font-weight:700;margin-bottom:2px'>" + escA(FEED_TITLE) + "</div><div>" + escA(feedLine(e)) + "</div>";
+      c.style.cssText = 'background:var(--card);color:var(--ink);border:1px solid var(--border);border-left:4px solid ' + (e.ok ? 'var(--good)' : 'var(--crit)') + ';border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);padding:10px 12px;cursor:pointer;font-size:13px';
+      c.innerHTML = "<div style='font-weight:700;margin-bottom:2px'>" + escA(feedTitle(e)) + "</div><div>" + escA(feedLine(e)) + "</div>";
       c.onclick = function () { c.remove(); feedDetails(e); };
       box.appendChild(c);
       setTimeout(function () { try { c.remove(); } catch (x) {} }, CFG.toastMs * 4);       /* a problem stays on screen a minute */
@@ -11068,13 +11075,16 @@ try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' 
       var box = document.getElementById('d3Details');
       if (!box) { box = document.createElement('div'); box.id = 'd3Details'; box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px'; box.onclick = function (ev) { if (ev.target === box) box.remove(); }; document.body.appendChild(box); }
       var w = feedWhy(e);
+      var okRows = "<span style='color:var(--ink2)'>აღდგა</span><span>" + escA(new Date(e.at).toLocaleString('ka-GE')) + " (UTC " + escA(iso(e.at).slice(11, 16)) + ")</span>" +
+          (e.opened ? "<span style='color:var(--ink2)'>შეფერხება დაიწყო</span><span>" + escA(new Date(e.opened).toLocaleString('ka-GE')) + "</span>" : '');
+      var okText = "სისტემის შემოწმება ბოლო 30 წუთია გამართულად მუშაობს: Super Dispatch-იდან ცვლილებების ავტომატური მიღება აღდგა. თუ პრობლემა ისევ გაჩნდება, ახალი შეტყობინება მოვა.";
       box.innerHTML = "<div class='card p' style='max-width:560px;width:100%;max-height:82vh;overflow:auto' data-d3-details='feed'>" +
-        "<h4 style='margin-bottom:8px'>" + escA(FEED_TITLE) + " — მხოლოდ სანახავად</h4>" +
+        "<h4 style='margin-bottom:8px'>" + escA(feedTitle(e)) + " — მხოლოდ სანახავად</h4>" +
         "<div style='display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px'>" +
           "<span style='color:var(--ink2)'>კომპანია</span><b>" + escA(e.code) + "</b>" +
-          "<span style='color:var(--ink2)'>დაფიქსირდა</span><span>" + escA(new Date(e.at).toLocaleString('ka-GE')) + " (UTC " + escA(iso(e.at).slice(11, 16)) + ")</span>" +
-          "<span style='color:var(--ink2)'>მიზეზი</span><span>" + escA(w || '—') + "</span></div>" +
-        "<div style='font-size:12.5px;margin-top:10px;line-height:1.5'>სისტემის შემოწმებამ დააფიქსირა, რომ Super Dispatch-იდან ცვლილებების ავტომატური მიღება გამართულად არ მუშაობს. სანამ გამოსწორდება, ამ კომპანიის ტვირთების ცვლილებები შეიძლება დაგვიანებით ან საერთოდ არ გამოჩნდეს. ავტომატურად არაფერი ირთვება — საჭიროა შემოწმება. ეს შეტყობინება ერთ შემთხვევაზე ერთხელ მოდის.</div>" +
+          (e.ok ? okRows : "<span style='color:var(--ink2)'>დაფიქსირდა</span><span>" + escA(new Date(e.at).toLocaleString('ka-GE')) + " (UTC " + escA(iso(e.at).slice(11, 16)) + ")</span>" +
+          "<span style='color:var(--ink2)'>მიზეზი</span><span>" + escA(w || '—') + "</span>") + "</div>" +
+        "<div style='font-size:12.5px;margin-top:10px;line-height:1.5'>" + (e.ok ? okText : "სისტემის შემოწმებამ დააფიქსირა, რომ Super Dispatch-იდან ცვლილებების ავტომატური მიღება გამართულად არ მუშაობს. სანამ გამოსწორდება, ამ კომპანიის ტვირთების ცვლილებები შეიძლება დაგვიანებით ან საერთოდ არ გამოჩნდეს. ავტომატურად არაფერი ირთვება — საჭიროა შემოწმება. ეს შეტყობინება ერთ შემთხვევაზე ერთხელ მოდის.") + "</div>" +
         "<div style='display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap'>" +
           "<button type='button' class='bigbtn' style='padding:8px 16px;font-size:13px' onclick=\"var d=document.getElementById('d3Details'); if(d) d.remove();\">დახურვა</button></div></div>";
     } catch (x) { /* read-only view; nothing to undo */ }
@@ -11159,17 +11169,27 @@ try { if (mgiActive_()) mgiLoad_(true).then(function () { if (MTAB === 'closes' 
       /* r2.3: the webhook-feed incidents of the last 24 h (a handful of rows at most). A separate read: its failure never holds
          back a shift-close alert and never moves the cursor; the seen-set keeps one entry - one notification - per incident. */
       try {
-        var ir = await sb.from('sd_push_incident').select('id,company_id,opened_at,reasons').gte('opened_at', iso(now - CFG.baseline)).order('opened_at', { ascending: true }).limit(50);
+        var fsince = iso(now - CFG.baseline);       /* r2.5: opened OR restored in the last 24 h (a long incident still announces its end) */
+        var ir = await sb.from('sd_push_incident').select('id,company_id,opened_at,reasons,restored_at').or('opened_at.gte."' + fsince + '",restored_at.gte."' + fsince + '"').order('opened_at', { ascending: true }).limit(50);
         if (!eligible() || USER.email !== email || !A.st.enabled) return;
         if (ir && !ir.error) (ir.data || []).forEach(function (r) {
           if (!r || r.id == null || !allow[r.company_id] || !r.opened_at) return;
           var at = ms(r.opened_at); if (!isFinite(at)) return;
           var id = 'feed|' + r.company_id + '|' + r.id;
-          if (A.st.seen[id]) return;
-          A.st.seen[id] = at;
-          var e = { id: id, kind: 'feed', company_id: r.company_id, code: coCode(r.company_id), at: at, reasons: Array.isArray(r.reasons) ? r.reasons.slice(0, 8).map(String) : [] };
-          if (silent) A.st.read[id] = 1; else fresh.push(e);
-          A.st.entries.push(e);
+          if (!A.st.seen[id] && at >= now - CFG.baseline - CFG.overlap) {
+            A.st.seen[id] = at;
+            var e = { id: id, kind: 'feed', company_id: r.company_id, code: coCode(r.company_id), at: at, reasons: Array.isArray(r.reasons) ? r.reasons.slice(0, 8).map(String) : [] };
+            if (silent) A.st.read[id] = 1; else fresh.push(e);
+            A.st.entries.push(e);
+          }
+          /* r2.5: the end of that incident - once, from the database's own restored time */
+          var rat = r.restored_at ? ms(r.restored_at) : NaN, rid = 'feedok|' + r.company_id + '|' + r.id;
+          if (isFinite(rat) && !A.st.seen[rid]) {
+            A.st.seen[rid] = rat;
+            var k = { id: rid, kind: 'feed', ok: true, company_id: r.company_id, code: coCode(r.company_id), at: rat, opened: at };
+            if (silent) A.st.read[rid] = 1; else fresh.push(k);
+            A.st.entries.push(k);
+          }
         });
       } catch (x) { if (TEST) console.warn('feed incident read failed', x && x.message); }
       A.st.entries.sort(function (a, b) { return b.at - a.at || String(a.id).localeCompare(String(b.id)); });
