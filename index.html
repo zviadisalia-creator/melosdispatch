@@ -14765,6 +14765,29 @@ var REG_MSG = {
   name_exists: 'ამ სახელით ჩანაწერი უკვე არსებობს — ახალი მძღოლი არ შექმნილა.',
   sd_name_row_exists: 'ეს SD მძღოლი უკვე მიუთითებს არსებულ ჩანაწერზე (ბმა დაუდასტურებელია). ახალი მძღოლი არ შექმნილა — თუ ეს ის ადამიანია, გამოიყენე „არსებულ მძღოლთან დაკავშირება“ ამ ჩანაწერთან; თუ არა, საკითხი მენეჯმენტმა უნდა გადაწყვიტოს.'
 };
+/* ---- DOS-NOVA-WHLIVE r2.7 (owner 2026-11-27): NOVA's drivers are linked BY HAND from the strip below. A load webhook that brings a
+   driver id nobody is linked to makes one row: the id and the load's Order ID (copyable, to search in Super Dispatch). The manager
+   looks the order up in SD and links an existing driver or adds a new one from that row. The app asks Super Dispatch for nothing
+   (no driver list, no lookup) and reads no sheet. The save goes through sd_pending_confirm_v1, which first makes sure the order(s)
+   the row showed still belong to that driver id - if a newer assignment has arrived, nothing is saved and the row is shown as it
+   is now. Other companies keep the existing path unchanged. ---- */
+REG_MSG.assignment_changed = 'ამ სტრიქონის ტვირთზე აპმა ამასობაში უფრო ახალი ინფორმაცია მიიღო (მძღოლი შეიცვალა ან მოიხსნა, ან ტვირთი დაიხურა / წაიშალა) — არაფერი შენახულა. სტრიქონი განახლდა: გადაამოწმე ტვირთი SD-ში და თავიდან დაადასტურე.';
+REG_MSG.assignment_pending = 'ამ ტვირთზე SD-დან ახალი შეტყობინება ახლა მუშავდება — არაფერი შენახულა. დაელოდე დაახლოებით ერთი წუთი და სცადე ხელახლა.';
+REG_MSG.orders_required = 'ამ SD მძღოლის ნომერზე ღია ტვირთი აღარ არის — დასადასტურებელი სტრიქონი აღარ არსებობს. არაფერი შენახულა.';
+REG_MSG.manual_links = 'ამ კომპანიაში მძღოლები ხელით ებმება: SD-ის მძღოლების სია აღარ იკითხება და SD-ს მოთხოვნა არ ეგზავნება.';
+REG_MSG.not_manual_company = 'ეს გზა მხოლოდ ხელით დაკავშირების კომპანიისთვისაა — არაფერი შეცვლილა.';
+function regManual(co) { return uCoCode(co) === 'NOVA'; }
+function regOrdersHtml(x) {
+  if (!regManual(x.company_id) || !(x.orders || []).length) return '';
+  return '<small class="u-regorders">Order ID (SD): ' + x.orders.map(function (o) {
+    return '<span class="u-regord" style="user-select:all;font-family:ui-monospace,Consolas,monospace;font-weight:700">' + h(o) + '</span> <button type="button" class="u-btn u-link" data-u-reg-copy="' + h(o) + '" title="Order ID-ის კოპირება — SD-ში საძებნელად">კოპირება</button>';
+  }).join(' · ') + (x.load_n > x.orders.length ? ' · და კიდევ ' + (x.load_n - x.orders.length) : '') + '</small>';
+}
+function regCopy(text) {
+  var done = function (ok) { feedback(ok ? 'კოპირებულია: ' + text : 'ვერ დაკოპირდა — მონიშნე ნომერი და დააკოპირე ხელით.', !ok); };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); }); return; } } catch (e) {}
+  done(false);
+}
 /* the SD-side state is known (installed or not); while unknown / unreadable the add panel does not guess */
 function regKnown() { return REG.state === 'ok' || REG.state === 'missing'; }
 function regOn() { return REG.state === 'ok'; }
@@ -14821,7 +14844,7 @@ function regStripHtml() {
     var lk = x.state === 'inactive_link', uv = x.state === 'unverified_link', key = x.company_id + '|' + x.driver_id_sd;
     return '<div class="u-regitem" data-u-reg-item="' + h(key) + '"><span class="u-regwho"><b>' + h(x.sd_name || ('SD მძღოლი #' + x.driver_id_sd)) + '</b><small>' + h(x.code) + ' · SD #' + h(x.driver_id_sd) + (x.sd_phone ? ' · ' + h(x.sd_phone) : '') + (x.sd_status ? ' · SD: ' + h(x.sd_status) : '') + '</small>' +
         (x.mapping ? '<small>SD-ის ბმა: „' + h(x.mapping.driver_name) + '“ (' + h(x.mapping.source === 'unverified' ? 'დაუდასტურებელი' : x.mapping.source) + ')</small>' : '') + '</span>' +
-      '<span class="u-regloads"><b>' + x.load_n + '</b> ღია ტვირთი' + ((x.load_names || []).length ? '<small>ტვირთებზე: ' + h(x.load_names.join(', ')) + '</small>' : '') + '</span>' +
+      '<span class="u-regloads"><b>' + x.load_n + '</b> ღია ტვირთი' + ((x.load_names || []).length && !regManual(x.company_id) /* r2.7: a NOVA row shows no name taken from the booking workbook */ ? '<small>ტვირთებზე: ' + h(x.load_names.join(', ')) + '</small>' : '') + regOrdersHtml(x) + '</span>' +
       (uv ? '<span class="u-regact"><span class="u-regnote">ბმა მიუთითებს ' + h(regExistingText(x.row)) + ' — დაადასტურე, თუ ეს ის ადამიანია.</span><button type="button" class="u-btn u-primary" data-u-reg-linknamed="' + h(key) + '"' + (regBusy() ? ' disabled' : '') + '>დაკავშირება „' + h(x.row.name) + '“-თან</button></span>'
       : lk ? '<span class="u-regnote">დაკავშირებულია გამორთულ ჩანაწერთან ' + h(regExistingText(x.row)) + '. ხელახლა ჩართვა / გადაყვანა ცალკე გადაწყვეტილებაა.</span>'
           : '<span class="u-regact"><button type="button" class="u-btn" data-u-reg-linkitem="' + h(x.company_id + '|' + x.driver_id_sd) + '"' + (regBusy() ? ' disabled' : '') + '>არსებულ მძღოლთან დაკავშირება</button><button type="button" class="u-btn u-primary" data-u-reg-additem="' + h(x.company_id + '|' + x.driver_id_sd) + '"' + (regBusy() || !drServerOn() ? ' disabled' : '') + '>ახალი მძღოლის დამატება</button></span>') + '</div>';
@@ -14835,6 +14858,7 @@ function regStripHtml() {
       (nod.length ? '<p class="u-note"><b>დისპეჩერი მისანიჭებელია:</b> ' + nod.map(function (x) { return h(x.name) + ' (' + h(x.code) + ')'; }).join(', ') + ' — დისპეჩერი სტრიქონის „დისპეჩერი“ სვეტში აირჩიე.</p>' : '') +
       (nosd.length ? '<p class="u-note">ზოგ ღია ტვირთს მძღოლის სახელი აქვს, მაგრამ SD-ის მძღოლის ნომერი არა — ასეთები აქ არ ჯგუფდება და ავტომატურად არავის ებმება.</p>' : '') +
       (unv.length ? '<p class="u-note">SD ანგარიში დადასტურებული არ არის: ' + unv.map(function (x) { return h(x.code); }).join(', ') + ' — იქ SD-სთან დაკავშირება და ეს სია არ მოქმედებს.</p>' : '') +
+      (items.some(function (x) { return regManual(x.company_id); }) ? '<p class="u-note"><b>NOVA:</b> SD-ის მძღოლის სახელს აპი აღარ კითხულობს. დააკოპირე Order ID, მოძებნე ტვირთი Super Dispatch-ში, ნახე ვინ არის მძღოლი და ამ სტრიქონიდან დააკავშირე არსებულ მძღოლთან ან დაამატე ახალი (სახელი და გვარი). შენახვამდე აპი ამოწმებს, რომ ამ ტვირთზე მძღოლი ამასობაში არ შეცვლილა.</p>' : '') +
       '<p class="u-note">ერთი სტრიქონი = ერთი SD მძღოლი ერთ კომპანიაში (რამდენი ტვირთიც არ უნდა ჰქონდეს). დამთხვევა მოწმდება SD-ის მძღოლის ნომრით, არა სახელით.</p></div>' : '') + '</section>';
 }
 function regFindItem(key) { return ((REG.data && REG.data.items) || []).filter(function (x) { return x.company_id + '|' + x.driver_id_sd === key; })[0] || null; }
@@ -14851,6 +14875,7 @@ function regSdRows(A) {
   return (D.data.drivers || []).filter(function (x) { return !q || ((x.sd_name || '') + ' ' + (x.sd_phone || '') + ' ' + x.driver_id_sd).toLocaleLowerCase().indexOf(q) >= 0; });
 }
 function regDirNote(co) {
+  if (regManual(co)) return '<p class="u-note">' + h(REG_MSG.manual_links) + ' უცნობი Driver ID ჩნდება „დასაკავშირებელ მძღოლებში“ ტვირთის Order ID-ით — იქიდან დააკავშირე ან დაამატე.</p>';   /* r2.7: no list, no refresh request */
   var D = REGDIR[co]; if (!D || D.state === 'unknown' || D.state === 'loading') return '<p class="u-note">SD სია იტვირთება…</p>';
   if (D.state === 'error') return '<p class="u-err-text" role="alert">SD სია ვერ ჩაიტვირთა (' + h(D.err) + '). ცარიელი სია არ ნიშნავს, რომ SD-ში მძღოლი არ არის.</p>';
   var x = D.data || {}, last = x.last_run, ok = x.last_applied, req = x.request && !x.request.served_at;
@@ -14910,7 +14935,14 @@ async function drAddGo() {
   var r = null, fn = regOn() ? 'driver_register_v2' : 'driver_add_v1';
   var args = regOn() ? { p_company_id: A.co, p_driver_id_sd: sdMode ? A.sd.driver_id_sd : null, p_name: name, p_dispatcher: A.disp, p_cap: A.cap === '' ? null : Number(A.cap), p_target: tgt.v, p_note: null }
                      : { p_company_id: A.co, p_name: name, p_dispatcher: A.disp || null, p_cap: A.cap === '' ? null : Number(A.cap), p_note: null };
-  try { r = await sb.rpc(fn, args); } catch (e) { r = { error: e }; }
+  /* r2.7: a hand-linked company's row is saved through the check "the order(s) the row showed still belong to this driver id" */
+  var args0 = args, fn0 = fn;
+  if (sdMode && regManual(A.co) && (A.sd.orders || []).length) { fn = 'sd_pending_confirm_v1';
+    args = { p_company_id: A.co, p_driver_id_sd: A.sd.driver_id_sd, p_seen_orders: A.sd.orders, p_mode: 'add', p_name: name, p_dispatcher: A.disp, p_cap: A.cap === '' ? null : Number(A.cap), p_target: tgt.v }; }
+  try { r = await sb.rpc(fn, args);
+    /* the check is not on the server (not installed, or switched back): the existing save, unchanged */
+    if (fn !== fn0 && ((r.error && uMissing(r.error)) || (r.data && r.data.reason === 'not_manual_company'))) { fn = fn0; r = await sb.rpc(fn0, args0); }
+  } catch (e) { r = { error: e }; }
   if (DR.add !== A) return;
   A.busy = false;
   if (r.error) { if (uMissing(r.error)) { if (fn === 'driver_register_v2') { REG.state = 'missing'; A.err = 'SD-ის კავშირი სერვერზე ჯერ არ არის ჩართული — სცადე ხელახლა (დაემატება SD-მდე ჩანაწერად). არაფერი შეცვლილა.'; } else { DR.rpcMissing = true; A.err = DR_NO_RPC; } } else A.err = 'ვერ დაემატა: ' + uErr(r.error) + ' · არაფერი შეცვლილა.'; return render(); }
@@ -14918,6 +14950,8 @@ async function drAddGo() {
     var why = r.data && r.data.reason;
     if (why === 'name_exists') { A.exists = r.data.existing || []; A.err = REG_MSG.name_exists; }
     else if (why === 'sd_linked' || why === 'sd_linked_inactive' || why === 'sd_name_row_exists') { A.linked = r.data.existing || null; A.err = REG_MSG[why]; }
+    else if (why === 'assignment_changed' || why === 'orders_required') { DR.add = null; feedback(regReason(r.data), true); regLoad(true); return render(); }   /* r2.7: nothing saved; the row is read again */
+    else if (why === 'assignment_pending') { A.err = REG_MSG.assignment_pending; regLoad(true); }   /* r2.7: nothing saved; the form stays for the retry */
     else A.err = regReason(r.data);
     return render();
   }
@@ -14933,7 +14967,7 @@ async function drAddGo() {
 }
 
 /* ---- link: an existing current row <-> an SD identity of the same company ---- */
-function regLinkOpenForItem(item) { DR.add = null; DR.link = { co: item.company_id, fixed: 'sd', sd: { driver_id_sd: item.driver_id_sd, sd_name: item.sd_name, sd_phone: item.sd_phone, load_n: item.load_n }, rowId: '', busy: false, err: '', linked: null, sdq: '' }; }
+function regLinkOpenForItem(item) { DR.add = null; DR.link = { co: item.company_id, fixed: 'sd', sd: { driver_id_sd: item.driver_id_sd, sd_name: item.sd_name, sd_phone: item.sd_phone, load_n: item.load_n, orders: item.orders || [] }, rowId: '', busy: false, err: '', linked: null, sdq: '' }; }
 function regLinkOpenForRow(x) { DR.add = null; DR.link = { co: x.co, fixed: 'row', rowId: x.d.id, sd: null, busy: false, err: '', linked: null, sdq: '' }; regDirLoad(x.co); }
 function regLinkRows(co) { return drRows().filter(function (x) { return x.co === co && x.cur && !x.d._unreg; }); }
 function regLinkHtml() {
@@ -14969,15 +15003,24 @@ async function regLinkGo() {
   if (!L.sd) { L.err = 'აირჩიე SD-ის მძღოლი.'; return drRepaint(); }
   L.busy = true; drRepaint();
   var r = null;
-  try { r = await sb.rpc('driver_link_sd_v1', { p_company_id: L.co, p_driver_id: x.d.id, p_driver_id_sd: L.sd.driver_id_sd, p_expected_updated_at: x.d.updated_at || null, p_note: null }); } catch (e) { r = { error: e }; }
+  /* r2.7: a hand-linked company's row is saved through the check "the order(s) the row showed still belong to this driver id" */
+  var man = regManual(L.co) && (L.sd.orders || []).length;
+  var direct = function () { return sb.rpc('driver_link_sd_v1', { p_company_id: L.co, p_driver_id: x.d.id, p_driver_id_sd: L.sd.driver_id_sd, p_expected_updated_at: x.d.updated_at || null, p_note: null }); };
+  try { r = man ? await sb.rpc('sd_pending_confirm_v1', { p_company_id: L.co, p_driver_id_sd: L.sd.driver_id_sd, p_seen_orders: L.sd.orders, p_mode: 'link', p_driver_id: x.d.id, p_expected_updated_at: x.d.updated_at || null })
+                : await direct();
+    /* the check is not on the server (not installed, or switched back): the existing save, unchanged */
+    if (man && ((r.error && uMissing(r.error)) || (r.data && r.data.reason === 'not_manual_company'))) r = await direct();
+  } catch (e) { r = { error: e }; }
   if (DR.link !== L) return;
   L.busy = false;
   if (r.error) { L.err = uMissing(r.error) ? 'SD-ის კავშირი სერვერზე ჯერ არ არის ჩართული. არაფერი შეცვლილა.' : 'ვერ დაუკავშირდა: ' + uErr(r.error) + ' · არაფერი შეცვლილა.'; return render(); }
   if (!r.data || r.data.ok !== true) {
     var why = r.data && r.data.reason;
+    if (why === 'assignment_changed' || why === 'orders_required') { DR.link = null; feedback(regReason(r.data), true); regLoad(true); return render(); }   /* r2.7: nothing saved; the row is read again */
     if (why === 'sd_linked' || why === 'sd_linked_inactive' || why === 'sd_name_row_exists') L.linked = r.data.existing || null;
     L.err = regReason(r.data);
     if (why === 'stale' || why === 'not_found') { drResync(); regLoad(true); }
+    if (why === 'assignment_pending') regLoad(true);   /* r2.7: nothing saved; the form stays for the retry */
     return render();
   }
   DR.link = null; delete REGDIR[L.co];
@@ -14990,7 +15033,8 @@ function regRowTag(x) { return !x.d._unreg && x.cur && regAwaiting(x.co, x.d.id)
 function regClick(e, el) {
   var a, key, it;
   if (el.closest('[data-u-reg-toggle]')) { drReadAll(); REG.open = !REG.open; drRepaint(); return true; }
-  if ((a = el.closest('[data-u-reg-additem]'))) { if (regBusy()) return true; it = regFindItem(a.getAttribute('data-u-reg-additem')); if (!it) return true; drReadAll(); DR.link = null; DR.add = regAddNew(it.company_id, { driver_id_sd: it.driver_id_sd, sd_name: it.sd_name, sd_phone: it.sd_phone, sd_status: it.sd_status }); DR.add.mode = 'sd'; regDirLoad(it.company_id); drRepaint(); regFocus('u-dr-add-name', 'u-dr-add'); return true; }
+  if ((a = el.closest('[data-u-reg-copy]'))) { regCopy(a.getAttribute('data-u-reg-copy')); return true; }   /* r2.7 */
+  if ((a = el.closest('[data-u-reg-additem]'))) { if (regBusy()) return true; it = regFindItem(a.getAttribute('data-u-reg-additem')); if (!it) return true; drReadAll(); DR.link = null; DR.add = regAddNew(it.company_id, { driver_id_sd: it.driver_id_sd, sd_name: it.sd_name, sd_phone: it.sd_phone, sd_status: it.sd_status, orders: it.orders || [] }); DR.add.mode = 'sd'; regDirLoad(it.company_id); drRepaint(); regFocus('u-dr-add-name', 'u-dr-add'); return true; }
   if ((a = el.closest('[data-u-reg-linknamed]'))) { if (regBusy()) return true; it = regFindItem(a.getAttribute('data-u-reg-linknamed')); if (!it || !it.row) return true; drReadAll(); regLinkOpenForItem(it); DR.link.rowId = it.row.id; drRepaint(); regFocus('u-dr-link-row', 'u-dr-link'); return true; }
   if (el.closest('[data-u-reg-retry]')) { regLoad(true); return true; }
   if ((a = el.closest('[data-u-reg-linkitem]'))) { if (regBusy()) return true; it = regFindItem(a.getAttribute('data-u-reg-linkitem')); if (!it) return true; drReadAll(); regLinkOpenForItem(it); drRepaint(); regFocus('u-dr-link-row', 'u-dr-link'); return true; }
@@ -14999,7 +15043,7 @@ function regClick(e, el) {
   if (el.closest('[data-u-reg-linkgo]')) { regLinkGo(); return true; }
   if ((a = el.closest('[data-u-reg-linksd]'))) { var L = DR.link; if (!L || L.busy) return true; drReadAll(); key = a.getAttribute('data-u-reg-linksd');
     var D = REGDIR[L.co], f = ((D && D.data && D.data.drivers) || []).filter(function (y) { return y.driver_id_sd === key; })[0] || regFindItem(L.co + '|' + key) || { driver_id_sd: key };
-    L.sd = { driver_id_sd: key, sd_name: f.sd_name, sd_phone: f.sd_phone, load_n: f.load_n != null ? f.load_n : null }; drRepaint(); return true; }
+    L.sd = { driver_id_sd: key, sd_name: f.sd_name, sd_phone: f.sd_phone, load_n: f.load_n != null ? f.load_n : null, orders: (regFindItem(L.co + '|' + key) || {}).orders || [] }; drRepaint(); return true; }
   if (el.closest('[data-u-reg-linksdclear]')) { if (DR.link && !DR.link.busy) { drReadAll(); DR.link.sd = null; drRepaint(); } return true; }
   if ((a = el.closest('[data-u-reg-mode]'))) { if (!DR.add || DR.add.busy) return true; drReadAll(); DR.add.mode = a.getAttribute('data-u-reg-mode'); DR.add.err = ''; if (DR.add.mode === 'sd') regDirLoad(DR.add.co); drRepaint(); return true; }
   if ((a = el.closest('[data-u-reg-sd]'))) { var A = DR.add; if (!A || A.busy) return true; drReadAll(); key = a.getAttribute('data-u-reg-sd');
